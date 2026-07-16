@@ -8,13 +8,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, NewType
 
 EventId = NewType("EventId", str)
 
 
-class SpanKind(str, Enum):
+class SpanKind(StrEnum):
     LLM_CALL = "llm_call"
     TOOL_CALL = "tool_call"
     AGENT_TASK = "agent_task"
