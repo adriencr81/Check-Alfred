@@ -1,0 +1,42 @@
+# Mandat déclaratif pour l'agent refund-bot-v3 (PLAN.md §5, Brique 2).
+#
+# Chaque champ est lu par `alfred.mandate.load_mandate` puis comparé à une
+# trace d'events par `alfred.mandate.evaluate`, qui produit une liste
+# typée de Deviation, chacune ancrée sur au moins un event_id de la trace.
+
+# Nom de l'agent surveillé — doit correspondre à l'attribut
+# `gen_ai.agent.name` porté par les spans agent_task de la trace.
+agent: refund-bot-v3
+
+# Outils que l'agent a le droit d'appeler. Tout tool_call (gen_ai.tool.name)
+# absent de cette liste déclenche une déviation `tool_not_allowed`.
+allowed_tools:
+  - read_order
+  - issue_refund
+  - notify_customer
+
+# Budget quotidien en euros pour cet agent, calculé en sommant l'attribut
+# gen_ai.usage.cost_eur sur tous les events de la trace. Dépassement →
+# déviation `budget_exceeded`.
+daily_budget_eur: 5.00
+
+# Actions interdites. Deux formes supportées :
+#   - un nom d'outil exact (ex. `send_marketing`) : tout appel de cet outil
+#     est une déviation `forbidden_action`.
+#   - un motif `<outil>_above_<seuil>_eur` (ex. `issue_refund_above_100_eur`) :
+#     déviation si l'outil est appelé avec un attribut
+#     `tool.arguments.amount_eur` strictement supérieur au seuil.
+forbidden_actions:
+  - issue_refund_above_100_eur
+  - send_marketing
+
+# Conditions qui doivent déclencher une escalade de l'agent (un event
+# portant l'attribut `alfred.escalated=true`). Si la métrique dépasse le
+# seuil et qu'aucune escalade n'est présente dans la trace → déviation
+# `escalation_missed`.
+#   - tool_error_rate : proportion d'appels d'outils en erreur
+#     (tool.result.status != "ok") parmi tous les appels d'outils.
+#   - budget_used : coût de la trace / daily_budget_eur.
+escalate_when:
+  - tool_error_rate > 0.10
+  - budget_used > 0.80
