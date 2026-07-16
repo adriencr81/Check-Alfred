@@ -20,7 +20,8 @@
               "startTimeUnixNano": "1788037200000000000",
               "endTimeUnixNano": "1788037212000000000",
               "attributes": [
-                { "key": "agent.name", "value": { "stringValue": "refund-bot-v3" } },
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "invoke_agent" } },
+                { "key": "gen_ai.agent.name", "value": { "stringValue": "refund-bot-v3" } },
                 { "key": "agent.task", "value": { "stringValue": "handle_refund_request" } },
                 { "key": "agent.task.id", "value": { "stringValue": "task-4711" } }
               ]
@@ -51,7 +52,8 @@
               "startTimeUnixNano": "1788037205000000000",
               "endTimeUnixNano": "1788037206500000000",
               "attributes": [
-                { "key": "tool.name", "value": { "stringValue": "issue_refund" } },
+                { "key": "gen_ai.operation.name", "value": { "stringValue": "execute_tool" } },
+                { "key": "gen_ai.tool.name", "value": { "stringValue": "issue_refund" } },
                 { "key": "tool.arguments.amount_eur", "value": { "doubleValue": 42.50 } },
                 { "key": "tool.arguments.order_id", "value": { "stringValue": "ORD-9812" } },
                 { "key": "tool.result.status", "value": { "stringValue": "ok" } }

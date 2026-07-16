@@ -30,13 +30,27 @@ def _attributes(raw: list[dict[str, Any]]) -> dict[str, Any]:
     return {kv["key"]: _value(kv["value"]) for kv in raw}
 
 
+_OPERATION_KIND = {
+    "chat": SpanKind.LLM_CALL,
+    "text_completion": SpanKind.LLM_CALL,
+    "embeddings": SpanKind.LLM_CALL,
+    "execute_tool": SpanKind.TOOL_CALL,
+    "invoke_agent": SpanKind.AGENT_TASK,
+    "create_agent": SpanKind.AGENT_TASK,
+}
+
+
 def _kind(attributes: dict[str, Any]) -> SpanKind:
-    if any(key.startswith("gen_ai.") for key in attributes):
-        return SpanKind.LLM_CALL
-    if any(key.startswith("tool.") for key in attributes):
-        return SpanKind.TOOL_CALL
-    if any(key.startswith("agent.") for key in attributes):
-        return SpanKind.AGENT_TASK
+    """Discriminate SpanKind from `gen_ai.operation.name` (OTel GenAI semconv).
+
+    See docs/adr/0003-span-kind-classification.md: unlike a prefix scan over
+    `gen_ai.*`/`tool.*`/`agent.*` attribute keys, the semconv already carries
+    tool and agent spans under the `gen_ai.*` namespace, so the operation
+    name is the only reliable discriminator.
+    """
+    operation = attributes.get("gen_ai.operation.name")
+    if isinstance(operation, str) and operation in _OPERATION_KIND:
+        return _OPERATION_KIND[operation]
     return SpanKind.UNKNOWN
 
 

@@ -47,6 +47,10 @@ class TraceStore:
 
     Zero-infra by design: everything fits in a single file. See PLAN.md §10
     (backlog) — do not add another database in v0.x.
+
+    `event_id` (the OTel spanId) is the primary key and is treated as
+    globally unique across traces — an accepted v0.1 risk, not a spec
+    guarantee. See docs/adr/0001-event-id-global-uniqueness.md.
     """
 
     def __init__(self, path: Path | str) -> None:
@@ -56,6 +60,12 @@ class TraceStore:
         self._conn.commit()
 
     def put(self, event: TraceEvent) -> None:
+        """Insert or, on a matching `event_id`, blindly replace.
+
+        Re-putting an `event_id` with different field values silently
+        overwrites the prior anchor (accepted for v0.1 — see
+        docs/adr/0002-brique1-skeleton-fixes.md).
+        """
         self._conn.execute(
             """
             INSERT OR REPLACE INTO trace_events
@@ -87,7 +97,8 @@ class TraceStore:
 
     def find_by_trace(self, trace_id: str) -> list[TraceEvent]:
         rows = self._conn.execute(
-            "SELECT * FROM trace_events WHERE trace_id = ?", (trace_id,)
+            "SELECT * FROM trace_events WHERE trace_id = ? ORDER BY start_time, event_id",
+            (trace_id,),
         ).fetchall()
         return [_row_to_event(row) for row in rows]
 

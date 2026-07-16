@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from alfred.trace.ingest import ingest_otlp_file, ingest_otlp_json
-from alfred.trace.model import TraceIngestionError
+from alfred.trace.model import SpanKind, TraceIngestionError
 
 
 def test_ingest_returns_all_spans(otlp_sample_payload: dict[str, object]) -> None:
@@ -54,6 +54,43 @@ def test_ingest_extracts_parent_span(otlp_sample_payload: dict[str, object]) -> 
     events = {e.event_id: e for e in ingest_otlp_json(otlp_sample_payload)}
     assert events["00f067aa0ba902b7"].parent_span_id is None
     assert events["a1b2c3d4e5f60718"].parent_span_id == "00f067aa0ba902b7"
+
+
+def test_ingest_kind_is_derived_from_gen_ai_operation_name(
+    otlp_sample_payload: dict[str, object],
+) -> None:
+    """`.kind` must be inferred from `gen_ai.operation.name` (OTel GenAI semconv),
+    not from ad-hoc attribute-key prefixes — see docs/adr/0003."""
+    events = {e.event_id: e for e in ingest_otlp_json(otlp_sample_payload)}
+    assert events["00f067aa0ba902b7"].kind == SpanKind.AGENT_TASK
+    assert events["a1b2c3d4e5f60718"].kind == SpanKind.LLM_CALL
+    assert events["b2c3d4e5f6071829"].kind == SpanKind.TOOL_CALL
+
+
+def test_ingest_kind_is_unknown_without_operation_name() -> None:
+    payload = {
+        "resourceSpans": [
+            {
+                "scopeSpans": [
+                    {
+                        "spans": [
+                            {
+                                "traceId": "t",
+                                "spanId": "s",
+                                "parentSpanId": "",
+                                "name": "some.unlabelled.span",
+                                "startTimeUnixNano": "1788037200000000000",
+                                "endTimeUnixNano": "1788037201000000000",
+                                "attributes": [],
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    events = ingest_otlp_json(payload)
+    assert events[0].kind == SpanKind.UNKNOWN
 
 
 def test_ingest_malformed_raises() -> None:
