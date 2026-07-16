@@ -21,10 +21,21 @@ Aucun résumé auto-déclaré. Si une implémentation viole ça : STOP, replanif
 - Preuve exigée à chaque fin de tâche : sortie pytest + commande exécutée
 - Un commit par brique cohérente, message en anglais impératif
 
+## Discipline d'exécution
+- Aucune supposition silencieuse : si une consigne est ambiguë, demander
+  plutôt que deviner (mandat, seuil de déviation, format de digest, etc.)
+- Simplicité d'abord : le code minimal qui satisfait le test falsifiable —
+  pas d'abstraction, de config ou de flag pour un besoin hypothétique
+- Modifications chirurgicales : ne toucher que le code lié à la tâche en
+  cours ; aucun refactor ou renommage orthogonal dans le même commit
+- Objectifs vérifiables : traduire toute demande floue en critère de succès
+  testable avant d'écrire du code
+
 ## Commandes
 - Tests : pytest -q
 - Lint : ruff check . && mypy --strict src/
 - Démo locale : alfred demo (agent factice → daily en stdout)
+- Setup hooks (une fois) : pre-commit install
 
 ## Vocabulaire
 mandate = YAML déclaratif ; trace event = span OTel normalisé ;

@@ -381,6 +381,7 @@ Décisions actives de *ne pas* faire, pour éviter la dérive :
 - ❌ Base de données autre que SQLite (jamais en v0.x — zéro infra est un feature).
 - ❌ Auth, RBAC, multi-tenancy (v0.4+, closed-source).
 - ❌ Export dossier de preuve (v0.4 — c'est le pont vers le payant).
+- ❌ Audit sécurité Trail of Bits (CodeQL/Semgrep) — prévu B5-B6, pas avant.
 
 Backlog du harnais RAG (rappel D1) : B7-B9 sont documentées dans `BACKLOG_RAG.md` du repo harnais, pas ici. Le leaderboard (B9) reviendra en J+120 comme contenu marketing Alfred.
 
