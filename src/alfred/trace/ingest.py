@@ -1,15 +1,63 @@
 """OTLP JSON → list[TraceEvent].
 
-STUB. To implement in the first Claude Code session on Alfred.
 See PLAN.md §5 Brique 1 for the contract, and tests/test_trace_ingest.py
 for the falsifiable specification.
 """
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
-from alfred.trace.model import TraceEvent
+from alfred.trace.model import EventId, SpanKind, TraceEvent, TraceIngestionError
+
+
+def _value(value: dict[str, Any]) -> Any:
+    if "stringValue" in value:
+        return value["stringValue"]
+    if "intValue" in value:
+        return int(value["intValue"])
+    if "doubleValue" in value:
+        return value["doubleValue"]
+    if "boolValue" in value:
+        return value["boolValue"]
+    raise TraceIngestionError(f"Unsupported OTLP attribute value: {value!r}")
+
+
+def _attributes(raw: list[dict[str, Any]]) -> dict[str, Any]:
+    return {kv["key"]: _value(kv["value"]) for kv in raw}
+
+
+def _kind(attributes: dict[str, Any]) -> SpanKind:
+    if any(key.startswith("gen_ai.") for key in attributes):
+        return SpanKind.LLM_CALL
+    if any(key.startswith("tool.") for key in attributes):
+        return SpanKind.TOOL_CALL
+    if any(key.startswith("agent.") for key in attributes):
+        return SpanKind.AGENT_TASK
+    return SpanKind.UNKNOWN
+
+
+def _timestamp(nanos: str) -> datetime:
+    seconds, nanoseconds = divmod(int(nanos), 1_000_000_000)
+    return datetime.fromtimestamp(seconds, tz=UTC).replace(microsecond=nanoseconds // 1_000)
+
+
+def _span_to_event(span: dict[str, Any]) -> TraceEvent:
+    attributes = _attributes(span.get("attributes", []))
+    parent_span_id = span.get("parentSpanId") or None
+    return TraceEvent(
+        event_id=EventId(span["spanId"]),
+        trace_id=span["traceId"],
+        parent_span_id=parent_span_id,
+        kind=_kind(attributes),
+        name=span["name"],
+        start_time=_timestamp(span["startTimeUnixNano"]),
+        end_time=_timestamp(span["endTimeUnixNano"]),
+        attributes=attributes,
+    )
 
 
 def ingest_otlp_json(payload: dict[str, object]) -> list[TraceEvent]:
@@ -21,9 +69,20 @@ def ingest_otlp_json(payload: dict[str, object]) -> list[TraceEvent]:
     - `attributes` is a flat `dict[str, Any]`, un-nested from OTLP's list-of-KV format.
     - Raises `TraceIngestionError` on malformed input (missing required fields).
     """
-    raise NotImplementedError("Brique 1: implement ingest_otlp_json")
+    try:
+        resource_spans = cast("list[dict[str, Any]]", payload["resourceSpans"])
+        events = [
+            _span_to_event(span)
+            for resource_span in resource_spans
+            for scope_span in resource_span["scopeSpans"]
+            for span in scope_span["spans"]
+        ]
+    except (KeyError, TypeError) as exc:
+        raise TraceIngestionError(f"Malformed OTLP payload: {exc}") from exc
+    return events
 
 
 def ingest_otlp_file(path: Path) -> list[TraceEvent]:
     """Read an OTLP JSON file from disk and delegate to ingest_otlp_json."""
-    raise NotImplementedError("Brique 1: implement ingest_otlp_file")
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    return ingest_otlp_json(payload)

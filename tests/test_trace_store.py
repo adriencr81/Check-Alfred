@@ -9,7 +9,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from alfred.trace.model import EventId, SpanKind, TraceEvent, TraceStore
+from alfred.trace.model import EventId, SpanKind, TraceEvent
+from alfred.trace.store import TraceStore
 
 
 def _event(event_id: str, trace_id: str = "trace-1") -> TraceEvent:

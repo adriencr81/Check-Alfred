@@ -17,8 +17,8 @@
               "parentSpanId": "",
               "name": "agent_task.handle_refund_request",
               "kind": 1,
-              "startTimeUnixNano": "1756515600000000000",
-              "endTimeUnixNano": "1756515612000000000",
+              "startTimeUnixNano": "1788037200000000000",
+              "endTimeUnixNano": "1788037212000000000",
               "attributes": [
                 { "key": "agent.name", "value": { "stringValue": "refund-bot-v3" } },
                 { "key": "agent.task", "value": { "stringValue": "handle_refund_request" } },
@@ -31,8 +31,8 @@
               "parentSpanId": "00f067aa0ba902b7",
               "name": "chat gpt-4o-mini",
               "kind": 3,
-              "startTimeUnixNano": "1756515601000000000",
-              "endTimeUnixNano": "1756515604000000000",
+              "startTimeUnixNano": "1788037201000000000",
+              "endTimeUnixNano": "1788037204000000000",
               "attributes": [
                 { "key": "gen_ai.system", "value": { "stringValue": "openai" } },
                 { "key": "gen_ai.operation.name", "value": { "stringValue": "chat" } },
@@ -48,8 +48,8 @@
               "parentSpanId": "00f067aa0ba902b7",
               "name": "tool_call.issue_refund",
               "kind": 3,
-              "startTimeUnixNano": "1756515605000000000",
-              "endTimeUnixNano": "1756515606500000000",
+              "startTimeUnixNano": "1788037205000000000",
+              "endTimeUnixNano": "1788037206500000000",
               "attributes": [
                 { "key": "tool.name", "value": { "stringValue": "issue_refund" } },
                 { "key": "tool.arguments.amount_eur", "value": { "doubleValue": 42.50 } },

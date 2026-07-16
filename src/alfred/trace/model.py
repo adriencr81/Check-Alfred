@@ -34,4 +34,4 @@ class TraceEvent:
     name: str
     start_time: datetime
     end_time: datetime
-    attributes: dict[str, Any] = field(default_factory=dict)
+    attributes: dict[str, Any] = field(default_factory=dict, hash=False)
