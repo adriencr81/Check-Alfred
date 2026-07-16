@@ -1,0 +1,82 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/block-destructive-bash.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "extraKnownMarketplaces": {
+    "superpowers-marketplace": {
+      "source": { "source": "github", "repo": "obra/superpowers-marketplace" }
+    },
+    "mattpocock-skills-marketplace": {
+      "source": { "source": "github", "repo": "mattpocock/skills" }
+    }
+  },
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true,
+    "mattpocock-skills@mattpocock-skills-marketplace": true
+  },
+  "skillOverrides": {
+    "using-superpowers": "off",
+    "brainstorming": "off",
+    "dispatching-parallel-agents": "off",
+    "executing-plans": "off",
+    "finishing-a-development-branch": "off",
+    "receiving-code-review": "off",
+    "requesting-code-review": "off",
+    "subagent-driven-development": "off",
+    "test-driven-development": "off",
+    "using-git-worktrees": "off",
+    "verification-before-completion": "off",
+    "writing-plans": "off",
+    "writing-skills": "off",
+    "design-an-interface": "off",
+    "qa": "off",
+    "request-refactor-plan": "off",
+    "ubiquitous-language": "off",
+    "ask-matt": "off",
+    "code-review": "off",
+    "codebase-design": "off",
+    "diagnosing-bugs": "off",
+    "domain-modeling": "off",
+    "grill-with-docs": "off",
+    "implement": "off",
+    "improve-codebase-architecture": "off",
+    "prototype": "off",
+    "research": "off",
+    "resolving-merge-conflicts": "off",
+    "setup-matt-pocock-skills": "off",
+    "tdd": "off",
+    "to-spec": "off",
+    "to-tickets": "off",
+    "triage": "off",
+    "wayfinder": "off",
+    "batch-grill-me": "off",
+    "claude-handoff": "off",
+    "loop-me": "off",
+    "setup-ts-deep-modules": "off",
+    "to-questionnaire": "off",
+    "wizard": "off",
+    "writing-beats": "off",
+    "writing-fragments": "off",
+    "writing-shape": "off",
+    "git-guardrails-claude-code": "off",
+    "migrate-to-shoehorn": "off",
+    "scaffold-exercises": "off",
+    "setup-pre-commit": "off",
+    "edit-article": "off",
+    "obsidian-vault": "off",
+    "grilling": "off",
+    "handoff": "off",
+    "teach": "off",
+    "writing-great-skills": "off"
+  }
+}

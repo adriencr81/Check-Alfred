@@ -12,7 +12,9 @@ from alfred import __version__
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="alfred", description="Alfred — accountability layer for AI employees")
+    parser = argparse.ArgumentParser(
+        prog="alfred", description="Alfred — accountability layer for AI employees"
+    )
     parser.add_argument("--version", action="version", version=f"alfred {__version__}")
     parser.add_argument("command", nargs="?", help="init | watch | demo (Brique 5-6)")
     args = parser.parse_args(argv)
@@ -21,7 +23,9 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
 
-    print(f"alfred: command '{args.command}' is not yet implemented (see PLAN.md).", file=sys.stderr)
+    print(
+        f"alfred: command '{args.command}' is not yet implemented (see PLAN.md).", file=sys.stderr
+    )
     return 2
 
 

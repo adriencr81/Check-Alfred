@@ -8,7 +8,7 @@ anchor, mirroring the `TraceEvent` contract in `alfred.trace.model`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from alfred.trace.model import EventId
@@ -18,7 +18,7 @@ class MandateError(Exception):
     """Raised when a mandate cannot be parsed or fails validation."""
 
 
-class DeviationType(str, Enum):
+class DeviationType(StrEnum):
     TOOL_NOT_ALLOWED = "tool_not_allowed"
     BUDGET_EXCEEDED = "budget_exceeded"
     FORBIDDEN_ACTION = "forbidden_action"
