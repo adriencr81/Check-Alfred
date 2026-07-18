@@ -1,5 +1,7 @@
 # Alfred
 
+[![CI](https://github.com/adriencr81/check-alfred/actions/workflows/ci.yml/badge.svg)](https://github.com/adriencr81/check-alfred/actions/workflows/ci.yml)
+
 > **Accountability layer for AI employees.** A Python package that turns raw
 > agent traces into a daily stand-up your team can actually trust — every line
 > anchored to a trace event ID.
@@ -43,7 +45,19 @@ Delivered to Slack (v0.1), Teams (v0.2), or stdout / markdown (always).
 | Guardrails · NeMo Guardrails | Inline filters on LLM inputs / outputs. | Post-hoc control across the whole agent session, including tool calls and cost. |
 | A homegrown Grafana / Datadog dashboard | Aggregated metrics, alerting. | Narrative, anchored, opinionated report — no dashboard design required. |
 
-## Quickstart (once v0.1 ships)
+## Quickstart
+
+`alfred-ai` isn't on PyPI yet, but `alfred demo` already works today from
+a clone — an instrumented fake agent produces a real trace and a real
+digest, no mandate file, no Slack webhook, no network call:
+
+```bash
+git clone https://github.com/adriencr81/check-alfred.git && cd check-alfred
+pip install -e ".[dev]"
+alfred demo
+```
+
+Once v0.1 ships to PyPI:
 
 ```bash
 pip install alfred-ai
@@ -85,7 +99,7 @@ falsifiable tests and a definition-of-done. See [PLAN.md §5](PLAN.md).
 - **Brique 3** — report engine
 - **Brique 4** — verified NLG (the test that *is* the product)
 - **Brique 5** — Slack delivery + CLI
-- **Brique 6** — `alfred demo` + launch polish → **public v0.1 on PyPI**
+- **Brique 6** — `alfred demo` (done, see Quickstart above) + launch polish → **public v0.1 on PyPI**
 
 Post-v0.1: native connectors (v0.2), performance review — behavioral drift & cost-per-task (v0.3), evidence file export (v0.4 — the bridge to the closed-source engine).
 
