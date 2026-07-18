@@ -57,6 +57,14 @@ pip install -e ".[dev]"
 alfred demo
 ```
 
+### Verify a real agent
+
+`alfred demo` replays a scripted scenario. To watch Alfred catch a *real*
+agent's deviation — a framework-free Claude tool loop that decides on its
+own whether to grant an over-limit refund — see
+[`examples/agents/refund_bot/`](examples/agents/refund_bot/). Nothing is
+scripted there: the model decides, Alfred verifies.
+
 Once v0.1 ships to PyPI:
 
 ```bash

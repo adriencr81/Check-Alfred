@@ -27,3 +27,9 @@ entries below are the work done so far towards the v0.1 roadmap
   trace and a real digest with zero setup; CI (pytest/ruff/mypy matrix +
   CodeQL); CONTRIBUTING.md, issue templates,
   `docs/vcd/alfred-v0.1.md`.
+- Brique 7 — real-agent example (`examples/agents/refund_bot/`): a
+  framework-free Claude tool loop handles support tickets with real tool
+  executions, emits genuine OTLP traces, and `alfred watch` catches its
+  over-limit refund as a `forbidden_action` deviation under the stock
+  `examples/mandates/refund-bot.yaml` mandate. Scripted-client tests keep
+  CI network-free.

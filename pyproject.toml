@@ -59,9 +59,18 @@ ignore = ["S101"]  # allow assert in tests
 python_version = "3.11"
 strict = true
 files = ["src/alfred", "tests"]
+# examples/agents lets mypy resolve (and strictly check) the refund_bot
+# example imported by tests/test_example_refund_bot.py — see ADR 0010.
+mypy_path = ["examples/agents"]
 warn_return_any = true
 warn_unused_ignores = true
 disallow_any_generics = true
+
+[[tool.mypy.overrides]]
+# The anthropic SDK is an example-only dependency (never installed in CI);
+# run.py imports it lazily inside AnthropicClient. See ADR 0010, decision 2.
+module = "anthropic"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"

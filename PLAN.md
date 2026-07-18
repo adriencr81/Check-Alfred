@@ -261,6 +261,24 @@ def test_narrated_digest_only_uses_source_events():
 
 **Livrable public** : c'est LE launch. Voir §6.
 
+### Brique 7 — premier agent réel vérifié (ajoutée en v1.1, ADR 0010)
+
+**Objectif** : un agent réel (boucle d'outils Claude sans framework,
+`examples/agents/refund_bot/`) reçoit de vrais tickets, décide seul de ses
+appels d'outils, émet une vraie trace OTLP — et `alfred watch` attrape (ou
+pas : rien n'est scripté) sa déviation `forbidden_action` sous le mandat
+`examples/mandates/refund-bot.yaml` existant. C'est la source du GIF de
+launch et la réponse au « show me » d'une interview YC.
+
+**Tests falsifiables** : `tests/test_example_refund_bot.py` (client LLM
+scripté, zéro réseau) — trace ingestible, `tool.arguments.amount_eur` sur
+`issue_refund`, usage réel propagé, run à 250 € → exactement une déviation
+ancrée sur l'event ID du tool call, miroir conforme, erreur d'outil tracée.
+
+**Definition of done** : tests verts en CI + **un run réel** (`run.py`,
+clé API requise — action utilisateur) dont le digest attrape la déviation.
+Le launch (§6.3) est re-daté seulement après ce run.
+
 ---
 
 ## 6. Plan marketing
@@ -297,9 +315,9 @@ vos agents IA ont besoin d'un mandat, pas d'un dashboard ».
 - Post LinkedIn FR (angle manager/conformité).
 - Post Reddit adapté par sub.
 
-### 6.3 Launch (semaine du **4 août 2026**, J+20 — ADR 0009)
+### 6.3 Launch (date **suspendue** — ADR 0010 ; re-datage après le run réel de la Brique 7. Séquence ci-dessous inchangée, translatable.)
 
-**Séquence sur 5 jours ouvrés** (mardi 4 août → lundi suivant) :
+**Séquence sur 5 jours ouvrés** (mardi → lundi suivant) :
 
 | Jour | Canal | Angle | Objectif |
 |---|---|---|---|
