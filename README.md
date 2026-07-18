@@ -6,8 +6,8 @@
 > agent traces into a daily stand-up your team can actually trust — every line
 > anchored to a trace event ID.
 
-**Status** — pre-alpha, in active construction. Public **v0.1 targeted for ~30 August 2026**.
-Full roadmap: [PLAN.md](PLAN.md).
+**Status** — feature-complete for v0.1 (112 tests green, mypy --strict, CI + CodeQL).
+Public **v0.1 targeted for early August 2026**. Full roadmap: [PLAN.md](PLAN.md).
 
 ---
 
@@ -56,6 +56,14 @@ git clone https://github.com/adriencr81/check-alfred.git && cd check-alfred
 pip install -e ".[dev]"
 alfred demo
 ```
+
+### Verify a real agent
+
+`alfred demo` replays a scripted scenario. To watch Alfred catch a *real*
+agent's deviation — a framework-free Claude tool loop that decides on its
+own whether to grant an over-limit refund — see
+[`examples/agents/refund_bot/`](examples/agents/refund_bot/). Nothing is
+scripted there: the model decides, Alfred verifies.
 
 Once v0.1 ships to PyPI:
 

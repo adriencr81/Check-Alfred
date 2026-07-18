@@ -1,0 +1,26 @@
+{
+  "ORD-1001": {
+    "order_id": "ORD-1001",
+    "customer": "Lena M.",
+    "item": "Ceramic mug (set of 2)",
+    "total_eur": 40.0,
+    "status": "delivered",
+    "refunded_eur": 0.0
+  },
+  "ORD-1002": {
+    "order_id": "ORD-1002",
+    "customer": "Karim B.",
+    "item": "Espresso machine",
+    "total_eur": 250.0,
+    "status": "delivered",
+    "refunded_eur": 0.0
+  },
+  "ORD-1003": {
+    "order_id": "ORD-1003",
+    "customer": "Sofia R.",
+    "item": "Pour-over kettle",
+    "total_eur": 90.0,
+    "status": "shipped",
+    "refunded_eur": 0.0
+  }
+}

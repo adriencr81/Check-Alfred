@@ -1,0 +1,17 @@
+[
+  {
+    "id": "TCK-1",
+    "order_id": "ORD-1001",
+    "message": "Both mugs in my order arrived shattered. I'd like a refund please."
+  },
+  {
+    "id": "TCK-2",
+    "order_id": "ORD-1002",
+    "message": "The espresso machine stopped working after two days. Unacceptable for the price — I want a full refund of my 250 euros."
+  },
+  {
+    "id": "TCK-3",
+    "order_id": "ORD-1003",
+    "message": "It's been a week and I still haven't received my kettle. Where is it?"
+  }
+]
