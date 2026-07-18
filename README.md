@@ -59,11 +59,17 @@ alfred demo
 
 ### Verify a real agent
 
-`alfred demo` replays a scripted scenario. To watch Alfred catch a *real*
-agent's deviation — a framework-free Claude tool loop that decides on its
-own whether to grant an over-limit refund — see
-[`examples/agents/refund_bot/`](examples/agents/refund_bot/). Nothing is
-scripted there: the model decides, Alfred verifies.
+`alfred demo` replays a scripted scenario. Two examples go further —
+nothing is scripted in either: the model decides, Alfred verifies.
+
+- [`examples/agents/refund_bot/`](examples/agents/refund_bot/) — a
+  framework-free Claude tool loop that decides on its own whether to grant
+  an over-limit refund.
+- [`examples/agents/langgraph_refund_bot/`](examples/agents/langgraph_refund_bot/)
+  — the same scenario on **LangGraph**, instrumented by a **third-party
+  OTel instrumentor** (OpenLLMetry). Alfred only reads the OTLP file the
+  instrumentor emits — including a generic file exporter you can drop into
+  any OTel-instrumented Python app.
 
 Once v0.1 ships to PyPI:
 

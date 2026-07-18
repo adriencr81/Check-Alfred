@@ -37,11 +37,12 @@ def _event(
     trace_id: str = "trace-1",
     kind: SpanKind = SpanKind.TOOL_CALL,
     attributes: dict[str, object] | None = None,
+    parent: str | None = None,
 ) -> TraceEvent:
     return TraceEvent(
         event_id=EventId(event_id),
         trace_id=trace_id,
-        parent_span_id=None,
+        parent_span_id=parent,
         kind=kind,
         name="span",
         start_time=datetime(2026, 8, 30, 12, 0, 0, tzinfo=UTC),
@@ -116,6 +117,40 @@ def test_tasks_completed_counts_agent_task_spans() -> None:
     line = _line(digest, LineKind.TASKS_COMPLETED)
     assert line.value == 2.0
     assert line.sources == (EventId("e1"), EventId("e2"))
+
+
+def test_nested_agent_task_spans_count_once() -> None:
+    """Real instrumentors (e.g. OpenLLMetry on LangGraph) emit an inner
+    `invoke_agent` span nested under the root one — one invocation must
+    still count as one task. See ADR 0011."""
+    events = [
+        _event("root", kind=SpanKind.AGENT_TASK),
+        _event("workflow", kind=SpanKind.AGENT_TASK, parent="root"),
+        _event("deep", kind=SpanKind.AGENT_TASK, parent="workflow"),
+        _event("other-root", trace_id="trace-2", kind=SpanKind.AGENT_TASK),
+    ]
+    digest = build_digest(_mandate(), events, date(2026, 8, 30))
+    line = _line(digest, LineKind.TASKS_COMPLETED)
+    assert line.value == 2.0
+    assert line.sources == (EventId("root"), EventId("other-root"))
+
+
+def test_cost_line_prices_claude_models() -> None:
+    events = [
+        _event(
+            "e1",
+            kind=SpanKind.LLM_CALL,
+            attributes={
+                "gen_ai.response.model": "claude-opus-4-8",
+                "gen_ai.usage.input_tokens": 1000,
+                "gen_ai.usage.output_tokens": 200,
+            },
+        )
+    ]
+    digest = build_digest(_mandate(), events, date(2026, 8, 30))
+    line = _line(digest, LineKind.COST_EUR)
+    expected = (1000 / 1000) * 0.0046 + (200 / 1000) * 0.023
+    assert line.value == pytest.approx(expected)
 
 
 def test_tasks_completed_line_absent_when_no_agent_task() -> None:

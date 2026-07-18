@@ -15,7 +15,7 @@ from datetime import date
 from alfred.mandate.engine import evaluate
 from alfred.mandate.model import Deviation, Mandate
 from alfred.report.model import Digest, Line, LineKind
-from alfred.trace.model import SpanKind, TraceEvent
+from alfred.trace.model import EventId, SpanKind, TraceEvent
 
 _COST_ATTR = "gen_ai.usage.cost_eur"
 _MODEL_ATTR = "gen_ai.response.model"
@@ -31,6 +31,11 @@ _PRICING_EUR_PER_1K_TOKENS: dict[str, tuple[float, float]] = {
     "gpt-4o-mini-2024-07-18": (0.00015, 0.00060),
     "gpt-4o": (0.00250, 0.01000),
     "gpt-4o-2024-08-06": (0.00250, 0.01000),
+    # Anthropic public $/MTok converted at a fixed 0.92 USD→EUR snapshot,
+    # same convention as above. See docs/adr/0011-brique8-langgraph-adapter.md.
+    "claude-opus-4-8": (0.00460, 0.02300),
+    "claude-sonnet-5": (0.00276, 0.01380),
+    "claude-haiku-4-5": (0.00092, 0.00460),
 }
 
 
@@ -56,8 +61,29 @@ def _event_cost_eur(event: TraceEvent) -> float:
     return 0.0
 
 
+def _has_agent_task_ancestor(event: TraceEvent, by_id: dict[EventId, TraceEvent]) -> bool:
+    seen: set[str] = set()
+    parent = event.parent_span_id
+    while parent and parent not in seen:
+        seen.add(parent)
+        ancestor = by_id.get(EventId(parent))
+        if ancestor is None:
+            return False
+        if ancestor.kind is SpanKind.AGENT_TASK:
+            return True
+        parent = ancestor.parent_span_id
+    return False
+
+
 def _tasks_completed_line(events: Sequence[TraceEvent]) -> Line | None:
-    tasks = [event for event in events if event.kind is SpanKind.AGENT_TASK]
+    # Real instrumentors nest an inner invoke_agent span under the root
+    # one — only ancestor-free agent spans count as tasks (ADR 0011).
+    by_id = {event.event_id: event for event in events}
+    tasks = [
+        event
+        for event in events
+        if event.kind is SpanKind.AGENT_TASK and not _has_agent_task_ancestor(event, by_id)
+    ]
     if not tasks:
         return None
     return Line(

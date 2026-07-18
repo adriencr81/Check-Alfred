@@ -33,3 +33,13 @@ entries below are the work done so far towards the v0.1 roadmap
   over-limit refund as a `forbidden_action` deviation under the stock
   `examples/mandates/refund-bot.yaml` mandate. Scripted-client tests keep
   CI network-free.
+- Brique 8 — third-party instrumentor support: ingestion-boundary
+  normalization of GenAI semconv variants (`gen_ai.task.status` →
+  `tool.result.status`, tool-argument promotion from
+  `gen_ai.tool.call.arguments`, `arrayValue` attributes, nested/creation
+  agent spans no longer double-count tasks), Claude entries in the pricing
+  table, a LangGraph example instrumented by
+  `opentelemetry-instrumentation-langchain`
+  (`examples/agents/langgraph_refund_bot/`), and a generic OTLP-JSON file
+  `SpanExporter` usable by any OTel-instrumented Python app. Regression
+  fixture captured from a real instrumented run.

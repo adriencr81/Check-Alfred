@@ -278,6 +278,28 @@ ancrée sur l'event ID du tool call, miroir conforme, erreur d'outil tracée.
 **Definition of done** : tests verts en CI + **un run réel** (`run.py`,
 clé API requise — action utilisateur) dont le digest attrape la déviation.
 Le launch (§6.3) est re-daté seulement après ce run.
+**Statut : run réel exécuté et validé par l'utilisateur (2026-07-18).**
+
+### Brique 8 — instrumentor tiers + couche d'adaptation (ajoutée en v1.1, ADR 0011)
+
+**Objectif** : prouver « ingests OTLP traces » contre un instrumentor
+qu'on ne contrôle pas. Même scénario refund rebâti sur LangGraph +
+`opentelemetry-instrumentation-langchain` (OpenLLMetry) →
+`examples/agents/langgraph_refund_bot/`, avec un SpanExporter générique
+OTLP JSON (`otlp_file.py`) comme pont réutilisable. Côté produit : la
+couche d'adaptation anticipée par §9 — normalisation des semconv tierces à
+la frontière d'ingestion (`gen_ai.task.status` → `tool.result.status`,
+promotion des arguments d'outils, `arrayValue`, tâches imbriquées non
+double-comptées, `create_agent` ≠ tâche) + prix Claude dans la table.
+
+**Tests falsifiables** : `tests/test_trace_normalize.py` sur une fixture
+**capturée d'un run instrumenté réel** (pas écrite à la main) — test-clé :
+une trace LangGraph déclenche `forbidden_action` sous le mandat
+`refund-bot.yaml` inchangé.
+
+**Definition of done** : tests verts en CI + run de bout en bout (exemple
+→ `alfred watch` → digest « 1 task, 1 deviation » ancrée sur le span réel
+de l'instrumentor). Le run avec vrai modèle est l'étape utilisateur.
 
 ---
 
