@@ -1,8 +1,8 @@
 """Alfred CLI entrypoint.
 
 `init` and `watch` land in Brique 5 (see PLAN.md §5 and
-docs/adr/0007-brique5-delivery-cli-design.md); `demo` remains a stub for
-Brique 6.
+docs/adr/0007-brique5-delivery-cli-design.md); `demo` lands in Brique 6
+(see docs/adr/0008-brique6-demo-launch-polish-design.md).
 """
 
 from __future__ import annotations
@@ -15,8 +15,11 @@ from pathlib import Path
 from alfred import __version__
 from alfred.config import ConfigError, init_project, load_config
 from alfred.deliver import slack, stdout
+from alfred.demo import build_demo_payload, demo_mandate
 from alfred.mandate.model import MandateError
 from alfred.mandate.yaml_io import load_mandate
+from alfred.report.build import build_digest
+from alfred.trace.ingest import ingest_otlp_json
 from alfred.trace.store import TraceStore
 from alfred.watch import watch_once
 
@@ -58,9 +61,13 @@ def _cmd_watch(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_demo_stub(args: argparse.Namespace) -> int:
-    print("alfred: command 'demo' is not yet implemented (see PLAN.md).", file=sys.stderr)
-    return 2
+def _cmd_demo(args: argparse.Namespace) -> int:
+    payload = build_demo_payload(args.agent)
+    events = ingest_otlp_json(payload)
+    mandate = demo_mandate(args.agent)
+    digest = build_digest(mandate, events, events[0].start_time.date())
+    stdout.deliver(digest)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -84,8 +91,11 @@ def main(argv: list[str] | None = None) -> int:
     watch_parser.add_argument("--project", default=".")
     watch_parser.set_defaults(func=_cmd_watch)
 
-    demo_parser = subparsers.add_parser("demo", help="Run a fake instrumented agent (Brique 6)")
-    demo_parser.set_defaults(func=_cmd_demo_stub)
+    demo_parser = subparsers.add_parser(
+        "demo", help="Run a fake instrumented agent → real digest, zero setup"
+    )
+    demo_parser.add_argument("--agent", default="demo-bot")
+    demo_parser.set_defaults(func=_cmd_demo)
 
     args = parser.parse_args(argv)
 

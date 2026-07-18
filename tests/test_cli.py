@@ -1,6 +1,7 @@
-"""alfred.cli — `init` and `watch` subcommand wiring (Brique 5).
+"""alfred.cli — `init`/`watch` (Brique 5) and `demo` (Brique 6) subcommand wiring.
 
-See PLAN.md §5 Brique 5 and docs/adr/0007-brique5-delivery-cli-design.md.
+See PLAN.md §5 Briques 5-6, docs/adr/0007-brique5-delivery-cli-design.md and
+docs/adr/0008-brique6-demo-launch-polish-design.md.
 """
 
 from __future__ import annotations
@@ -69,10 +70,16 @@ def test_cli_watch_reports_missing_project(
     assert "no Alfred project found" in capsys.readouterr().err
 
 
-def test_cli_demo_is_still_a_stub(capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_demo_runs_fake_agent_and_prints_digest(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     exit_code = main(["demo"])
-    assert exit_code == 2
-    assert "not yet implemented" in capsys.readouterr().err
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "demo-bot" in out
+    assert "Tasks completed" in out
+    assert "Deviations (mandate)" in out
+    assert "read_pii" in out
 
 
 def test_cli_no_command_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
