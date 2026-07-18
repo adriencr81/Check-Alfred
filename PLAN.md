@@ -4,8 +4,14 @@
 > soit modifier ce document, soit être documentée dans un ADR daté sous
 > `docs/adr/`. Pas de plan parallèle en tête ou en Notion.
 
-**Version** : 1.0 · **Date** : 2026-07-15 · **Cible produit** : v0.1 publique à J+45 (30 août 2026).
-**Cible fondateur** : dossier YC 2027 lisible à J+150 (12 décembre 2026).
+**Version** : 1.1 · **Date** : 2026-07-18 · **Cible produit** : v0.1 publique le **4 août 2026** (J+20).
+**Cible fondateur** : candidature YC **déposée le 2026-07-18** — traction démontrable avant la réponse YC.
+
+> Révision v1.1 (2026-07-18, ADR 0009) : les 6 briques §5 sont livrées à
+> J+3 (112 tests, mypy --strict, CI + CodeQL verts). D2 est supersédée
+> (candidature YC déposée), le launch avance du 30 août au 4 août, et un
+> sprint S0 « tout ce qui est public » remplace §11. Voir
+> `docs/adr/0009-yc-application-submitted-replan-v1-1.md`.
 
 ---
 
@@ -14,7 +20,7 @@
 | # | Décision | Impact |
 |---|---|---|
 | D1 | **Séquencement hybride RAG→Alfred** : finir la Brique 6 du harnais RAG (en cours). Geler B7-B9 en backlog. Attaquer Alfred immédiatement après. | Launch Alfred déplacé de J+150 à J+45 (~30 août 2026). |
-| D2 | **YC : cible unique = candidature sérieuse 2027** (Winter ou Summer 2027 selon les métriques à J+150). Pas de candidature-exercice Fall 2026. | Pas de sprint pitch parallèle. Le plan produit devient le pitch. |
+| D2 | ~~YC : cible unique = candidature sérieuse 2027. Pas de candidature-exercice Fall 2026.~~ **Supersédée (ADR 0009)** : candidature déposée le 2026-07-18. Le plan est calé sur les événements YC (invitation à interview), pas sur des dates de batch. | Piste parallèle « YC-readiness » (vidéo 1 min, screencast démo, why-now, suivi métriques hebdo). |
 | D3 | **Nom paquet PyPI = `alfred-ai`**, nom import = `alfred`, org GitHub = `alfred-ai`. | Ligne 1 du README. À réserver dans la semaine. |
 | D4 | **Licence Apache 2.0** pour le paquet open-source, moteur de mandat avancé closed-source (open-core assumé dès le README). | Ligne 2 du README. |
 | D5 | **Règle produit absolue** : chaque affirmation d'un rapport est ancrée sur un event ID de la trace. Le LLM ne fait que la mise en langage. | Encodée dans CLAUDE.md et testée par un test dédié (B4). |
@@ -135,6 +141,12 @@ alfred/
 ---
 
 ## 5. Roadmap — 6 briques v0.1
+
+> **Statut v1.1 : les 6 briques sont livrées** (2026-07-18, `main` vert —
+> preuve dans `docs/vcd/alfred-v0.1.md`). Restent les actions *publiques*
+> de la DoD B6 (PyPI, tag, GIF, good first issues, org/domaine),
+> absorbées par le sprint S0 de §11. Cette section est conservée comme
+> contrat de référence.
 
 Chaque brique est un **contrat** : objectif, tests falsifiables, definition-of-done, deliverable public. Le passage d'une brique à la suivante exige que la DoD précédente soit remplie et committée. Une semaine calendaire ≈ 5-7 heures de travail (contrainte CDI + 1h/jour ouvré + weekends partiels).
 
@@ -257,7 +269,16 @@ def test_narrated_digest_only_uses_source_events():
 
 Les stars viennent d'une **thèse racontée avec des preuves**. La thèse d'Alfred : *« on déploie des employés IA sans mandat, sans daily, sans dossier de preuve — voici la couche manquante »*. Chaque contenu la ré-encode. Aucun post ne parle du produit sans une preuve concrète (finding, code, GIF).
 
-### 6.2 Pré-launch (S1→S6, pendant le build)
+### 6.2 Pré-launch (compressé : 21 juillet → 3 août, ADR 0009)
+
+Le build ayant fini à J+3, le pré-launch passe de 6 semaines à 2. Cibles
+recalées : **15 noms** d'early users au 1er août (au lieu de 30 à J+45),
+DM personnalisés vers ~8 d'entre eux dès que le GIF existe, objectif
+inchangé de 5 installations le jour du launch + 2-3 témoignages écrits.
+**2 posts build-in-public** au lieu de 6 : (1) le post B4 « comment on
+empêche notre LLM d'halluciner nos rapports » — il est déjà documenté
+dans `docs/verified_nlg.md`, c'est le plus fort ; (2) un post « pourquoi
+vos agents IA ont besoin d'un mandat, pas d'un dashboard ».
 
 **Cadence** : 1 post/semaine, EN + FR (X + LinkedIn), toujours sur un problème concret rencontré pendant la construction. Pas « j'ai codé la brique 3 » mais « voici pourquoi un agent qui résume sa propre activité hallucine, et comment on l'ancre sur la trace » (post issu de B4 par exemple).
 
@@ -276,9 +297,9 @@ Les stars viennent d'une **thèse racontée avec des preuves**. La thèse d'Alfr
 - Post LinkedIn FR (angle manager/conformité).
 - Post Reddit adapté par sub.
 
-### 6.3 Launch (J+45 à J+50, semaine du 30 août 2026)
+### 6.3 Launch (semaine du **4 août 2026**, J+20 — ADR 0009)
 
-**Séquence sur 5 jours ouvrés** (mardi → lundi suivant) :
+**Séquence sur 5 jours ouvrés** (mardi 4 août → lundi suivant) :
 
 | Jour | Canal | Angle | Objectif |
 |---|---|---|---|
@@ -312,7 +333,12 @@ Les stars viennent d'une **thèse racontée avec des preuves**. La thèse d'Alfr
 
 ### 7.1 Le dossier qui convertit
 
-À constituer à J+150 (décembre 2026) pour candidature Winter 2027 (deadline typique ~octobre 2026 — **à vérifier une fois la date officielle publiée**) ou Summer 2027 :
+**v1.1 (ADR 0009)** : la candidature est déposée (2026-07-18). Ce tableau
+n'est plus une cible à J+150 mais la trajectoire à démontrer *en continu*
+— si une invitation à interview arrive, on présente la pente (courbe
+d'installs et de stars depuis le launch du 4 août), pas le niveau absolu.
+Les cibles chiffrées restent la référence pour un éventuel re-dépôt sur
+un batch ultérieur :
 
 | Élément | Cible à J+150 |
 |---|---|
@@ -387,13 +413,29 @@ Backlog du harnais RAG (rappel D1) : B7-B9 sont documentées dans `BACKLOG_RAG.m
 
 ---
 
-## 11. Prochaines actions immédiates (48h)
+## 11. Sprint S0 « tout ce qui est public » (18–21 juillet, ADR 0009)
 
-- [ ] Réserver `alfred-ai` sur PyPI, l'org GitHub `alfred-ai`, un domaine (`getalfred.dev` ou `alfred.sh`).
-- [ ] Finir la Brique 6 du harnais RAG sans dévier vers B7 (D1).
-- [ ] Tag `v1.0` du harnais RAG, publier `BACKLOG_RAG.md` avec B7-B9 documentées.
-- [ ] Première session Claude Code sur Alfred : implémenter les stubs de la Brique 1 pour rendre `pytest -q` vert (le squelette et les tests sont déjà en place — voir `src/alfred/trace/` et `tests/`).
-- [ ] Commit `feat: brique 1 — trace store + otlp ingest`.
+Dans cet ordre — le nom PyPI d'abord, chaque jour d'attente est un risque
+de squat (`alfred-ai` vérifié libre le 2026-07-18) :
+
+- [ ] Publier `alfred-ai 0.1.0rc1` sur PyPI (réserve le nom).
+- [ ] Créer l'org GitHub `alfred-ai`, transférer le repo (AVANT le launch
+      — les redirections préservent les liens, les stars s'accumulent à
+      l'adresse définitive). Réserver le domaine (`getalfred.dev` ou `alfred.sh`).
+- [ ] Enregistrer le GIF de démo (< 15 s, boucle propre) → haut du README.
+- [ ] Ouvrir les 3 issues « good first issue ».
+- [ ] Basculer le quickstart README sur `pip install alfred-ai`.
+- [ ] Tag `v0.1.0` + release PyPI finale.
+
+Puis, semaines du 21 et 28 juillet (pré-launch compressé, §6.2) :
+
+- [ ] Publier le post B4 (« comment on empêche notre LLM d'halluciner nos
+      rapports » — matière déjà dans `docs/verified_nlg.md`).
+- [ ] Constituer la liste de 15 early users, DM ~8 avec le GIF.
+- [ ] Rédiger le post Show HN + les assets §6.2 (thread X, LinkedIn FR, Reddit).
+- [ ] Piste YC-readiness : vidéo fondateur 1 min, screencast démo 60 s,
+      réponse « why now » écrite, suivi métriques hebdo (point zéro daté).
+- [ ] **Launch mardi 4 août 14h-16h Paris** (séquence §6.3).
 
 ---
 

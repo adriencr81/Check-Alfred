@@ -6,8 +6,8 @@
 > agent traces into a daily stand-up your team can actually trust — every line
 > anchored to a trace event ID.
 
-**Status** — pre-alpha, in active construction. Public **v0.1 targeted for ~30 August 2026**.
-Full roadmap: [PLAN.md](PLAN.md).
+**Status** — feature-complete for v0.1 (112 tests green, mypy --strict, CI + CodeQL).
+Public **v0.1 targeted for early August 2026**. Full roadmap: [PLAN.md](PLAN.md).
 
 ---
 
