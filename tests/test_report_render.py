@@ -34,6 +34,8 @@ def _digest_with_one_deviation() -> Digest:
 
 
 def test_render_matches_fixed_format_single_deviation() -> None:
+    """One deviation renders in the same list format as several — one
+    layout regardless of count (see ADR 0011, arbitrage S7)."""
     lines = render(_digest_with_one_deviation()).splitlines()
     assert lines[0] == "Alfred · refund-bot-v3 · 2026-08-30"
     assert lines[1] == ""
@@ -47,10 +49,11 @@ def test_render_matches_fixed_format_single_deviation() -> None:
     assert "3" in lines[4]
     assert "[evt:e01, e02, e03]" in lines[4]
     assert lines[5].startswith("Deviations (mandate):")
-    assert "[evt:d0a]" in lines[5]
-    assert "tool_not_allowed" in lines[5]
-    assert "read_pii" in lines[5]
-    assert len(lines) == 6
+    assert "1" in lines[5]
+    assert lines[6].startswith("  - tool_not_allowed:")
+    assert "[evt:d0a]" in lines[6]
+    assert "read_pii" in lines[6]
+    assert len(lines) == 7
 
 
 def test_render_omits_deviations_section_when_none() -> None:

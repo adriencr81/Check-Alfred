@@ -9,6 +9,7 @@ of a new dependency, mandate scaffold reuse via `dump_mandate`).
 from __future__ import annotations
 
 import json
+import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,7 @@ from alfred.mandate.yaml_io import dump_mandate
 _MANDATE_FILENAME = "mandate.yaml"
 _CONFIG_RELATIVE_PATH = Path(".alfred") / "config.toml"
 _DEFAULT_TRACE_DB_RELATIVE_PATH = ".alfred/trace.db"
+_WEBHOOK_ENV_VAR = "ALFRED_SLACK_WEBHOOK_URL"
 
 
 class ConfigError(Exception):
@@ -83,6 +85,10 @@ def init_project(directory: Path | str, agent: str) -> None:
 def load_config(directory: Path | str) -> AlfredConfig:
     """Load `.alfred/config.toml` relative to `directory` (the project root).
 
+    The Slack webhook is a secret: the `ALFRED_SLACK_WEBHOOK_URL`
+    environment variable takes priority over the `slack_webhook_url` key in
+    config.toml, so it never has to be written to a file at all.
+
     Raises `ConfigError` if no project is initialized there, or the config
     is malformed / missing a required key.
     """
@@ -103,7 +109,7 @@ def load_config(directory: Path | str) -> AlfredConfig:
     except KeyError as exc:
         raise ConfigError(f"config at {config_path} is missing required key {exc}") from exc
 
-    webhook = raw.get("slack_webhook_url")
+    webhook = os.environ.get(_WEBHOOK_ENV_VAR) or raw.get("slack_webhook_url")
     return AlfredConfig(
         mandate_path=mandate_path,
         trace_db_path=trace_db_path,

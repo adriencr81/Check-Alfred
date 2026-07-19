@@ -57,6 +57,29 @@ def test_load_config_reads_slack_webhook_url(tmp_path: Path) -> None:
     assert config.slack_webhook_url == "https://hooks.slack.com/services/T0/B0/xyz"
 
 
+def test_webhook_env_var_wins_over_config_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B11: the webhook is a secret — the env var overrides the file, so it
+    never has to be committed to config.toml at all."""
+    init_project(tmp_path, agent="refund-bot-v3")
+    config_path = tmp_path / ".alfred" / "config.toml"
+    with config_path.open("a", encoding="utf-8") as handle:
+        handle.write('slack_webhook_url = "https://hooks.slack.com/services/OLD"\n')
+    monkeypatch.setenv("ALFRED_SLACK_WEBHOOK_URL", "https://hooks.slack.com/services/ENV")
+    config = load_config(tmp_path)
+    assert config.slack_webhook_url == "https://hooks.slack.com/services/ENV"
+
+
+def test_webhook_env_var_works_without_config_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_project(tmp_path, agent="refund-bot-v3")
+    monkeypatch.setenv("ALFRED_SLACK_WEBHOOK_URL", "https://hooks.slack.com/services/ENV")
+    config = load_config(tmp_path)
+    assert config.slack_webhook_url == "https://hooks.slack.com/services/ENV"
+
+
 def test_load_config_raises_when_missing(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="no Alfred project found"):
         load_config(tmp_path)

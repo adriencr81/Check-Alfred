@@ -37,12 +37,6 @@ def _render_line(line: Line) -> str:
 def _render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
     if not deviations:
         return []
-    if len(deviations) == 1:
-        deviation = deviations[0]
-        return [
-            f"Deviations (mandate): {1:>10}   {_format_sources(deviation.event_ids)} "
-            f"— {deviation.type.value}: {deviation.message}"
-        ]
     rows = [f"Deviations (mandate): {len(deviations):>10}"]
     rows.extend(
         f"  - {deviation.type.value}: {deviation.message}   "
