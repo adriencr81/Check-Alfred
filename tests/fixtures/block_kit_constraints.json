@@ -1,14 +1,21 @@
 {
-  "_note": "Hand-authored from Slack's public Block Kit reference docs. Slack does not publish a downloadable official JSON Schema, so this fixture encodes the documented constraints for the block types Alfred emits — see docs/adr/0007-brique5-delivery-cli-design.md.",
+  "_note": "Hand-authored from Slack's public Block Kit reference docs. Slack does not publish a downloadable official JSON Schema, so this fixture encodes the documented constraints for the block types Alfred emits — see docs/adr/0007-brique5-delivery-cli-design.md and docs/adr/0012-slack-native-block-kit.md.",
   "max_blocks": 50,
-  "block_text_limits": {
+  "block_limits": {
     "header": {
       "text_types": ["plain_text"],
       "max_length": 150
     },
     "section": {
       "text_types": ["plain_text", "mrkdwn"],
-      "max_length": 3000
+      "max_length": 3000,
+      "max_fields": 10,
+      "field_max_length": 2000
+    },
+    "context": {
+      "max_elements": 10,
+      "element_text_types": ["plain_text", "mrkdwn"],
+      "element_max_length": 2000
     }
   }
 }

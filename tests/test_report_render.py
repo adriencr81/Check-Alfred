@@ -6,7 +6,7 @@ from datetime import date
 
 from alfred.mandate.model import Deviation, DeviationType
 from alfred.report.model import Digest, Line, LineKind
-from alfred.report.render import render
+from alfred.report.render import format_sources, render
 from alfred.trace.model import EventId
 
 
@@ -61,6 +61,35 @@ def test_render_omits_deviations_section_when_none() -> None:
     )
     output = render(digest)
     assert "Deviations" not in output
+
+
+def test_format_sources_truncates_long_ids_to_prefix() -> None:
+    assert format_sources((EventId("e69a993566e99bd0"),)) == "[evt:e69a9935…]"
+
+
+def test_format_sources_keeps_short_ids_intact() -> None:
+    assert format_sources((EventId("d0a"), EventId("demo-1-task"))) == "[evt:d0a, demo-1-task]"
+
+
+def test_format_sources_samples_at_most_three_ids() -> None:
+    ids = tuple(EventId(f"f0dd0fd8f111ebc{i}") for i in range(6))
+    assert format_sources(ids) == "[evt:f0dd0fd8…, f0dd0fd8…, f0dd0fd8… +3]"
+
+
+def test_format_sources_omits_sample_suffix_at_three_ids() -> None:
+    assert format_sources((EventId("a1"), EventId("a2"), EventId("a3"))) == "[evt:a1, a2, a3]"
+
+
+def test_render_never_shows_a_full_long_event_id() -> None:
+    long_id = "784800533a465770"
+    digest = Digest(
+        agent="refund-bot-v3",
+        date=date(2026, 8, 30),
+        lines=(Line(LineKind.TASKS_COMPLETED, 1.0, (EventId(long_id),)),),
+    )
+    output = render(digest)
+    assert long_id not in output
+    assert "evt:78480053…" in output
 
 
 def test_render_lists_each_deviation_when_multiple() -> None:
