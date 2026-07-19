@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import json
 import re
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from typing import Protocol
 
+from alfred import _http
+from alfred._http import HTTPRequest as HTTPRequest  # re-export: part of this module's API
 from alfred.narrate.model import NarratedDigest, Sentence
 from alfred.report.model import Digest, Line
 from alfred.trace.model import EventId
@@ -76,32 +76,15 @@ def narrate(digest: Digest, llm_client: LLMClient) -> NarratedDigest:
     return NarratedDigest(digest=digest, sentences=sentences)
 
 
-@dataclass(frozen=True, slots=True)
-class HTTPRequest:
-    url: str
-    headers: dict[str, str]
-    body: bytes
-    timeout_s: float
-
-
 class Transport(Protocol):
     def __call__(self, request: HTTPRequest) -> bytes: ...
 
 
 def _urllib_transport(request: HTTPRequest) -> bytes:
-    if not request.url.startswith(("http://", "https://")):
-        raise NarrateError(f"refusing to fetch non-HTTP(S) URL: {request.url!r}")
-    urlreq = urllib.request.Request(  # noqa: S310
-        request.url, data=request.body, headers=request.headers, method="POST"
-    )
     try:
-        with urllib.request.urlopen(urlreq, timeout=request.timeout_s) as response:  # noqa: S310
-            content: bytes = response.read()
-            return content
-    except urllib.error.HTTPError as exc:
-        raise NarrateError(f"LLM endpoint returned HTTP {exc.code}: {exc.reason}") from exc
-    except urllib.error.URLError as exc:
-        raise NarrateError(f"LLM endpoint unreachable: {exc.reason}") from exc
+        return _http.post(request)
+    except _http.TransportError as exc:
+        raise NarrateError(f"LLM endpoint: {exc}") from exc
 
 
 def _extract_content(raw: bytes) -> str:

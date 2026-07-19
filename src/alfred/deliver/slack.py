@@ -3,20 +3,18 @@
 See PLAN.md §5 Brique 5 and docs/adr/0007-brique5-delivery-cli-design.md for
 why the payload wraps `alfred.report.render.render`'s fixed-format text in a
 single Block Kit section — one source of truth for the digest's textual
-layout — instead of re-deriving per-line blocks. The HTTP shape
-(`HTTPRequest`/`Transport`) mirrors `alfred.narrate.llm`'s injection pattern
-for the same reason: real `urllib` by default, a fake `Transport` in tests,
-zero real network calls in the test suite.
+layout — instead of re-deriving per-line blocks. HTTP plumbing is shared
+with `alfred.narrate.llm` via `alfred._http`: real `urllib` by default, a
+fake `Transport` in tests, zero real network calls in the test suite.
 """
 
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
-from dataclasses import dataclass
 from typing import Any, Protocol
 
+from alfred import _http
+from alfred._http import HTTPRequest as HTTPRequest  # re-export: part of this module's API
 from alfred.report.model import Digest
 from alfred.report.render import render
 
@@ -44,30 +42,15 @@ def build_block_kit_payload(digest: Digest) -> dict[str, Any]:
     }
 
 
-@dataclass(frozen=True, slots=True)
-class HTTPRequest:
-    url: str
-    headers: dict[str, str]
-    body: bytes
-    timeout_s: float
-
-
 class Transport(Protocol):
     def __call__(self, request: HTTPRequest) -> None: ...
 
 
 def _urllib_transport(request: HTTPRequest) -> None:
-    if not request.url.startswith(("http://", "https://")):
-        raise DeliverError(f"refusing to post to non-HTTP(S) URL: {request.url!r}")
-    urlreq = urllib.request.Request(  # noqa: S310
-        request.url, data=request.body, headers=request.headers, method="POST"
-    )
     try:
-        urllib.request.urlopen(urlreq, timeout=request.timeout_s)  # noqa: S310
-    except urllib.error.HTTPError as exc:
-        raise DeliverError(f"Slack webhook returned HTTP {exc.code}: {exc.reason}") from exc
-    except urllib.error.URLError as exc:
-        raise DeliverError(f"Slack webhook unreachable: {exc.reason}") from exc
+        _http.post(request)
+    except _http.TransportError as exc:
+        raise DeliverError(f"Slack webhook: {exc}") from exc
 
 
 def send(
