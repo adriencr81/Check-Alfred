@@ -1,9 +1,12 @@
 """Digest → fixed-format text.
 
-Format frozen by PLAN.md §5 Brique 3 (see also README's digest example) — do
-not vary the layout per output sink. The same string serves both the stdout
-and markdown outputs called for by Brique 3's objective; delivery (writing
-it to a file vs. printing it) is out of scope here (Brique 5).
+Format frozen by PLAN.md §5 Brique 3 (see also README's digest example).
+The same string serves both the stdout and markdown outputs called for by
+Brique 3's objective; delivery (writing it to a file vs. printing it) is
+out of scope here (Brique 5). The Slack sink builds native Block Kit blocks
+instead (docs/adr/0012-slack-native-block-kit.md) but reuses this module's
+`LABELS`, `format_value` and `format_sources` so labels, value formatting
+and evidence display stay identical across sinks.
 """
 
 from __future__ import annotations
