@@ -41,9 +41,7 @@ def _is_escalated(events: Sequence[TraceEvent]) -> bool:
     return any(event.attributes.get(_ESCALATED_ATTR) is True for event in events)
 
 
-def _check_tool_not_allowed(
-    mandate: Mandate, tool_calls: Sequence[TraceEvent]
-) -> list[Deviation]:
+def _check_tool_not_allowed(mandate: Mandate, tool_calls: Sequence[TraceEvent]) -> list[Deviation]:
     deviations: list[Deviation] = []
     for event in tool_calls:
         tool = _tool_name(event)
@@ -59,9 +57,7 @@ def _check_tool_not_allowed(
     return deviations
 
 
-def _check_forbidden_actions(
-    mandate: Mandate, tool_calls: Sequence[TraceEvent]
-) -> list[Deviation]:
+def _check_forbidden_actions(mandate: Mandate, tool_calls: Sequence[TraceEvent]) -> list[Deviation]:
     deviations: list[Deviation] = []
     for action in mandate.forbidden_actions:
         match = _FORBIDDEN_PATTERN.match(action)

@@ -17,6 +17,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
-      - run: pytest -q
+      - run: pytest -q --cov=alfred --cov-report=term
       - run: ruff check .
-      - run: mypy --strict src/
+      - run: ruff format --check .
+      # python -m: always the env's mypy, whole config (src + tests, strict).
+      - run: python -m mypy

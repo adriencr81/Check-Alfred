@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "alfred-ai"
-version = "0.1.0.dev0"
+dynamic = ["version"]
 description = "Accountability layer for AI employees: mandate-anchored daily digests from agent traces."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -37,8 +37,13 @@ dev = [
 alfred = "alfred.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/alfred-ai/alfred"
-Issues = "https://github.com/alfred-ai/alfred/issues"
+# Points at the repo that actually exists today; move to the alfred-ai org
+# when PLAN.md D3 (org + PyPI name reservation) is executed.
+Homepage = "https://github.com/adriencr81/Check-Alfred"
+Issues = "https://github.com/adriencr81/Check-Alfred/issues"
+
+[tool.hatch.version]
+path = "src/alfred/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/alfred"]

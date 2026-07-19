@@ -48,9 +48,7 @@ def _mandate_from_dict(raw: dict[str, Any]) -> Mandate:
             allowed_tools=frozenset(str(tool) for tool in raw["allowed_tools"]),
             daily_budget_eur=float(raw["daily_budget_eur"]),
             forbidden_actions=tuple(str(action) for action in raw["forbidden_actions"]),
-            escalate_when=tuple(
-                _parse_escalation_rule(str(rule)) for rule in raw["escalate_when"]
-            ),
+            escalate_when=tuple(_parse_escalation_rule(str(rule)) for rule in raw["escalate_when"]),
         )
     except (TypeError, ValueError) as exc:
         raise MandateError(f"Malformed mandate: {exc}") from exc

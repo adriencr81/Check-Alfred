@@ -13,9 +13,15 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: ruff-format
+        name: ruff format --check
+        entry: python3 -m ruff format --check .
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: mypy
-        name: mypy --strict
-        entry: python3 -m mypy --strict src/
+        name: mypy (strict, src + tests)
+        entry: python3 -m mypy
         language: system
         pass_filenames: false
         always_run: true

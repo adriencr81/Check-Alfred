@@ -47,9 +47,7 @@ def test_cli_watch_ingests_and_prints_digest(
     assert "Tasks completed" in out
 
 
-def test_cli_watch_reports_no_new_files(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_cli_watch_reports_no_new_files(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     project_dir = tmp_path / "project"
     main(["init", str(project_dir), "--agent", "refund-bot-v3"])
     empty_traces_dir = tmp_path / "traces"

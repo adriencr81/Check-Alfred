@@ -59,21 +59,25 @@ def test_put_is_idempotent_on_same_id(store: TraceStore) -> None:
 
 
 def test_find_by_trace_returns_all_events_of_a_trace(store: TraceStore) -> None:
-    store.put_many([
-        _event("a", "trace-A"),
-        _event("b", "trace-A"),
-        _event("c", "trace-B"),
-    ])
+    store.put_many(
+        [
+            _event("a", "trace-A"),
+            _event("b", "trace-A"),
+            _event("c", "trace-B"),
+        ]
+    )
     got = store.find_by_trace("trace-A")
     assert {e.event_id for e in got} == {"a", "b"}
 
 
 def test_find_by_trace_orders_by_start_time(store: TraceStore) -> None:
-    store.put_many([
-        _event("c", "trace-A", start_time=datetime(2026, 8, 30, 12, 0, 2, tzinfo=UTC)),
-        _event("a", "trace-A", start_time=datetime(2026, 8, 30, 12, 0, 0, tzinfo=UTC)),
-        _event("b", "trace-A", start_time=datetime(2026, 8, 30, 12, 0, 1, tzinfo=UTC)),
-    ])
+    store.put_many(
+        [
+            _event("c", "trace-A", start_time=datetime(2026, 8, 30, 12, 0, 2, tzinfo=UTC)),
+            _event("a", "trace-A", start_time=datetime(2026, 8, 30, 12, 0, 0, tzinfo=UTC)),
+            _event("b", "trace-A", start_time=datetime(2026, 8, 30, 12, 0, 1, tzinfo=UTC)),
+        ]
+    )
     got = store.find_by_trace("trace-A")
     assert [e.event_id for e in got] == ["a", "b", "c"]
 

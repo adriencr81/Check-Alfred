@@ -110,9 +110,7 @@ def test_narrate_preserves_line_order() -> None:
     assert [sentence.line.kind for sentence in narrated.sentences] == [
         line.kind for line in digest.lines
     ]
-    assert all(
-        narrated.sentences[i].line is digest.lines[i] for i in range(len(digest.lines))
-    )
+    assert all(narrated.sentences[i].line is digest.lines[i] for i in range(len(digest.lines)))
 
 
 def test_narrate_calls_llm_once_per_line() -> None:

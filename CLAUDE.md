@@ -33,7 +33,8 @@ Aucun résumé auto-déclaré. Si une implémentation viole ça : STOP, replanif
 
 ## Commandes
 - Tests : pytest -q
-- Lint : ruff check . && mypy --strict src/
+- Lint : ruff check . && ruff format --check . && python -m mypy
+  (toujours `python -m mypy` — le binaire nu peut résoudre un mypy hors env)
 - Démo locale : alfred demo (agent factice → daily en stdout)
 - Setup hooks (une fois) : pre-commit install
 

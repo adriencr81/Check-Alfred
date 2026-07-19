@@ -39,8 +39,7 @@ def _render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
         return []
     rows = [f"Deviations (mandate): {len(deviations):>10}"]
     rows.extend(
-        f"  - {deviation.type.value}: {deviation.message}   "
-        f"{_format_sources(deviation.event_ids)}"
+        f"  - {deviation.type.value}: {deviation.message}   {_format_sources(deviation.event_ids)}"
         for deviation in deviations
     )
     return rows

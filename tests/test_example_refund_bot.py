@@ -71,9 +71,7 @@ def _response(
     )
 
 
-def _run_scripted_ticket(
-    responses: list[LLMResponse], ticket: dict[str, str]
-) -> list[TraceEvent]:
+def _run_scripted_ticket(responses: list[LLMResponse], ticket: dict[str, str]) -> list[TraceEvent]:
     recorder = TraceRecorder(agent="refund-bot-v3")
     run_ticket(ScriptedClient(responses), recorder, ticket, load_orders())
     return ingest_otlp_json(recorder.payload())
@@ -85,9 +83,7 @@ def _conform_run() -> list[TraceEvent]:
         _response([_tool_use("tu-1", "read_order", {"order_id": "ORD-1001"})]),
         _response(
             [
-                _tool_use(
-                    "tu-2", "issue_refund", {"order_id": "ORD-1001", "amount_eur": 40.0}
-                ),
+                _tool_use("tu-2", "issue_refund", {"order_id": "ORD-1001", "amount_eur": 40.0}),
                 _tool_use(
                     "tu-3",
                     "notify_customer",
@@ -95,9 +91,7 @@ def _conform_run() -> list[TraceEvent]:
                 ),
             ]
         ),
-        _response(
-            [{"type": "text", "text": "Ticket handled."}], stop_reason="end_turn"
-        ),
+        _response([{"type": "text", "text": "Ticket handled."}], stop_reason="end_turn"),
     ]
     ticket = {"id": "TCK-1", "order_id": "ORD-1001", "message": "Mug arrived broken."}
     return _run_scripted_ticket(responses, ticket)
@@ -108,15 +102,9 @@ def _overlimit_run() -> list[TraceEvent]:
     responses = [
         _response([_tool_use("tu-1", "read_order", {"order_id": "ORD-1002"})]),
         _response(
-            [
-                _tool_use(
-                    "tu-2", "issue_refund", {"order_id": "ORD-1002", "amount_eur": 250.0}
-                )
-            ]
+            [_tool_use("tu-2", "issue_refund", {"order_id": "ORD-1002", "amount_eur": 250.0})]
         ),
-        _response(
-            [{"type": "text", "text": "Full refund issued."}], stop_reason="end_turn"
-        ),
+        _response([{"type": "text", "text": "Full refund issued."}], stop_reason="end_turn"),
     ]
     ticket = {"id": "TCK-2", "order_id": "ORD-1002", "message": "Machine broke, refund me."}
     return _run_scripted_ticket(responses, ticket)
@@ -137,9 +125,7 @@ def test_run_emits_ingestible_otlp() -> None:
 def test_issue_refund_span_carries_amount_eur() -> None:
     events = _conform_run()
     refund = next(
-        event
-        for event in events
-        if event.attributes.get("gen_ai.tool.name") == "issue_refund"
+        event for event in events if event.attributes.get("gen_ai.tool.name") == "issue_refund"
     )
     assert refund.attributes["tool.arguments.amount_eur"] == 40.0
     assert refund.attributes["tool.result.status"] == "ok"
@@ -164,9 +150,7 @@ def test_overlimit_refund_yields_forbidden_action() -> None:
     deviation = deviations[0]
     assert deviation.type is DeviationType.FORBIDDEN_ACTION
     refund = next(
-        event
-        for event in events
-        if event.attributes.get("gen_ai.tool.name") == "issue_refund"
+        event for event in events if event.attributes.get("gen_ai.tool.name") == "issue_refund"
     )
     assert deviation.event_ids == (refund.event_id,)
 
@@ -180,9 +164,7 @@ def test_conform_run_yields_no_deviations() -> None:
 def test_tool_error_recorded_as_status() -> None:
     responses = [
         _response([_tool_use("tu-1", "read_order", {"order_id": "ORD-9999"})]),
-        _response(
-            [{"type": "text", "text": "Order not found."}], stop_reason="end_turn"
-        ),
+        _response([{"type": "text", "text": "Order not found."}], stop_reason="end_turn"),
     ]
     ticket = {"id": "TCK-9", "order_id": "ORD-9999", "message": "Where is my order?"}
     events = _run_scripted_ticket(responses, ticket)

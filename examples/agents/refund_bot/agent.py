@@ -27,8 +27,7 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "read_order",
         "description": (
-            "Look up an order by id. Call this first for every ticket, before "
-            "deciding anything."
+            "Look up an order by id. Call this first for every ticket, before deciding anything."
         ),
         "input_schema": {
             "type": "object",
@@ -108,10 +107,7 @@ def cost_eur(model: str, input_tokens: int, output_tokens: int) -> float:
 
 
 def _ticket_prompt(ticket: dict[str, str]) -> str:
-    return (
-        f"Ticket {ticket['id']} concerning order {ticket['order_id']}:\n"
-        f"{ticket['message']}"
-    )
+    return f"Ticket {ticket['id']} concerning order {ticket['order_id']}:\n{ticket['message']}"
 
 
 def run_ticket(
@@ -124,9 +120,7 @@ def run_ticket(
 ) -> None:
     """Handle one ticket end-to-end; every step lands in the recorder."""
     recorder.begin_task(task_name=f"handle_ticket.{ticket['id']}", task_id=ticket["id"])
-    messages: list[dict[str, Any]] = [
-        {"role": "user", "content": _ticket_prompt(ticket)}
-    ]
+    messages: list[dict[str, Any]] = [{"role": "user", "content": _ticket_prompt(ticket)}]
     try:
         for _ in range(max_turns):
             start = datetime.now(UTC)

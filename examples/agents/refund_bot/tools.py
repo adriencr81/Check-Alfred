@@ -45,9 +45,7 @@ def _issue_refund(orders: dict[str, Order], arguments: dict[str, Any]) -> ToolOu
     if not isinstance(amount, int | float) or amount <= 0:
         return ToolOutcome("error", "amount_eur must be a positive number.")
     order["refunded_eur"] = float(order["refunded_eur"]) + float(amount)
-    return ToolOutcome(
-        "ok", f"Refund of {float(amount):.2f} EUR issued on {order['order_id']}."
-    )
+    return ToolOutcome("ok", f"Refund of {float(amount):.2f} EUR issued on {order['order_id']}.")
 
 
 def _notify_customer(orders: dict[str, Order], arguments: dict[str, Any]) -> ToolOutcome:

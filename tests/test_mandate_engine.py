@@ -122,9 +122,7 @@ def test_budget_exceeded_absent_under_budget() -> None:
 
 def test_escalation_missed_on_tool_error_rate() -> None:
     events = [
-        _event(
-            "e1", attributes={"gen_ai.tool.name": "read_order", "tool.result.status": "error"}
-        )
+        _event("e1", attributes={"gen_ai.tool.name": "read_order", "tool.result.status": "error"})
     ]
     deviations = evaluate(_mandate(), events)
     matches = [d for d in deviations if d.type.value == "escalation_missed"]
@@ -134,9 +132,7 @@ def test_escalation_missed_on_tool_error_rate() -> None:
 
 def test_escalation_missed_absent_when_agent_escalates() -> None:
     events = [
-        _event(
-            "e1", attributes={"gen_ai.tool.name": "read_order", "tool.result.status": "error"}
-        ),
+        _event("e1", attributes={"gen_ai.tool.name": "read_order", "tool.result.status": "error"}),
         _event("e2", kind=SpanKind.AGENT_TASK, attributes={"alfred.escalated": True}),
     ]
     deviations = evaluate(_mandate(), events)

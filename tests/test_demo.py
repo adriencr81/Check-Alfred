@@ -39,9 +39,7 @@ def test_demo_digest_is_credible() -> None:
     assert digest.agent == "demo-bot"
     tasks_line = next(line for line in digest.lines if line.kind is LineKind.TASKS_COMPLETED)
     assert tasks_line.value == 3
-    escalations_line = next(
-        line for line in digest.lines if line.kind is LineKind.ESCALATIONS
-    )
+    escalations_line = next(line for line in digest.lines if line.kind is LineKind.ESCALATIONS)
     assert escalations_line.value == 1
 
     assert len(digest.deviations) == 1

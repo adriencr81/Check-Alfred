@@ -35,7 +35,7 @@ def test_init_raises_if_mandate_already_exists(tmp_path: Path) -> None:
 def test_init_raises_if_config_already_exists(tmp_path: Path) -> None:
     config_dir = tmp_path / ".alfred"
     config_dir.mkdir()
-    (config_dir / "config.toml").write_text("mandate_path = \"mandate.yaml\"\n", encoding="utf-8")
+    (config_dir / "config.toml").write_text('mandate_path = "mandate.yaml"\n', encoding="utf-8")
     with pytest.raises(ConfigError, match="already exists"):
         init_project(tmp_path, agent="refund-bot-v3")
 
