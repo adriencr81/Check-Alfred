@@ -333,6 +333,9 @@ vos agents IA ont besoin d'un mandat, pas d'un dashboard ».
 
 ### 6.4 Post-launch (J+50 → J+150)
 
+> Déclinaison opérationnelle mois par mois (cibles intermédiaires, rythme
+> hebdo, goulots du funnel) : `docs/GROWTH_PLAN_3M.md` (ADR 0011).
+
 **Le moteur récurrent** :
 - **Un finding public/mois** : issu de B4 puis du harnais agents. Chaque finding se conclut par « et voici comment ça apparaît dans le daily Alfred ».
 - **Réactivité issues < 24h** les 3 premiers mois. C'est le signal de star le plus sous-estimé.
