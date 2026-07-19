@@ -15,6 +15,7 @@ from pathlib import Path
 from alfred import __version__
 from alfred.config import ConfigError, init_project, load_config
 from alfred.deliver import slack, stdout
+from alfred.deliver.slack import DeliverError
 from alfred.demo import build_demo_payload, demo_mandate
 from alfred.mandate.model import MandateError
 from alfred.mandate.yaml_io import load_mandate
@@ -46,19 +47,27 @@ def _cmd_watch(args: argparse.Namespace) -> int:
     config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
     store = TraceStore(config.trace_db_path)
     try:
-        digests = watch_once(project_dir, Path(args.traces_dir), mandate, store)
+        result = watch_once(project_dir, Path(args.traces_dir), mandate, store)
     finally:
         store.close()
 
-    if not digests:
+    for failure in result.failures:
+        print(f"alfred watch: skipped {failure.file_name}: {failure.error}", file=sys.stderr)
+
+    if not result.digests and not result.failures:
         print("alfred watch: no new trace files.")
         return 0
 
-    for digest in digests:
-        stdout.deliver(digest)
-        if config.slack_webhook_url:
-            slack.send(digest, config.slack_webhook_url)
-    return 0
+    try:
+        for digest in result.digests:
+            stdout.deliver(digest)
+            if config.slack_webhook_url:
+                slack.send(digest, config.slack_webhook_url)
+    except DeliverError as exc:
+        print(f"alfred watch: {exc}", file=sys.stderr)
+        return 1
+
+    return 1 if result.failures else 0
 
 
 def _cmd_demo(args: argparse.Namespace) -> int:

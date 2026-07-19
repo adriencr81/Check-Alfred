@@ -7,6 +7,11 @@ See PLAN.md §5 Brique 5 and docs/adr/0007-brique5-delivery-cli-design.md.
 by each event's own `start_time`, not "today", since an ingested file may
 carry a historical trace.
 
+A file that cannot be ingested (invalid JSON, malformed OTLP, unreadable)
+is quarantined: reported in the result's `failures`, marked seen so it is
+not retried on every run, and the rest of the batch still goes through —
+one bad file must never block the pipeline (see ADR 0011, arbitrage S3).
+
 No daemon, no polling loop: each invocation does one pass and exits. See
 the ADR for why (zero-infra philosophy, simpler to test, cron-friendly).
 """
@@ -15,6 +20,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -22,10 +28,24 @@ from alfred.mandate.model import Mandate
 from alfred.report.build import build_digest
 from alfred.report.model import Digest
 from alfred.trace.ingest import ingest_otlp_file
-from alfred.trace.model import TraceEvent
+from alfred.trace.model import TraceEvent, TraceIngestionError
 from alfred.trace.store import TraceStore
 
 _SEEN_FILENAME = "seen.json"
+
+
+@dataclass(frozen=True, slots=True)
+class FileFailure:
+    """A trace file that could not be ingested, and why."""
+
+    file_name: str
+    error: str
+
+
+@dataclass(frozen=True, slots=True)
+class WatchResult:
+    digests: tuple[Digest, ...]
+    failures: tuple[FileFailure, ...]
 
 
 def _seen_path(project_dir: Path) -> Path:
@@ -47,26 +67,35 @@ def _save_seen(project_dir: Path, seen: set[str]) -> None:
 
 def watch_once(
     project_dir: Path, traces_dir: Path, mandate: Mandate, store: TraceStore
-) -> list[Digest]:
+) -> WatchResult:
     """Ingest OTLP JSON files in `traces_dir` not yet recorded as seen.
 
     Returns one `Digest` per calendar day among the newly-ingested events,
-    ordered by date. Returns an empty list if every file was already seen
-    (or `traces_dir` has no `*.json` files) — this is what makes a second
-    call over the same directory a no-op.
+    ordered by date, plus one `FileFailure` per file that could not be
+    ingested. Every scanned file — ingested or failed — is marked seen, so
+    a second call over the same directory is a no-op.
     """
     seen = _load_seen(project_dir)
     new_files = sorted(p for p in Path(traces_dir).glob("*.json") if p.name not in seen)
     if not new_files:
-        return []
+        return WatchResult(digests=(), failures=())
 
     by_day: dict[date, list[TraceEvent]] = defaultdict(list)
+    failures: list[FileFailure] = []
     for file_path in new_files:
-        events = ingest_otlp_file(file_path)
+        try:
+            events = ingest_otlp_file(file_path)
+        except (TraceIngestionError, ValueError, OSError) as exc:
+            failures.append(FileFailure(file_name=file_path.name, error=str(exc)))
+            seen.add(file_path.name)
+            continue
         store.put_many(events)
         for event in events:
             by_day[event.start_time.date()].append(event)
         seen.add(file_path.name)
 
     _save_seen(project_dir, seen)
-    return [build_digest(mandate, by_day[day], day) for day in sorted(by_day)]
+    return WatchResult(
+        digests=tuple(build_digest(mandate, by_day[day], day) for day in sorted(by_day)),
+        failures=tuple(failures),
+    )

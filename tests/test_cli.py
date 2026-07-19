@@ -70,6 +70,58 @@ def test_cli_watch_reports_missing_project(
     assert "no Alfred project found" in capsys.readouterr().err
 
 
+def test_cli_watch_reports_corrupt_file_and_still_delivers(
+    tmp_path: Path, otlp_sample_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """B3 regression: a corrupt file yields a clean stderr line and exit 1,
+    while the valid files' digest is still delivered — no traceback."""
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+    (traces_dir / "corrupt.json").write_text("{not json", encoding="utf-8")
+
+    exit_code = main(["watch", str(traces_dir), "--project", str(project_dir)])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "corrupt.json" in captured.err
+    assert "Tasks completed" in captured.out
+
+
+def test_cli_watch_reports_slack_failure_cleanly(
+    tmp_path: Path,
+    otlp_sample_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from alfred.deliver.slack import DeliverError
+    from alfred.report.model import Digest
+
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    config_path = project_dir / ".alfred" / "config.toml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8")
+        + 'slack_webhook_url = "https://hooks.slack.com/services/T0/B0/xyz"\n',
+        encoding="utf-8",
+    )
+
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+
+    def failing_send(digest: Digest, webhook_url: str) -> None:
+        raise DeliverError("Slack webhook returned HTTP 404: Not Found")
+
+    monkeypatch.setattr("alfred.deliver.slack.send", failing_send)
+
+    exit_code = main(["watch", str(traces_dir), "--project", str(project_dir)])
+    assert exit_code == 1
+    assert "404" in capsys.readouterr().err
+
+
 def test_cli_demo_runs_fake_agent_and_prints_digest(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
