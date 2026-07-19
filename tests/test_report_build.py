@@ -12,8 +12,9 @@ from pathlib import Path
 
 import pytest
 
+from alfred.cost import event_cost_eur
 from alfred.mandate.model import EscalationRule, Mandate
-from alfred.report.build import ReportError, _event_cost_eur, build_digest
+from alfred.report.build import ReportError, build_digest
 from alfred.report.model import Digest, Line, LineKind
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 from alfred.trace.store import TraceStore
@@ -228,7 +229,7 @@ def test_digest_cost_matches_sum() -> None:
     digest = build_digest(_mandate(), events, date(2026, 8, 30))
     cost_line = _line(digest, LineKind.COST_EUR)
     by_id = {event.event_id: event for event in events}
-    expected = sum(_event_cost_eur(by_id[event_id]) for event_id in cost_line.sources)
+    expected = sum(event_cost_eur(by_id[event_id]) for event_id in cost_line.sources)
     assert cost_line.value == pytest.approx(expected)
 
 

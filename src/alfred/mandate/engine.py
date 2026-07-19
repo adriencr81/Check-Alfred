@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
+from alfred.cost import event_cost_eur
 from alfred.mandate.model import Deviation, DeviationType, Mandate, MandateError
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
@@ -19,7 +20,6 @@ _FORBIDDEN_PATTERN = re.compile(r"^(?P<tool>.+?)_above_(?P<amount>\d+(?:\.\d+)?)
 _TOOL_NAME_ATTR = "gen_ai.tool.name"
 _TOOL_STATUS_ATTR = "tool.result.status"
 _TOOL_AMOUNT_ATTR = "tool.arguments.amount_eur"
-_COST_ATTR = "gen_ai.usage.cost_eur"
 _ESCALATED_ATTR = "alfred.escalated"
 
 
@@ -35,15 +35,6 @@ def _tool_name(event: TraceEvent) -> str | None:
 def _is_error(event: TraceEvent) -> bool:
     status = event.attributes.get(_TOOL_STATUS_ATTR)
     return isinstance(status, str) and status.lower() != "ok"
-
-
-def _cost(event: TraceEvent) -> float:
-    cost = event.attributes.get(_COST_ATTR, 0.0)
-    return float(cost) if isinstance(cost, int | float) else 0.0
-
-
-def _trace_cost_eur(events: Sequence[TraceEvent]) -> float:
-    return sum(_cost(event) for event in events)
 
 
 def _is_escalated(events: Sequence[TraceEvent]) -> bool:
@@ -107,8 +98,8 @@ def _check_forbidden_actions(
 
 
 def _check_budget_exceeded(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
-    contributing = [event for event in events if _cost(event) > 0.0]
-    total = sum(_cost(event) for event in contributing)
+    contributing = [event for event in events if event_cost_eur(event) > 0.0]
+    total = sum(event_cost_eur(event) for event in contributing)
     if total > mandate.daily_budget_eur:
         return [
             Deviation(
@@ -138,8 +129,8 @@ def _metric_value(
     if metric == "budget_used":
         if not mandate.daily_budget_eur:
             return 0.0, ()
-        contributing = [event for event in events if _cost(event) > 0.0]
-        used = _trace_cost_eur(events) / mandate.daily_budget_eur
+        contributing = [event for event in events if event_cost_eur(event) > 0.0]
+        used = sum(event_cost_eur(event) for event in contributing) / mandate.daily_budget_eur
         return used, tuple(event.event_id for event in contributing)
     raise MandateError(f"Unknown escalation metric: {metric!r}")
 
