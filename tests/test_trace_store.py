@@ -78,6 +78,22 @@ def test_find_by_trace_orders_by_start_time(store: TraceStore) -> None:
     assert [e.event_id for e in got] == ["a", "b", "c"]
 
 
+def test_put_many_is_atomic_on_bad_event(store: TraceStore) -> None:
+    """B5 regression: a batch with one unserializable event leaves zero rows —
+    no partially-ingested batch on failure."""
+    bad = _event("bad")
+    bad.attributes["unserializable"] = object()
+    with pytest.raises(TypeError):
+        store.put_many([_event("a"), bad, _event("c")])
+    assert store.count() == 0
+
+
+def test_store_is_a_context_manager() -> None:
+    with TraceStore(":memory:") as store:
+        store.put(_event("evt-1"))
+        assert store.count() == 1
+
+
 def test_attributes_survive_roundtrip(store: TraceStore) -> None:
     """Attribute values must round-trip verbatim (used for cost computation)."""
     original = _event("evt-x")

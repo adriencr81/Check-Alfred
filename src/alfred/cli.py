@@ -45,11 +45,8 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         return 1
 
     config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
-    store = TraceStore(config.trace_db_path)
-    try:
+    with TraceStore(config.trace_db_path) as store:
         result = watch_once(project_dir, Path(args.traces_dir), mandate, store)
-    finally:
-        store.close()
 
     for failure in result.failures:
         print(f"alfred watch: skipped {failure.file_name}: {failure.error}", file=sys.stderr)

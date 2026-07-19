@@ -11,6 +11,7 @@ import sqlite3
 from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
+from types import TracebackType
 
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
@@ -27,6 +28,26 @@ CREATE TABLE IF NOT EXISTS trace_events (
 );
 CREATE INDEX IF NOT EXISTS idx_trace_events_trace_id ON trace_events (trace_id);
 """
+
+
+_INSERT_SQL = """
+INSERT OR REPLACE INTO trace_events
+    (event_id, trace_id, parent_span_id, kind, name, start_time, end_time, attributes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+
+def _event_to_row(event: TraceEvent) -> tuple[str, str, str | None, str, str, str, str, str]:
+    return (
+        event.event_id,
+        event.trace_id,
+        event.parent_span_id,
+        event.kind.value,
+        event.name,
+        event.start_time.isoformat(),
+        event.end_time.isoformat(),
+        json.dumps(event.attributes),
+    )
 
 
 def _row_to_event(row: sqlite3.Row) -> TraceEvent:
@@ -59,6 +80,17 @@ class TraceStore:
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
 
+    def __enter__(self) -> TraceStore:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.close()
+
     def put(self, event: TraceEvent) -> None:
         """Insert or, on a matching `event_id`, blindly replace.
 
@@ -66,28 +98,14 @@ class TraceStore:
         overwrites the prior anchor (accepted for v0.1 — see
         docs/adr/0002-brique1-skeleton-fixes.md).
         """
-        self._conn.execute(
-            """
-            INSERT OR REPLACE INTO trace_events
-                (event_id, trace_id, parent_span_id, kind, name, start_time, end_time, attributes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                event.event_id,
-                event.trace_id,
-                event.parent_span_id,
-                event.kind.value,
-                event.name,
-                event.start_time.isoformat(),
-                event.end_time.isoformat(),
-                json.dumps(event.attributes),
-            ),
-        )
-        self._conn.commit()
+        with self._conn:
+            self._conn.execute(_INSERT_SQL, _event_to_row(event))
 
     def put_many(self, events: Iterable[TraceEvent]) -> None:
-        for event in events:
-            self.put(event)
+        """Insert a batch atomically: one transaction, all rows or none."""
+        rows = [_event_to_row(event) for event in events]
+        with self._conn:
+            self._conn.executemany(_INSERT_SQL, rows)
 
     def get(self, event_id: EventId) -> TraceEvent | None:
         row = self._conn.execute(
