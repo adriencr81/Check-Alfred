@@ -2,19 +2,19 @@
 
 See PLAN.md §5 Brique 3 for the contract and tests/test_report_build.py for
 the falsifiable specification. Design decisions (pricing table, zero-count
-line omission, grouping by trace_id) are recorded in
-docs/adr/0005-brique3-report-engine-design.md.
+line omission) are recorded in docs/adr/0005-brique3-report-engine-design.md;
+day-scope evaluation superseding the original per-trace grouping is recorded
+in docs/adr/0011-day-scope-mandate-evaluation.md.
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date
 
 from alfred.cost import event_cost_eur
 from alfred.mandate.engine import evaluate
-from alfred.mandate.model import Deviation, Mandate
+from alfred.mandate.model import Mandate
 from alfred.report.model import Digest, Line, LineKind
 from alfred.trace.model import SpanKind, TraceEvent
 
@@ -60,24 +60,14 @@ def _escalations_line(events: Sequence[TraceEvent]) -> Line | None:
     )
 
 
-def _deviations(mandate: Mandate, events: Sequence[TraceEvent]) -> tuple[Deviation, ...]:
-    by_trace: dict[str, list[TraceEvent]] = defaultdict(list)
-    for event in events:
-        by_trace[event.trace_id].append(event)
-    deviations: list[Deviation] = []
-    for trace_events in by_trace.values():
-        deviations.extend(evaluate(mandate, trace_events))
-    return tuple(deviations)
-
-
 def build_digest(mandate: Mandate, events: Sequence[TraceEvent], on: date) -> Digest:
     """Build `mandate.agent`'s Digest for calendar day `on`.
 
     Contract: `events` must be non-empty and pre-scoped to one agent / one
-    calendar day (caller's responsibility — mirrors the single-trace
-    precondition already documented on `alfred.mandate.engine.evaluate`).
-    Events are grouped by `trace_id` before being handed to `evaluate`,
-    since one day typically spans multiple traces (multiple tasks).
+    calendar day (caller's responsibility). The whole day is handed to
+    `alfred.mandate.engine.evaluate` in one call, so aggregated checks
+    (budget, escalation) see the day's total — see
+    docs/adr/0011-day-scope-mandate-evaluation.md.
     """
     if not events:
         raise ReportError("cannot build a Digest from an empty trace")
@@ -94,5 +84,5 @@ def build_digest(mandate: Mandate, events: Sequence[TraceEvent], on: date) -> Di
         agent=mandate.agent,
         date=on,
         lines=lines,
-        deviations=_deviations(mandate, events),
+        deviations=tuple(evaluate(mandate, events)),
     )

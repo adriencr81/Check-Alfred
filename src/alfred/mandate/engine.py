@@ -161,11 +161,16 @@ def _check_escalation_missed(
 
 
 def evaluate(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
-    """Compare a single trace's events against a mandate.
+    """Compare one agent-day's events against a mandate.
 
-    Contract: `events` must belong to one trace (e.g. via
-    `TraceStore.find_by_trace`). Returns every `Deviation` detected, each
-    anchored to at least one `event_id` from `events`.
+    Contract: `events` is every event of one agent for one calendar day
+    (UTC) — the same scope `build_digest` receives. Per-event checks
+    (tool_not_allowed, forbidden_action) are scope-independent; aggregated
+    checks (budget_exceeded, escalation_missed) are computed over the whole
+    day, because `daily_budget_eur` is a day budget, not a trace budget.
+    See docs/adr/0011-day-scope-mandate-evaluation.md. Returns every
+    `Deviation` detected, each anchored to at least one `event_id` from
+    `events`.
     """
     tool_calls = _tool_calls(events)
     return [

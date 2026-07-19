@@ -201,6 +201,62 @@ def test_deviations_span_multiple_traces_in_one_day() -> None:
     assert len(digest.deviations) == 3
 
 
+def test_budget_aggregates_across_traces_of_the_same_day() -> None:
+    """B1 regression: daily_budget_eur is a day budget, not a trace budget.
+
+    3 traces at 2 EUR each against a 5 EUR budget deviate as a day (6 EUR)
+    even though every single trace is under budget.
+    """
+    events = [
+        _event(
+            f"e{i}",
+            trace_id=f"trace-{i}",
+            kind=SpanKind.LLM_CALL,
+            attributes={"gen_ai.usage.cost_eur": 2.0},
+        )
+        for i in range(1, 4)
+    ]
+    digest = build_digest(_mandate(), events, date(2026, 8, 30))
+    budget = [d for d in digest.deviations if d.type.value == "budget_exceeded"]
+    assert len(budget) == 1
+    assert budget[0].details["cost_eur"] == pytest.approx(6.0)
+    assert set(budget[0].event_ids) == {EventId("e1"), EventId("e2"), EventId("e3")}
+
+
+def test_budget_not_exceeded_when_day_total_is_under_budget() -> None:
+    events = [
+        _event(
+            f"e{i}",
+            trace_id=f"trace-{i}",
+            kind=SpanKind.LLM_CALL,
+            attributes={"gen_ai.usage.cost_eur": 1.5},
+        )
+        for i in range(1, 4)
+    ]
+    digest = build_digest(_mandate(), events, date(2026, 8, 30))
+    assert not any(d.type.value == "budget_exceeded" for d in digest.deviations)
+
+
+def test_escalation_exemption_is_day_scoped() -> None:
+    """An escalation anywhere in the day exempts the day's aggregated
+    metrics — the digest reports on the agent-day, not on single traces."""
+    events = [
+        _event(
+            "e1",
+            trace_id="trace-a",
+            attributes={"gen_ai.tool.name": "read_order", "tool.result.status": "error"},
+        ),
+        _event(
+            "e2",
+            trace_id="trace-b",
+            kind=SpanKind.AGENT_TASK,
+            attributes={"alfred.escalated": True},
+        ),
+    ]
+    digest = build_digest(_mandate(), events, date(2026, 8, 30))
+    assert not any(d.type.value == "escalation_missed" for d in digest.deviations)
+
+
 def test_digest_every_line_has_sources() -> None:
     digest = build_digest(_mandate(), _typical_day_events(), date(2026, 8, 30))
     assert digest.lines
