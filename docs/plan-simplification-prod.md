@@ -1,9 +1,13 @@
 # Plan — Simplification & amélioration vers un code prêt prod
 
 **Date** : 2026-07-19 · **Périmètre** : tout `src/alfred/` + packaging + CI.
-**Statut** : plan — aucune modification de code dans ce commit. Chaque brique
-ci-dessous suivra le workflow imposé (plan → test falsifiable → code → preuve
-pytest → un commit).
+**Statut** : **exécuté le 2026-07-19** — les 8 briques S1-S8 sont livrées,
+un commit par brique, 131 tests verts, `ruff check`, `ruff format --check`
+et `python -m mypy` (config complète src + tests, strict) verts. Les quatre
+décisions du §4 ont été arbitrées et documentées dans l'ADR 0011 (les
+propositions du plan ont été retenues, à une nuance près : `narrate/` reste
+dans le wheel, non branché, plutôt qu'exclu — l'exclusion ajoutait de la
+complexité de packaging sans bénéfice).
 
 > Relation avec PLAN.md : ce document ne contredit aucune décision actée
 > (D1-D5). Les deux points qui changent une sémantique documentée dans un ADR
