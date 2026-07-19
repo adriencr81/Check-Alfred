@@ -52,6 +52,18 @@ def _seen_path(project_dir: Path) -> Path:
     return project_dir / ".alfred" / _SEEN_FILENAME
 
 
+def _seen_key(path: Path) -> str:
+    """Identity of a scanned file: name + size + mtime.
+
+    A bare filename let two different files with the same name be
+    conflated, and a rewritten file never be re-ingested. Including size
+    and mtime means new content (including a fixed-up quarantined file)
+    is scanned again. See docs/adr/0012-watch-idempotence-and-ingest-casing.md.
+    """
+    stat = path.stat()
+    return f"{path.name}:{stat.st_size}:{stat.st_mtime_ns}"
+
+
 def _load_seen(project_dir: Path) -> set[str]:
     path = _seen_path(project_dir)
     if not path.exists():
@@ -76,7 +88,7 @@ def watch_once(
     a second call over the same directory is a no-op.
     """
     seen = _load_seen(project_dir)
-    new_files = sorted(p for p in Path(traces_dir).glob("*.json") if p.name not in seen)
+    new_files = sorted(p for p in Path(traces_dir).glob("*.json") if _seen_key(p) not in seen)
     if not new_files:
         return WatchResult(digests=(), failures=())
 
@@ -87,12 +99,12 @@ def watch_once(
             events = ingest_otlp_file(file_path)
         except (TraceIngestionError, ValueError, OSError) as exc:
             failures.append(FileFailure(file_name=file_path.name, error=str(exc)))
-            seen.add(file_path.name)
+            seen.add(_seen_key(file_path))
             continue
         store.put_many(events)
         for event in events:
             by_day[event.start_time.date()].append(event)
-        seen.add(file_path.name)
+        seen.add(_seen_key(file_path))
 
     _save_seen(project_dir, seen)
     return WatchResult(

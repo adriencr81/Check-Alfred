@@ -93,6 +93,36 @@ def test_ingest_kind_is_unknown_without_operation_name() -> None:
     assert events[0].kind == SpanKind.UNKNOWN
 
 
+def test_ingest_lowercases_span_and_trace_ids() -> None:
+    """Contract: event_id is the spanId hex, lowercased — two exporters
+    writing the same span in different cases must yield one anchor."""
+    payload = {
+        "resourceSpans": [
+            {
+                "scopeSpans": [
+                    {
+                        "spans": [
+                            {
+                                "traceId": "4BF92F3577B34DA6A3CE929D0E0E4736",
+                                "spanId": "00F067AA0BA902B7",
+                                "parentSpanId": "A1B2C3D4E5F60718",
+                                "name": "span",
+                                "startTimeUnixNano": "1788037200000000000",
+                                "endTimeUnixNano": "1788037201000000000",
+                                "attributes": [],
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    event = ingest_otlp_json(payload)[0]
+    assert event.event_id == "00f067aa0ba902b7"
+    assert event.trace_id == "4bf92f3577b34da6a3ce929d0e0e4736"
+    assert event.parent_span_id == "a1b2c3d4e5f60718"
+
+
 def test_ingest_malformed_raises() -> None:
     """Missing required fields must fail loudly with the typed error."""
     with pytest.raises(TraceIngestionError):

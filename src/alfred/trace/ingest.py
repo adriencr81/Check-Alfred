@@ -63,9 +63,9 @@ def _span_to_event(span: dict[str, Any]) -> TraceEvent:
     attributes = _attributes(span.get("attributes", []))
     parent_span_id = span.get("parentSpanId") or None
     return TraceEvent(
-        event_id=EventId(span["spanId"]),
-        trace_id=span["traceId"],
-        parent_span_id=parent_span_id,
+        event_id=EventId(str(span["spanId"]).lower()),
+        trace_id=str(span["traceId"]).lower(),
+        parent_span_id=str(parent_span_id).lower() if parent_span_id is not None else None,
         kind=_kind(attributes),
         name=span["name"],
         start_time=_timestamp(span["startTimeUnixNano"]),

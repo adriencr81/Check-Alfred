@@ -91,6 +91,19 @@ def test_watch_persists_seen_state_across_processes(project_dir: Path, traces_di
     second_store.close()
 
 
+def test_watch_reingests_a_rewritten_file(project_dir: Path, traces_dir: Path) -> None:
+    """B6 regression: seen-identity is name+size+mtime, not the bare name —
+    a file rewritten with new content must be scanned again."""
+    store = TraceStore(project_dir / "trace.db")
+    watch_once(project_dir, traces_dir, _mandate(), store)
+
+    trace_file = traces_dir / "day1.json"
+    trace_file.write_text(trace_file.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    result = watch_once(project_dir, traces_dir, _mandate(), store)
+    assert len(result.digests) == 1
+    store.close()
+
+
 def test_watch_quarantines_corrupt_file_and_ingests_the_rest(
     project_dir: Path, traces_dir: Path
 ) -> None:
