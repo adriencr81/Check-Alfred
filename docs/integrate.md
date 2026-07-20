@@ -34,9 +34,10 @@ That's the whole integration:
 - `llm_call()` — one model call. If you only know the model from the
   response, omit `model=` and pass
   `record_usage(..., response_model=response.model)` instead. Pass
-  `cost_eur=` if you compute cost yourself — it is what budget checks read
-  today; pricing from raw tokens across the board lands with Brique 9
-  (PLAN.md §12).
+  `cost_eur=` if you compute cost yourself — an explicit cost always wins;
+  otherwise budget checks and the digest cost line price the call from its
+  tokens when the model is in the pricing table
+  (`alfred.trace.cost`).
 - `tool_call(name, arguments={...})` — one tool execution. Scalar
   arguments are flattened to `tool.arguments.<key>` span attributes, which
   is what mandate rules like `issue_refund_above_100_eur` check. A clean

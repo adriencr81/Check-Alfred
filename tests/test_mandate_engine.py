@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from alfred.mandate.engine import evaluate
-from alfred.mandate.model import EscalationRule, Mandate
+from alfred.mandate.model import EscalationRule, ForbiddenRule, Mandate
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
 
@@ -104,6 +106,70 @@ def test_forbidden_action_exact_name_detected() -> None:
     matches = [d for d in deviations if d.type.value == "forbidden_action"]
     assert len(matches) == 1
     assert matches[0].event_ids == (EventId("e1"),)
+
+
+def _sql_mandate() -> Mandate:
+    """Structured-rule mandate (Brique 9): forbid SQL touching > 1000 rows."""
+    return Mandate(
+        agent="sql-analyst",
+        allowed_tools=frozenset({"execute_sql", "send_report"}),
+        daily_budget_eur=3.0,
+        forbidden_actions=(ForbiddenRule("execute_sql", "rows_affected", ">", 1000.0),),
+        escalate_when=(),
+    )
+
+
+def test_structured_forbidden_rule_triggers() -> None:
+    events = [
+        _event(
+            "e1",
+            attributes={"gen_ai.tool.name": "execute_sql", "tool.arguments.rows_affected": 5000},
+        )
+    ]
+    deviations = evaluate(_sql_mandate(), events)
+    assert len(deviations) == 1
+    assert deviations[0].type.value == "forbidden_action"
+    assert deviations[0].event_ids == (EventId("e1"),)
+
+
+def test_structured_forbidden_rule_conforming_trace() -> None:
+    events = [
+        _event(
+            "e1",
+            attributes={"gen_ai.tool.name": "execute_sql", "tool.arguments.rows_affected": 12},
+        )
+    ]
+    assert evaluate(_sql_mandate(), events) == []
+
+
+def test_budget_from_tokens_without_cost_attr() -> None:
+    """Tokens + known model, no cost_eur → budget_exceeded and budget_used work."""
+    mandate = Mandate(
+        agent="refund-bot-v3",
+        allowed_tools=frozenset({"read_order"}),
+        daily_budget_eur=0.01,
+        forbidden_actions=(),
+        escalate_when=(EscalationRule("budget_used", ">", 0.80),),
+    )
+    events = [
+        _event(
+            "e1",
+            kind=SpanKind.LLM_CALL,
+            attributes={
+                "gen_ai.response.model": "gpt-4o",
+                "gen_ai.usage.input_tokens": 2000,
+                "gen_ai.usage.output_tokens": 1000,
+            },
+        )
+    ]
+    deviations = evaluate(mandate, events)
+    budget = [d for d in deviations if d.type.value == "budget_exceeded"]
+    assert len(budget) == 1
+    assert budget[0].event_ids == (EventId("e1"),)
+    assert budget[0].details["cost_eur"] == pytest.approx(2 * 0.00250 + 1 * 0.01000)
+    escalation = [d for d in deviations if d.type.value == "escalation_missed"]
+    assert len(escalation) == 1
+    assert escalation[0].event_ids == (EventId("e1"),)
 
 
 def test_budget_exceeded_detected() -> None:

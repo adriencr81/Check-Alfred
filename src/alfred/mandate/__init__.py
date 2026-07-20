@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 from alfred.mandate.engine import evaluate
-from alfred.mandate.model import Deviation, DeviationType, EscalationRule, Mandate, MandateError
+from alfred.mandate.model import (
+    Deviation,
+    DeviationType,
+    EscalationRule,
+    ForbiddenRule,
+    Mandate,
+    MandateError,
+)
 from alfred.mandate.yaml_io import dump_mandate, load_mandate
 
 __all__ = [
     "Deviation",
     "DeviationType",
     "EscalationRule",
+    "ForbiddenRule",
     "Mandate",
     "MandateError",
     "dump_mandate",

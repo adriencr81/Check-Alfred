@@ -33,6 +33,13 @@ entries below are the work done so far towards the v0.1 roadmap
   `flush()` to a watchable file). The refund-bot example now consumes it
   and its example-only tracer is removed; quickstart in
   `docs/integrate.md`.
+- Brique 9 — generic mandate + cost from tokens: `forbidden_actions`
+  accepts structured rules (`tool:` + `when: args.<arg> <op> <number>`)
+  on any tool argument, alongside the unchanged legacy string DSL
+  (commented example in `examples/mandates/sql-analyst.yaml`); token
+  pricing moves to a shared `alfred.trace.cost` module so budget checks
+  (`budget_exceeded`, `budget_used`) and the digest cost line agree to
+  the cent on traces without `gen_ai.usage.cost_eur`.
 - Brique 7 — real-agent example (`examples/agents/refund_bot/`): a
   framework-free Claude tool loop handles support tickets with real tool
   executions, emits genuine OTLP traces, and `alfred watch` catches its

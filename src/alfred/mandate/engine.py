@@ -3,23 +3,23 @@
 See PLAN.md §5 Brique 2 for the four deviation types and
 tests/test_mandate_engine.py for the falsifiable specification. Design
 decisions (forbidden_actions DSL, cost model, escalation signal) are
-recorded in docs/adr/0004-brique2-mandate-engine-design.md.
+recorded in docs/adr/0004-brique2-mandate-engine-design.md; structured
+forbidden rules and token-based budgets (Brique 9) in ADR 0013.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
-from alfred.mandate.model import Deviation, DeviationType, Mandate, MandateError
+from alfred.mandate.model import Deviation, DeviationType, ForbiddenRule, Mandate, MandateError
+from alfred.trace.cost import event_cost_eur
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
 _FORBIDDEN_PATTERN = re.compile(r"^(?P<tool>.+?)_above_(?P<amount>\d+(?:\.\d+)?)_eur$")
 
 _TOOL_NAME_ATTR = "gen_ai.tool.name"
 _TOOL_STATUS_ATTR = "tool.result.status"
-_TOOL_AMOUNT_ATTR = "tool.arguments.amount_eur"
-_COST_ATTR = "gen_ai.usage.cost_eur"
 _ESCALATED_ATTR = "alfred.escalated"
 
 
@@ -35,15 +35,6 @@ def _tool_name(event: TraceEvent) -> str | None:
 def _is_error(event: TraceEvent) -> bool:
     status = event.attributes.get(_TOOL_STATUS_ATTR)
     return isinstance(status, str) and status.lower() != "ok"
-
-
-def _cost(event: TraceEvent) -> float:
-    cost = event.attributes.get(_COST_ATTR, 0.0)
-    return float(cost) if isinstance(cost, int | float) else 0.0
-
-
-def _trace_cost_eur(events: Sequence[TraceEvent]) -> float:
-    return sum(_cost(event) for event in events)
 
 
 def _is_escalated(events: Sequence[TraceEvent]) -> bool:
@@ -68,30 +59,56 @@ def _check_tool_not_allowed(
     return deviations
 
 
+def _rule_matches(
+    rule: ForbiddenRule, tool_calls: Sequence[TraceEvent]
+) -> Iterator[tuple[TraceEvent, float]]:
+    """Yield (event, argument value) for each tool call breaching `rule`."""
+    arg_attr = f"tool.arguments.{rule.arg}"
+    for event in tool_calls:
+        if _tool_name(event) != rule.tool:
+            continue
+        value = event.attributes.get(arg_attr)
+        if isinstance(value, int | float) and rule.triggered_by(float(value)):
+            yield event, float(value)
+
+
 def _check_forbidden_actions(
     mandate: Mandate, tool_calls: Sequence[TraceEvent]
 ) -> list[Deviation]:
     deviations: list[Deviation] = []
     for action in mandate.forbidden_actions:
+        if isinstance(action, ForbiddenRule):
+            for event, value in _rule_matches(action, tool_calls):
+                deviations.append(
+                    Deviation(
+                        type=DeviationType.FORBIDDEN_ACTION,
+                        event_ids=(event.event_id,),
+                        message=(
+                            f"forbidden action: {action.tool} called with "
+                            f"{action.arg}={value}, breaching '{action.when}'"
+                        ),
+                        details={"tool": action.tool, "when": action.when, "value": value},
+                    )
+                )
+            continue
         match = _FORBIDDEN_PATTERN.match(action)
         if match is not None:
+            # The legacy DSL string is a fixed-shape ForbiddenRule; only the
+            # message/details shape is kept distinct for backwards compat.
             tool, threshold = match["tool"], float(match["amount"])
-            for event in tool_calls:
-                if _tool_name(event) != tool:
-                    continue
-                amount = event.attributes.get(_TOOL_AMOUNT_ATTR)
-                if isinstance(amount, int | float) and float(amount) > threshold:
-                    deviations.append(
-                        Deviation(
-                            type=DeviationType.FORBIDDEN_ACTION,
-                            event_ids=(event.event_id,),
-                            message=(
-                                f"forbidden action '{action}': {tool} called with "
-                                f"amount_eur={float(amount)} > {threshold}"
-                            ),
-                            details={"action": action, "tool": tool, "amount_eur": float(amount)},
-                        )
+            rule = ForbiddenRule(tool=tool, arg="amount_eur", operator=">", threshold=threshold)
+            for event, amount in _rule_matches(rule, tool_calls):
+                deviations.append(
+                    Deviation(
+                        type=DeviationType.FORBIDDEN_ACTION,
+                        event_ids=(event.event_id,),
+                        message=(
+                            f"forbidden action '{action}': {tool} called with "
+                            f"amount_eur={amount} > {threshold}"
+                        ),
+                        details={"action": action, "tool": tool, "amount_eur": amount},
                     )
+                )
         else:
             for event in tool_calls:
                 if _tool_name(event) == action:
@@ -107,13 +124,14 @@ def _check_forbidden_actions(
 
 
 def _check_budget_exceeded(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
-    contributing = [event for event in events if _cost(event) > 0.0]
-    total = sum(_cost(event) for event in contributing)
+    costs = [(event, event_cost_eur(event)) for event in events]
+    contributing = [(event, cost) for event, cost in costs if cost > 0.0]
+    total = sum(cost for _, cost in contributing)
     if total > mandate.daily_budget_eur:
         return [
             Deviation(
                 type=DeviationType.BUDGET_EXCEEDED,
-                event_ids=tuple(event.event_id for event in contributing),
+                event_ids=tuple(event.event_id for event, _ in contributing),
                 message=(
                     f"trace cost {total:.2f}€ exceeds daily_budget_eur "
                     f"{mandate.daily_budget_eur:.2f}€"
@@ -138,9 +156,9 @@ def _metric_value(
     if metric == "budget_used":
         if not mandate.daily_budget_eur:
             return 0.0, ()
-        contributing = [event for event in events if _cost(event) > 0.0]
-        used = _trace_cost_eur(events) / mandate.daily_budget_eur
-        return used, tuple(event.event_id for event in contributing)
+        costs = [(event, event_cost_eur(event)) for event in events]
+        used = sum(cost for _, cost in costs) / mandate.daily_budget_eur
+        return used, tuple(event.event_id for event, cost in costs if cost > 0.0)
     raise MandateError(f"Unknown escalation metric: {metric!r}")
 
 

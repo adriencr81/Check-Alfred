@@ -13,8 +13,9 @@ from pathlib import Path
 import pytest
 
 from alfred.mandate.model import EscalationRule, Mandate
-from alfred.report.build import ReportError, _event_cost_eur, build_digest
+from alfred.report.build import ReportError, build_digest
 from alfred.report.model import Digest, Line, LineKind
+from alfred.trace.cost import event_cost_eur
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 from alfred.trace.store import TraceStore
 
@@ -228,8 +229,35 @@ def test_digest_cost_matches_sum() -> None:
     digest = build_digest(_mandate(), events, date(2026, 8, 30))
     cost_line = _line(digest, LineKind.COST_EUR)
     by_id = {event.event_id: event for event in events}
-    expected = sum(_event_cost_eur(by_id[event_id]) for event_id in cost_line.sources)
+    expected = sum(event_cost_eur(by_id[event_id]) for event_id in cost_line.sources)
     assert cost_line.value == pytest.approx(expected)
+
+
+def test_budget_deviation_and_cost_line_agree_from_tokens() -> None:
+    """Brique 9: engine budget and digest cost line price tokens identically."""
+    mandate = Mandate(
+        agent="refund-bot-v3",
+        allowed_tools=frozenset({"read_order"}),
+        daily_budget_eur=0.01,
+        forbidden_actions=(),
+        escalate_when=(),
+    )
+    events = [
+        _event(
+            "e1",
+            kind=SpanKind.LLM_CALL,
+            attributes={
+                "gen_ai.response.model": "gpt-4o",
+                "gen_ai.usage.input_tokens": 2000,
+                "gen_ai.usage.output_tokens": 1000,
+            },
+        )
+    ]
+    digest = build_digest(mandate, events, date(2026, 8, 30))
+    cost_line = _line(digest, LineKind.COST_EUR)
+    budget = [d for d in digest.deviations if d.type.value == "budget_exceeded"]
+    assert len(budget) == 1
+    assert budget[0].details["cost_eur"] == cost_line.value
 
 
 def test_reference_day_digest_snapshot() -> None:

@@ -1,0 +1,33 @@
+# Exemple de mandat avec une règle structurée (PLAN.md §12, Brique 9).
+#
+# Même contrat que refund-bot.yaml : chaque champ est lu par
+# `alfred.mandate.load_mandate` puis comparé à une trace d'events par
+# `alfred.mandate.evaluate`, qui produit des Deviation ancrées sur des
+# event IDs de la trace.
+
+agent: sql-analyst
+
+allowed_tools:
+  - execute_sql
+  - send_report
+
+daily_budget_eur: 3.00
+
+# Actions interdites — trois formes supportées, mélangeables librement :
+#   1. un nom d'outil exact : tout appel de cet outil est une déviation
+#      `forbidden_action` ;
+#   2. le motif legacy `<outil>_above_<seuil>_eur`, câblé sur l'attribut
+#      `tool.arguments.amount_eur` (voir refund-bot.yaml) ;
+#   3. la forme structurée `tool:` + `when:` (Brique 9) — la condition
+#      `args.<argument> <op> <nombre>` est évaluée contre l'attribut
+#      `tool.arguments.<argument>` du span de l'appel d'outil, avec
+#      op ∈ {>, >=, <, <=, ==}. Ici : toute exécution SQL touchant plus
+#      de 1000 lignes est une déviation `forbidden_action`.
+forbidden_actions:
+  - drop_table
+  - tool: execute_sql
+    when: args.rows_affected > 1000
+
+escalate_when:
+  - tool_error_rate > 0.10
+  - budget_used > 0.80
