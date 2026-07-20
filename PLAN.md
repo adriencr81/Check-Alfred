@@ -4,7 +4,7 @@
 > soit modifier ce document, soit être documentée dans un ADR daté sous
 > `docs/adr/`. Pas de plan parallèle en tête ou en Notion.
 
-**Version** : 1.1 · **Date** : 2026-07-18 · **Cible produit** : v0.1 publique le **4 août 2026** (J+20).
+**Version** : 1.2 · **Date** : 2026-07-20 · **Cible produit** : v0.1 publique le **4 août 2026** (J+20).
 **Cible fondateur** : candidature YC **déposée le 2026-07-18** — traction démontrable avant la réponse YC.
 
 > Révision v1.1 (2026-07-18, ADR 0009) : les 6 briques §5 sont livrées à
@@ -12,6 +12,14 @@
 > (candidature YC déposée), le launch avance du 30 août au 4 août, et un
 > sprint S0 « tout ce qui est public » remplace §11. Voir
 > `docs/adr/0009-yc-application-submitted-replan-v1-1.md`.
+
+> Révision v1.2 (2026-07-20, ADR 0013) : **le run réel B7 est exécuté** —
+> déviation `forbidden_action` attrapée sur un run non scripté, digest
+> livré dans Slack. Le verrou ADR 0010 est levé. Un sprint S1 « Bring Your
+> Own Agent » (§12, Briques 8-11) rend le produit utilisable par un dev
+> externe avec *ses* agents ; B8 + B11 sont sur le chemin critique du
+> launch (maintenu au 4 août s'ils sont verts au 1er août, sinon 11 août).
+> Voir `docs/adr/0013-byoa-bring-your-own-agent-plan.md`.
 
 ---
 
@@ -457,6 +465,147 @@ Puis, semaines du 21 et 28 juillet (pré-launch compressé, §6.2) :
 - [ ] Piste YC-readiness : vidéo fondateur 1 min, screencast démo 60 s,
       réponse « why now » écrite, suivi métriques hebdo (point zéro daté).
 - [ ] **Launch mardi 4 août 14h-16h Paris** (séquence §6.3).
+
+---
+
+## 12. Sprint S1 « Bring Your Own Agent » (21 juillet →, ADR 0013)
+
+**Objectif du sprint** : un dev qui clone le repo branche *son* agent sur
+Alfred et obtient un digest ancré — sans copier-coller de code d'exemple,
+sans attribut maison introuvable, sans format de fichier qui casse.
+
+**Constat d'audit (2026-07-20)** qui dimensionne le sprint : (1) la seule
+recette d'instrumentation est `examples/agents/refund_bot/tracer.py`,
+example-only ; (2) le DSL `forbidden_actions` est câblé sur
+`tool.arguments.amount_eur` et le budget du moteur ne lit que
+`gen_ai.usage.cost_eur` — une trace OTel standard donne un budget consommé
+de 0 € en silence ; (3) `ingest_otlp_file` ne lit pas le NDJSON du file
+exporter de l'OTel Collector, et les erreurs d'outil ignorent le
+`status.code` OTLP standard.
+
+**Chemin critique launch** : B8 + B11. B9 et B10 peuvent suivre la semaine
+du launch. Un commit par brique, mêmes exigences que §5 (`pytest -q`,
+`ruff`, `mypy --strict src/` verts à chaque DoD).
+
+### Brique 8 — `alfred.instrument` : SDK d'instrumentation public
+
+**Objectif** : promouvoir la forme prouvée de `tracer.py` en module public
+`alfred.instrument`, pour qu'une boucle d'agent quelconque s'instrumente en
+~10 lignes. Émission OTLP JSON directe, exactement les clés que lisent
+`ingest`/`engine`/`build` (neutralisation semconv de l'ADR 0010 conservée).
+Zéro dépendance nouvelle.
+
+**API cible** (forme, pas contrat figé — le test l'est) :
+
+```python
+from alfred.instrument import AgentTracer
+
+tracer = AgentTracer(agent="support-bot", traces_dir="traces/")
+with tracer.session():                                  # invoke_agent
+    with tracer.llm_call(model="claude-opus-4-8") as llm:   # chat
+        llm.record_usage(input_tokens=…, output_tokens=…)
+    with tracer.tool_call("send_email", arguments={"to": …}) as tool:
+        tool.record_result(status="ok")                 # execute_tool
+tracer.flush()  # → traces/support-bot-<ts>.json
+```
+
+**Tests falsifiables** :
+- `test_instrumented_loop_trace_ingests` : boucle jouet instrumentée →
+  fichier → `ingest_otlp_file` → kinds corrects (`AGENT_TASK`, `LLM_CALL`,
+  `TOOL_CALL`), event IDs uniques, timestamps cohérents.
+- `test_tool_arguments_flattened` : `arguments={"amount_eur": 250.0}` →
+  attribut `tool.arguments.amount_eur` sur le span.
+- `test_tool_error_recorded` : exception dans le bloc `tool_call` →
+  `tool.result.status != "ok"` (et l'exception se propage).
+- `test_usage_propagated` : tokens et modèle présents sur le span LLM.
+- `test_digest_from_instrumented_trace_anchored` : bout en bout jouet →
+  chaque ligne du digest a `sources` non-vide.
+- **Preuve de parité** : le refund-bot est refondu sur `alfred.instrument`
+  et ses 6 tests existants (`tests/test_example_refund_bot.py`) restent
+  verts **sans modification d'assertion** ; le `tracer.py` dupliqué est
+  supprimé.
+
+**Definition of done** : idem §5 + `docs/integrate.md` (quickstart
+« instrumenter votre agent en 5 minutes »).
+
+### Brique 9 — Mandat générique + coût depuis les tokens
+
+**Objectif** : des règles de mandat sur n'importe quel outil et n'importe
+quel argument, et un budget qui fonctionne sur une trace sans
+`gen_ai.usage.cost_eur`.
+
+**Forme YAML cible** (le DSL string actuel reste valide, rien ne casse) :
+
+```yaml
+forbidden_actions:
+  - send_marketing                     # forme actuelle : nom d'outil
+  - issue_refund_above_100_eur         # forme actuelle : DSL string
+  - tool: execute_sql                  # nouvelle forme structurée
+    when: args.rows_affected > 1000
+```
+
+**Tests falsifiables** :
+- `test_structured_forbidden_rule_triggers` : règle structurée + trace la
+  déclenchant → exactement une `Deviation` ancrée sur l'event ID du tool
+  call ; `test_structured_forbidden_rule_conforming_trace` : miroir à zéro.
+- `test_structured_rule_yaml_roundtrip` : parse → dump → parse identique.
+- `test_legacy_dsl_unchanged` : `examples/mandates/refund-bot.yaml`
+  inchangé, tests B2 existants verts sans modification.
+- `test_budget_from_tokens_without_cost_attr` : trace avec tokens + modèle
+  connu mais sans `cost_eur` → `budget_exceeded` et `budget_used`
+  calculés depuis la table de prix (logique extraite de `report/build.py`
+  vers `alfred.trace.cost`, consommée par les deux — même total au centime,
+  vérifié par test).
+
+**Definition of done** : idem + `examples/mandates/` gagne un exemple
+commenté de règle structurée.
+
+### Brique 10 — Ingestion du monde réel (OTel standard)
+
+**Objectif** : le pont « agent OTel → Collector (file exporter) →
+`alfred watch` » fonctionne, et les traces semconv standard sans clés
+maison produisent erreurs d'outil et arguments exploitables. Tout le
+mapping vit dans `alfred.trace.ingest` (garde-fou §9 : couche
+d'adaptation) — le moteur de mandat ne change pas de vocabulaire.
+
+**Tests falsifiables** :
+- `test_ingest_ndjson_lines` : fichier 3 lignes JSON (forme file exporter
+  Collector) → tous les spans ingérés ; fichier objet-unique → comportement
+  actuel inchangé.
+- `test_status_code_error_maps_to_tool_error` : span outil avec
+  `status.code == STATUS_CODE_ERROR` et sans `tool.result.status` →
+  `tool.result.status == "error"` après ingestion (jamais d'écrasement si
+  la clé maison est présente).
+- `test_tool_call_arguments_json_parsed` : `gen_ai.tool.call.arguments`
+  (string JSON) → `tool.arguments.<clé>` pour chaque valeur scalaire.
+- `test_malformed_ndjson_raises` : ligne invalide → `TraceIngestionError`
+  avec numéro de ligne.
+
+**Definition of done** : idem + section « OTel Collector bridge » dans
+`docs/integrate.md` avec une config Collector minimale copiable.
+
+### Brique 11 — Onboarding + « test 5 minutes BYOA »
+
+**Objectif** : le « test 5 minutes » de la DoD B6, re-défini pour un agent
+*externe* : un inconnu clone, lit le README, instrumente une boucle
+minimale avec `alfred.instrument`, lance `alfred watch`, voit un digest
+ancré — en moins de 5 minutes.
+
+**Livrables** :
+- `examples/agents/minimal/` : ~30 lignes, un agent jouet sans LLM (aucune
+  clé API requise) instrumenté avec `alfred.instrument`, avec son mandat.
+- Section README « Plug in your own agent » : les trois chemins (SDK
+  `alfred.instrument` aujourd'hui, pont Collector, connecteurs natifs
+  v0.2) — honnête sur les limites, comme le tableau « What's real ».
+- `docs/integrate.md` consolidé (quickstart B8 + bridge B10).
+
+**Tests falsifiables** : `test_minimal_example_end_to_end` : l'exemple
+minimal, exécuté tel quel, produit une trace ingérée dont le digest a
+toutes ses lignes ancrées (même esprit que le test refund-bot, zéro
+réseau).
+
+**Definition of done** : le test 5 minutes BYOA passe, chronométré par une
+personne qui n'a pas écrit le code.
 
 ---
 
