@@ -13,15 +13,14 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from alfred.instrument import AgentTracer
 from refund_bot.agent import LLMResponse, run_ticket
 from refund_bot.tools import load_orders
-from refund_bot.tracer import TraceRecorder
 
 _TICKETS_PATH = Path(__file__).parent / "tickets.json"
 AGENT_NAME = "refund-bot-v3"
@@ -94,23 +93,19 @@ def main(argv: list[str] | None = None) -> int:
     client = AnthropicClient(args.model)
     orders = load_orders()
     tickets = json.loads(_TICKETS_PATH.read_text(encoding="utf-8"))
-    recorder = TraceRecorder(agent=AGENT_NAME)
+    tracer = AgentTracer(agent=AGENT_NAME, traces_dir=args.out)
 
     for ticket in tickets:
         print(f"Handling {ticket['id']} (order {ticket['order_id']})...")
-        run_ticket(client, recorder, ticket, orders)
+        run_ticket(client, tracer, ticket, orders)
 
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    trace_path = out_dir / f"refund-bot-{stamp}.json"
-    trace_path.write_text(json.dumps(recorder.payload(), indent=2), encoding="utf-8")
+    trace_path = tracer.flush()
 
     print(f"\nTrace written to {trace_path}")
     print("Now let Alfred verify what the agent actually did:")
     print("  alfred init demo-project --agent refund-bot-v3")
     print("  cp examples/mandates/refund-bot.yaml demo-project/mandate.yaml")
-    print(f"  alfred watch {out_dir}/ --project demo-project")
+    print(f"  alfred watch {args.out}/ --project demo-project")
     return 0
 
 

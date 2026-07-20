@@ -27,6 +27,12 @@ entries below are the work done so far towards the v0.1 roadmap
   trace and a real digest with zero setup; CI (pytest/ruff/mypy matrix +
   CodeQL); CONTRIBUTING.md, issue templates,
   `docs/vcd/alfred-v0.1.md`.
+- Brique 8 — public instrumentation SDK (`alfred.instrument`): any agent
+  loop emits an Alfred-ingestible OTLP JSON trace in ~10 lines
+  (`AgentTracer` with `session`/`llm_call`/`tool_call` context managers,
+  `flush()` to a watchable file). The refund-bot example now consumes it
+  and its example-only tracer is removed; quickstart in
+  `docs/integrate.md`.
 - Brique 7 — real-agent example (`examples/agents/refund_bot/`): a
   framework-free Claude tool loop handles support tickets with real tool
   executions, emits genuine OTLP traces, and `alfred watch` catches its

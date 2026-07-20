@@ -19,7 +19,7 @@ Requires Python 3.11+, an `ANTHROPIC_API_KEY`, and the `anthropic` package
 
 ```bash
 pip install -e ".[dev]" anthropic
-python examples/agents/refund_bot/run.py          # → traces/refund-bot-<ts>.json
+python examples/agents/refund_bot/run.py          # → traces/refund-bot-v3-<ts>.json
 ```
 
 Then verify the run with Alfred:
@@ -48,6 +48,7 @@ Deviations (mandate):          1   [evt:…] — forbidden_action: issue_refund 
 | Tool executions and their outcomes (incl. errors) | The shop |
 | Span IDs, timestamps, token usage, cost attribution | — |
 
-Traces are emitted directly in the OTLP JSON shape Alfred ingests (see
-`tracer.py` for why the OTel SDK isn't used here). The system prompt does
-not restate the mandate — that's the point: a prompt is not a policy.
+Traces are emitted with the public `alfred.instrument` SDK, directly in
+the OTLP JSON shape Alfred ingests (see `docs/integrate.md` to instrument
+your own agent the same way). The system prompt does not restate the
+mandate — that's the point: a prompt is not a policy.

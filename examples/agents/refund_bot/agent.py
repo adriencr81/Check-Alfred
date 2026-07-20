@@ -9,11 +9,10 @@ the mandate check is external supervision over what actually happened.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any, Protocol
 
+from alfred.instrument import AgentTracer
 from refund_bot.tools import Order, execute
-from refund_bot.tracer import TraceRecorder
 
 SYSTEM_PROMPT = (
     "You are refund-bot-v3, the customer-support agent of a small kitchenware "
@@ -116,30 +115,30 @@ def _ticket_prompt(ticket: dict[str, str]) -> str:
 
 def run_ticket(
     client: LLMClient,
-    recorder: TraceRecorder,
+    tracer: AgentTracer,
     ticket: dict[str, str],
     orders: dict[str, Order],
     *,
     max_turns: int = 8,
 ) -> None:
-    """Handle one ticket end-to-end; every step lands in the recorder."""
-    recorder.begin_task(task_name=f"handle_ticket.{ticket['id']}", task_id=ticket["id"])
+    """Handle one ticket end-to-end; every step lands in the tracer."""
     messages: list[dict[str, Any]] = [
         {"role": "user", "content": _ticket_prompt(ticket)}
     ]
-    try:
+    with tracer.session(task_name=f"handle_ticket.{ticket['id']}", task_id=ticket["id"]):
         for _ in range(max_turns):
-            start = datetime.now(UTC)
-            response = client.complete(system=SYSTEM_PROMPT, messages=messages, tools=TOOLS)
-            recorder.record_chat(
-                request_model=response.model,
-                response_model=response.model,
-                input_tokens=response.input_tokens,
-                output_tokens=response.output_tokens,
-                cost_eur=cost_eur(response.model, response.input_tokens, response.output_tokens),
-                start=start,
-                end=datetime.now(UTC),
-            )
+            with tracer.llm_call() as llm:
+                response = client.complete(
+                    system=SYSTEM_PROMPT, messages=messages, tools=TOOLS
+                )
+                llm.record_usage(
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                    response_model=response.model,
+                    cost_eur=cost_eur(
+                        response.model, response.input_tokens, response.output_tokens
+                    ),
+                )
             if response.stop_reason != "tool_use":
                 return
             messages.append({"role": "assistant", "content": response.content})
@@ -147,17 +146,10 @@ def run_ticket(
             for block in response.content:
                 if block.get("type") != "tool_use":
                     continue
-                tool_start = datetime.now(UTC)
                 arguments = dict(block["input"])
-                outcome = execute(block["name"], arguments, orders)
-                amount = arguments.get("amount_eur")
-                recorder.record_tool(
-                    tool=block["name"],
-                    status=outcome.status,
-                    start=tool_start,
-                    end=datetime.now(UTC),
-                    amount_eur=float(amount) if isinstance(amount, int | float) else None,
-                )
+                with tracer.tool_call(block["name"], arguments=arguments) as tool:
+                    outcome = execute(block["name"], arguments, orders)
+                    tool.record_result(status=outcome.status)
                 result: dict[str, Any] = {
                     "type": "tool_result",
                     "tool_use_id": block["id"],
@@ -167,5 +159,3 @@ def run_ticket(
                     result["is_error"] = True
                 results.append(result)
             messages.append({"role": "user", "content": results})
-    finally:
-        recorder.end_task()

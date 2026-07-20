@@ -23,8 +23,8 @@ sys.path.insert(0, str(REPO_ROOT / "examples" / "agents"))
 
 from refund_bot.agent import LLMResponse, run_ticket  # noqa: E402
 from refund_bot.tools import load_orders  # noqa: E402
-from refund_bot.tracer import TraceRecorder  # noqa: E402
 
+from alfred.instrument import AgentTracer  # noqa: E402
 from alfred.mandate.engine import evaluate  # noqa: E402
 from alfred.mandate.model import DeviationType  # noqa: E402
 from alfred.mandate.yaml_io import load_mandate  # noqa: E402
@@ -74,9 +74,9 @@ def _response(
 def _run_scripted_ticket(
     responses: list[LLMResponse], ticket: dict[str, str]
 ) -> list[TraceEvent]:
-    recorder = TraceRecorder(agent="refund-bot-v3")
-    run_ticket(ScriptedClient(responses), recorder, ticket, load_orders())
-    return ingest_otlp_json(recorder.payload())
+    tracer = AgentTracer(agent="refund-bot-v3")
+    run_ticket(ScriptedClient(responses), tracer, ticket, load_orders())
+    return ingest_otlp_json(tracer.payload())
 
 
 def _conform_run() -> list[TraceEvent]:
