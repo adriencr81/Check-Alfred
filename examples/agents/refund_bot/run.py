@@ -68,6 +68,12 @@ class AnthropicClient:
                         "input": dict(block.input),
                     }
                 )
+        for block in content:
+            if block["type"] == "text" and block["text"].strip():
+                print(f"    agent: {block['text'].strip()}")
+            elif block["type"] == "tool_use":
+                arguments = ", ".join(f"{k}={v}" for k, v in block["input"].items())
+                print(f"    -> {block['name']}({arguments})")
         return LLMResponse(
             content=content,
             stop_reason=str(response.stop_reason),
@@ -78,6 +84,8 @@ class AnthropicClient:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--out", default="traces", help="Directory for the OTLP JSON trace")
