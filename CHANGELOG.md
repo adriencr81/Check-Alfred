@@ -11,6 +11,17 @@ entries below are the work done so far towards the v0.1 roadmap
 
 ### Added
 
+- Brique 12 — native LangGraph connector (`alfred.integrations.langgraph`):
+  attach `AlfredCallbackHandler` to a graph invocation and every model and
+  tool call becomes an Alfred-ingestible span, no manual instrumentation
+  (`pip install alfred-ai[langgraph]`). The handler drives the proven
+  `AgentTracer` context managers from LangChain callbacks (keyed by
+  `run_id`), so attribute keys and the event-ID anchoring guarantee are
+  inherited, not re-implemented; `tracer.py` is unchanged and the core keeps
+  its single `pyyaml` dependency. Runnable `examples/agents/langgraph_bot/`
+  (real graph, fake model, no API key), "LangGraph connector" section in
+  `docs/integrate.md`, falsifiable end-to-end test (zero network). See
+  `docs/adr/0014-langgraph-native-connector.md`.
 - Brique 1 — trace store: OTLP JSON ingest, `TraceEvent` model, SQLite
   persistence.
 - Brique 2 — mandate engine: YAML mandate parsing, typed `Deviation`
