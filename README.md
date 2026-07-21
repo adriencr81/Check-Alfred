@@ -57,9 +57,10 @@ stay within its mandate?* for the person accountable for it.
 
 ## Quickstart
 
-`alfred-ai` isn't on PyPI yet, but `alfred demo` already works today from
-a clone — an instrumented fake agent produces a real trace and a real
-digest, no mandate file, no Slack webhook, no network call:
+`alfred-ai` isn't on PyPI yet (the release pipeline is wired and rehearsing on
+TestPyPI first — see [docs/RELEASING.md](docs/RELEASING.md)), but `alfred demo`
+already works today from a clone — an instrumented fake agent produces a real
+trace and a real digest, no mandate file, no Slack webhook, no network call:
 
 ```bash
 git clone https://github.com/adriencr81/check-alfred.git && cd check-alfred
