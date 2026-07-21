@@ -91,6 +91,25 @@ def test_cli_watch_reports_missing_project(
     assert "no Alfred project found" in capsys.readouterr().err
 
 
+def test_cli_schedule_prints_cron_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    traces = tmp_path / "traces"
+    exit_code = main(["schedule", str(traces), "--project", str(tmp_path), "--at", "07:15"])
+    assert exit_code == 0
+    out = capsys.readouterr().out.strip()
+    assert out.startswith("15 7 * * * alfred watch ")
+    assert f"--project {tmp_path.resolve()}" in out
+
+
+def test_cli_schedule_rejects_bad_time(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = main(["schedule", str(tmp_path), "--at", "9am"])
+    assert exit_code == 1
+    assert "HH:MM" in capsys.readouterr().err
+
+
 def test_cli_demo_runs_fake_agent_and_prints_digest(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

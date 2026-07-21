@@ -19,6 +19,7 @@ from alfred.demo import build_demo_payload, demo_mandate
 from alfred.mandate.model import MandateError
 from alfred.mandate.yaml_io import load_mandate
 from alfred.report.build import build_digest
+from alfred.schedule import ScheduleError, build_cron_line
 from alfred.trace.ingest import ingest_otlp_json
 from alfred.trace.store import TraceStore
 from alfred.watch import watch_once
@@ -61,6 +62,22 @@ def _cmd_watch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_schedule(args: argparse.Namespace) -> int:
+    try:
+        hour_str, minute_str = args.at.split(":", 1)
+        hour, minute = int(hour_str), int(minute_str)
+    except ValueError:
+        print(f"alfred schedule: --at must be HH:MM, got {args.at!r}", file=sys.stderr)
+        return 1
+    try:
+        line = build_cron_line(args.project, args.traces_dir, hour=hour, minute=minute)
+    except ScheduleError as exc:
+        print(f"alfred schedule: {exc}", file=sys.stderr)
+        return 1
+    print(line)
+    return 0
+
+
 def _cmd_demo(args: argparse.Namespace) -> int:
     payload = build_demo_payload(args.agent)
     events = ingest_otlp_json(payload)
@@ -96,6 +113,16 @@ def main(argv: list[str] | None = None) -> int:
     watch_parser.add_argument("traces_dir")
     watch_parser.add_argument("--project", default=".")
     watch_parser.set_defaults(func=_cmd_watch)
+
+    schedule_parser = subparsers.add_parser(
+        "schedule", help="Print a crontab line that runs `alfred watch` daily"
+    )
+    schedule_parser.add_argument("traces_dir")
+    schedule_parser.add_argument("--project", default=".")
+    schedule_parser.add_argument(
+        "--at", default="09:00", metavar="HH:MM", help="daily run time (24h), default 09:00"
+    )
+    schedule_parser.set_defaults(func=_cmd_schedule)
 
     demo_parser = subparsers.add_parser(
         "demo", help="Run a fake instrumented agent → real digest, zero setup"
