@@ -38,6 +38,7 @@ OPENAI_RATES = [
 
 # Google Gemini (ai.google.dev); flat under-200k rate, no context tiering here.
 GEMINI_RATES = [
+    ("gemini-3.1-pro-preview", 0.002, 0.012),
     ("gemini-3.5-flash", 0.0015, 0.009),
     ("gemini-3-flash-preview", 0.0005, 0.003),
     ("gemini-3.1-flash-lite", 0.00025, 0.0015),
