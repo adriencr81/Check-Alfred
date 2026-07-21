@@ -86,3 +86,37 @@ que ce document doit être régénéré.
 - Ce VCD n'a pas été produit par (ni validé contre) la méthodologie du
   harnais RAG mentionnée dans PLAN.md §5 B6 — voir la section
   « Ce que ce document est » ci-dessus.
+
+## Brique 11 — vérification live (2026-07-21)
+
+Le sprint S1 « Bring Your Own Agent » (PLAN.md §12, ADR 0013, briques
+8-11) est mergé sur `main`. Ce tableau ci-dessus ne couvre que B1-B6 ; la
+suite complète reste verte après B7-B11 :
+
+```
+$ pytest -q
+151 passed
+$ ruff check .
+All checks passed!
+$ mypy --strict src/
+Success: no issues found in 27 source files
+```
+
+Le « test 5 minutes BYOA » de la brique 11 (`examples/agents/minimal/`) a
+été rejoué en conditions réelles, hors CI : `expense-bot` (aucun LLM,
+aucune clé API) exécuté, sa trace ingérée par `alfred watch` dans un
+projet isolé, digest produit et **livré dans Slack** (`#tous-alfred-demo`,
+Block Kit natif — ADR 0012) via le webhook de démo existant :
+
+```
+Alfred · expense-bot · 2026-07-21
+
+Tasks completed:          3   [evt:5ff68d0c…, 1481d192…, d81a8f46…]
+Deviations (mandate):          1   [evt:b92e06a2…] — forbidden_action: forbidden action
+'approve_expense_above_100_eur': approve_expense called with amount_eur=250.0 > 100.0
+```
+
+Chaque event ID ci-dessus provient du run réel — aucun fixture, aucun
+chiffre recopié à la main. Confirme la DoD de la brique 11 : un inconnu
+qui clone le repo peut voir un digest ancré, avec une déviation
+attrapée, sans réseau ni clé API, en moins de 5 minutes.
