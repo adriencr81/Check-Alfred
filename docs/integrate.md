@@ -6,6 +6,11 @@ task, each model call, and each tool call. The `alfred.instrument` SDK
 emits exactly that shape, with the exact attribute keys Alfred's mandate
 engine and report builder read. Stdlib only, no OTel SDK required.
 
+**Fastest start:** run [`examples/agents/minimal/`](../examples/agents/minimal/)
+— a ~30-line agent with no LLM and no API key — to see the whole loop
+(instrument → `alfred watch` → anchored digest) end to end before wiring in
+your own code.
+
 ## 1. Wrap your loop
 
 ```python
@@ -125,3 +130,10 @@ emit Alfred-specific keys:
 - the `gen_ai.tool.call.arguments` JSON blob is flattened to
   `tool.arguments.<key>` scalars, which is what mandate rules like
   `issue_refund_above_100_eur` check.
+
+## Native connectors (v0.2)
+
+If your agent runs on a managed platform and you can't add either the SDK or a
+Collector, native connectors that pull traces for you are on the roadmap for
+v0.2 — not built yet. Until then, one of the two paths above is required: for
+Alfred to verify a run, that run has to leave a trace it can read.

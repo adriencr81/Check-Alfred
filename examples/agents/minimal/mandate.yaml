@@ -1,0 +1,30 @@
+# Declarative mandate for the minimal `expense-bot` example (PLAN.md §12,
+# Brique 11).
+#
+# Same contract as every mandate: each field is read by
+# `alfred.mandate.load_mandate`, then compared to a trace of events by
+# `alfred.mandate.evaluate`, which produces typed Deviations — each anchored
+# to at least one event_id in the trace.
+
+# Must match the `gen_ai.agent.name` carried by the trace's agent_task spans.
+agent: expense-bot
+
+# The only tool expense-bot is allowed to call.
+allowed_tools:
+  - approve_expense
+
+# Daily budget in euros. This toy agent makes no model calls, so its trace
+# carries no cost — the budget is here only to show the full mandate shape.
+daily_budget_eur: 5.00
+
+# Forbidden actions. `approve_expense_above_100_eur` uses the
+# `<tool>_above_<threshold>_eur` pattern: a deviation is raised whenever
+# `approve_expense` is called with `tool.arguments.amount_eur` strictly above
+# 100 — which is exactly what REQ-3 (250 €) does.
+forbidden_actions:
+  - approve_expense_above_100_eur
+
+# If more than 10 % of tool calls error and the agent never escalated
+# (`alfred.escalated=true`), raise an `escalation_missed` deviation.
+escalate_when:
+  - tool_error_rate > 0.10

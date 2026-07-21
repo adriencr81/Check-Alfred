@@ -40,6 +40,14 @@ entries below are the work done so far towards the v0.1 roadmap
   pricing moves to a shared `alfred.trace.cost` module so budget checks
   (`budget_exceeded`, `budget_used`) and the digest cost line agree to
   the cent on traces without `gen_ai.usage.cost_eur`.
+- Brique 11 — onboarding / "5-minute BYOA test": `examples/agents/minimal/`,
+  a ~30-line agent with no LLM and no API key, instrumented with
+  `alfred.instrument` and shipped with its own mandate — run it and
+  `alfred watch` catches its over-cap approval as a `forbidden_action`
+  deviation, entirely offline. A "Plug in your own agent" section in the
+  README lays out the three honest paths (SDK today, OTel Collector bridge
+  today, native connectors in v0.2), and `docs/integrate.md` now points at
+  the minimal example as the fastest start. Network-free end-to-end test.
 - Brique 10 — real-world ingestion: `ingest_otlp_file` reads the
   newline-delimited OTLP payloads the OTel Collector file exporter writes
   (as well as single-payload files), so the `agent → Collector →
