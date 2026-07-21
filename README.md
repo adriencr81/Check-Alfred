@@ -79,10 +79,15 @@ Once v0.1 ships to PyPI:
 
 ```bash
 pip install alfred-ai
-alfred init          # generates mandate.yaml + Slack config
-alfred watch         # ingests OTLP traces, posts the daily
-alfred demo          # instrumented fake agent → real digest, no setup
+alfred init --slack-webhook https://hooks.slack.com/…  # mandate.yaml + Slack config
+alfred schedule traces/ --at 09:00 >> mycrontab        # one daily crontab line
+alfred watch traces/                                   # one pass now (or --loop to keep running)
+alfred demo                                            # fake agent → real digest, no setup
 ```
+
+`alfred watch` is a single pass by design (re-run via cron — `alfred schedule`
+prints the line for you). For environments without cron, `alfred watch --loop`
+re-scans on an interval until you stop it.
 
 ## Plug in your own agent
 

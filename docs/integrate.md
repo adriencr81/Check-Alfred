@@ -76,15 +76,43 @@ for the commented reference.
 ## 3. Watch the traces
 
 ```bash
-alfred init my-project --agent support-bot
+alfred init my-project --agent support-bot \
+  --slack-webhook https://hooks.slack.com/services/T0/B0/xyz   # webhook is optional
 cp mandate.yaml my-project/mandate.yaml
 alfred watch traces/ --project my-project
 ```
+
+Pass `--slack-webhook` to have `init` write the webhook into
+`.alfred/config.toml` for you (validated as an `https://` URL); omit it and
+the digest goes to stdout only until you add the webhook yourself.
 
 Every line of the resulting digest is computed from identifiable trace
 events (the `[evt:…]` IDs) — never self-reported by the agent, never
 invented by an LLM. See [verified_nlg.md](verified_nlg.md) for the
 guarantee.
+
+## 4. Make it daily
+
+`alfred watch` does one pass and exits — that's deliberate (no daemon, no
+infra; [ADR 0007](adr/0007-brique5-delivery-cli-design.md)). To get a
+*recurring* digest, pick one:
+
+- **Cron (recommended).** `alfred schedule` prints a ready-to-use crontab
+  line — no hand-rolled cron:
+
+  ```bash
+  alfred schedule traces/ --project my-project --at 09:00 >> mycrontab
+  crontab mycrontab
+  ```
+
+- **Loop (containers / CI without cron).** `alfred watch --loop` keeps
+  running, re-scanning every `--interval` seconds (default 60) until you stop
+  it (Ctrl-C). Only newly-arrived trace files produce a digest, so nothing is
+  re-delivered ([ADR 0015](adr/0015-watch-loop-opt-in.md)):
+
+  ```bash
+  alfred watch traces/ --project my-project --loop --interval 300
+  ```
 
 ## LangGraph connector
 

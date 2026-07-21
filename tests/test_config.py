@@ -48,6 +48,18 @@ def test_load_config_roundtrips_paths(tmp_path: Path) -> None:
     assert config.slack_webhook_url is None
 
 
+def test_init_writes_slack_webhook_from_arg(tmp_path: Path) -> None:
+    url = "https://hooks.slack.com/services/T0/B0/xyz"
+    init_project(tmp_path, agent="refund-bot-v3", slack_webhook=url)
+    assert load_config(tmp_path).slack_webhook_url == url
+
+
+def test_init_rejects_non_https_slack_webhook(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="https"):
+        init_project(tmp_path, agent="refund-bot-v3", slack_webhook="http://insecure/hook")
+    assert not (tmp_path / "mandate.yaml").exists()
+
+
 def test_load_config_reads_slack_webhook_url(tmp_path: Path) -> None:
     init_project(tmp_path, agent="refund-bot-v3")
     config_path = tmp_path / ".alfred" / "config.toml"
