@@ -19,11 +19,22 @@ _OUTPUT_TOKENS_ATTR = "gen_ai.usage.output_tokens"
 # €/1K-token rates (input, output), keyed by gen_ai.response.model. Public
 # pricing snapshot, not tied to any date — extend as new models are seen.
 # See docs/adr/0005-brique3-report-engine-design.md.
+# Anthropic rates use each model's standard (non-introductory) list price so
+# the table stays date-free; add new providers only with a sourced price.
 _PRICING_EUR_PER_1K_TOKENS: dict[str, tuple[float, float]] = {
+    # OpenAI
     "gpt-4o-mini": (0.00015, 0.00060),
     "gpt-4o-mini-2024-07-18": (0.00015, 0.00060),
     "gpt-4o": (0.00250, 0.01000),
     "gpt-4o-2024-08-06": (0.00250, 0.01000),
+    # Anthropic (Claude)
+    "claude-opus-4-8": (0.005, 0.025),
+    "claude-opus-4-7": (0.005, 0.025),
+    "claude-opus-4-6": (0.005, 0.025),
+    "claude-sonnet-5": (0.003, 0.015),
+    "claude-sonnet-4-6": (0.003, 0.015),
+    "claude-haiku-4-5": (0.001, 0.005),
+    "claude-fable-5": (0.010, 0.050),
 }
 
 
