@@ -48,6 +48,13 @@ Delivered to Slack (v0.1), Teams (v0.2), or stdout / markdown (always).
 | Guardrails · NeMo Guardrails | Inline filters on LLM inputs / outputs. | Post-hoc control across the whole agent session, including tool calls and cost. |
 | A homegrown Grafana / Datadog dashboard | Aggregated metrics, alerting. | Narrative, anchored, opinionated report — no dashboard design required. |
 
+Alfred is **complementary, not a replacement**. It reads the same OpenTelemetry
+GenAI traces your observability stack already emits, so if you run LangSmith,
+Langfuse, or any OTel backend, pointing Alfred at those traces needs no
+reinstrumentation. The split is the question and the reader: observability asks
+*is my agent working?* for the developer debugging it; Alfred asks *did my agent
+stay within its mandate?* for the person accountable for it.
+
 ## Quickstart
 
 `alfred-ai` isn't on PyPI yet, but `alfred demo` already works today from
