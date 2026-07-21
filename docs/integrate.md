@@ -86,6 +86,42 @@ events (the `[evt:…]` IDs) — never self-reported by the agent, never
 invented by an LLM. See [verified_nlg.md](verified_nlg.md) for the
 guarantee.
 
+## LangGraph connector
+
+If your agent runs on **LangGraph**, you don't wrap anything by hand. Attach
+`AlfredCallbackHandler` to the invocation and every model call and tool call in
+the graph becomes a span — in the same OTLP shape as section 1, with the same
+anchoring guarantee.
+
+```bash
+pip install alfred-ai[langgraph]
+```
+
+```python
+from alfred.instrument import AgentTracer
+from alfred.integrations.langgraph import AlfredCallbackHandler
+
+tracer = AgentTracer(agent="support-bot", traces_dir="traces/")
+graph.invoke(inputs, config={"callbacks": [AlfredCallbackHandler(tracer)]})
+tracer.flush()  # → traces/support-bot-<timestamp>.json
+```
+
+- One **session** spans the root graph run (`invoke_agent`); each
+  `on_chat_model_*` becomes an `llm_call` span with the response's real token
+  usage, and each `on_tool_*` becomes a `tool_call` span whose `inputs` are
+  flattened to `tool.arguments.<key>` — exactly what mandate rules read.
+- The handler drives the same `AgentTracer` context managers the SDK uses, so
+  it never re-emits attribute keys: the "computed from a real trace event, never
+  self-reported" guarantee is inherited, not re-implemented.
+- In production the handler never raises into your graph (LangChain swallows
+  callback errors). Successive `graph.invoke(...)` calls with the same tracer
+  accumulate; call `flush()` once when you're done.
+
+Declare the mandate and watch the traces exactly as in sections 2–3. Runnable
+example (real graph, fake model, no API key):
+[`examples/agents/langgraph_bot/`](../examples/agents/langgraph_bot/). Design
+rationale: [ADR 0014](adr/0014-langgraph-native-connector.md).
+
 ## OTel Collector bridge
 
 If your agent is already instrumented with the OpenTelemetry SDK, you don't
@@ -131,9 +167,9 @@ emit Alfred-specific keys:
   `tool.arguments.<key>` scalars, which is what mandate rules like
   `issue_refund_above_100_eur` check.
 
-## Native connectors (v0.2)
+## Other native connectors (v0.2)
 
-If your agent runs on a managed platform and you can't add either the SDK or a
-Collector, native connectors that pull traces for you are on the roadmap for
-v0.2 — not built yet. Until then, one of the two paths above is required: for
-Alfred to verify a run, that run has to leave a trace it can read.
+Beyond LangGraph (above), connectors for CrewAI, the OpenAI Agents SDK, and
+managed platforms are on the roadmap for v0.2 — not built yet. Until then, one
+of the paths above is required: for Alfred to verify a run, that run has to
+leave a trace it can read.

@@ -24,6 +24,9 @@ classifiers = [
 dependencies = ["pyyaml>=6.0"]
 
 [project.optional-dependencies]
+# Native LangGraph connector (alfred.integrations.langgraph). Optional: the core
+# package keeps its single pyyaml dependency. See docs/adr/0014.
+langgraph = ["langgraph>=1.0"]
 dev = [
   "pytest>=8.0",
   "pytest-cov>=5.0",
@@ -31,6 +34,8 @@ dev = [
   "mypy>=1.10",
   "types-PyYAML>=6.0",
   "pre-commit>=3.0",
+  # CI installs .[dev], so the LangGraph connector's e2e test runs on every push.
+  "langgraph>=1.0",
 ]
 
 [project.scripts]

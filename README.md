@@ -87,8 +87,9 @@ over-cap approval. Three honest paths get your real agent's runs to Alfred:
 | Path | For agents that… | Status |
 |---|---|---|
 | **`alfred.instrument` SDK** | you can add ~10 lines to (wrap the loop, model call, tool call) | **works today** — [`docs/integrate.md`](docs/integrate.md) |
+| **LangGraph connector** | run on LangGraph — attach one callback handler, no manual instrumentation | **works today** — `pip install alfred-ai[langgraph]` ([connector](docs/integrate.md#langgraph-connector)) |
 | **OTel Collector bridge** | already emit OpenTelemetry GenAI spans | **works today** — point the Collector's file exporter at the watched folder ([bridge config](docs/integrate.md#otel-collector-bridge)) |
-| **Native connectors** | run on a managed platform (no code change) | **v0.2** — not built yet |
+| **Other native connectors** | run on CrewAI, OpenAI Agents, or a managed platform | **v0.2** — not built yet |
 
 Whatever the path, the guarantee is the same: every digest line is computed
 from an identifiable trace event, never self-reported. What Alfred can't see in
@@ -113,7 +114,8 @@ src/alfred/narrate/    # Brique 4 — verified LLM rewrite (the anchoring test l
 src/alfred/deliver/    # Brique 5 — Slack / stdout
 src/alfred/demo/       # Brique 6 — instrumented fake agent
 src/alfred/instrument/ # Brique 8 — public instrumentation SDK (AgentTracer)
-examples/agents/       # B7 refund_bot (real LLM), B11 minimal (no LLM, no API key)
+src/alfred/integrations/ # Brique 12 — native connectors (LangGraph callback handler)
+examples/agents/       # B7 refund_bot (real LLM), B11 minimal (no LLM), B12 langgraph_bot
 ```
 
 The [`CLAUDE.md`](CLAUDE.md) file encodes the workflow rules for anyone (human or
@@ -144,6 +146,10 @@ downloads it for *their* agents
 - **Brique 9** — generic mandate (structured `tool:` / `when:` rules) + cost computed from tokens
 - **Brique 10** — real-world ingestion: OTel Collector NDJSON + standard GenAI semconv adaptation
 - **Brique 11** — onboarding + the 5-minute BYOA example (no LLM, no API key)
+
+**Native connectors (v1.3, [ADR 0014](docs/adr/0014-langgraph-native-connector.md)):**
+
+- **Brique 12** — LangGraph connector: attach one callback handler, get an anchored trace (`pip install alfred-ai[langgraph]`)
 
 Post-v0.1: native connectors (v0.2), performance review — behavioral drift & cost-per-task (v0.3), evidence file export (v0.4 — the bridge to the closed-source engine).
 
