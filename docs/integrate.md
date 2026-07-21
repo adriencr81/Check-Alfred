@@ -81,9 +81,47 @@ events (the `[evt:…]` IDs) — never self-reported by the agent, never
 invented by an LLM. See [verified_nlg.md](verified_nlg.md) for the
 guarantee.
 
-## Emitting from OTel directly
+## OTel Collector bridge
 
-If your agent is already instrumented with the OpenTelemetry SDK, an
-OTel Collector file-exporter bridge is planned (PLAN.md §12, Brique 10) —
-today Alfred reads single-payload OTLP JSON files like the ones
-`AgentTracer.flush()` writes.
+If your agent is already instrumented with the OpenTelemetry SDK, you don't
+need `alfred.instrument` — point your spans at an OTel Collector and let its
+file exporter write the trace Alfred watches. Alfred reads what the file
+exporter emits (one OTLP payload per line, NDJSON) as well as the
+single-payload files `AgentTracer.flush()` writes; both land in the same
+`alfred watch` folder.
+
+Minimal Collector config (`otel-collector.yaml`):
+
+```yaml
+receivers:
+  otlp:
+    protocols:
+      grpc:                       # your agent's OTLP exporter → localhost:4317
+      http:                       # or localhost:4318
+
+exporters:
+  file:
+    path: traces/agent-traces.json  # one JSON payload per line (NDJSON)
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [file]
+```
+
+```bash
+otelcol --config otel-collector.yaml   # run the Collector
+alfred watch traces/ --project my-project
+```
+
+For the bridge to yield anchored deviations, your tool spans need
+`gen_ai.operation.name: execute_tool` and `gen_ai.tool.name`. Alfred adapts
+the rest of the standard GenAI semconv on ingestion, so you don't have to
+emit Alfred-specific keys:
+
+- a span `status.code` of `STATUS_CODE_ERROR` becomes `tool.result.status:
+  error` (used by `tool_error_rate`) unless the span already sets it;
+- the `gen_ai.tool.call.arguments` JSON blob is flattened to
+  `tool.arguments.<key>` scalars, which is what mandate rules like
+  `issue_refund_above_100_eur` check.

@@ -54,6 +54,49 @@ def _kind(attributes: dict[str, Any]) -> SpanKind:
     return SpanKind.UNKNOWN
 
 
+_TOOL_STATUS_ATTR = "tool.result.status"
+_TOOL_ARGS_JSON_ATTR = "gen_ai.tool.call.arguments"
+_TOOL_ARGS_PREFIX = "tool.arguments."
+
+
+def _is_status_error(span: dict[str, Any]) -> bool:
+    """OTLP span status carries ERROR as the enum name or its integer value (2)."""
+    status = span.get("status")
+    if not isinstance(status, dict):
+        return False
+    return status.get("code") in ("STATUS_CODE_ERROR", 2)
+
+
+def _adapt_semconv(span: dict[str, Any], kind: SpanKind, attributes: dict[str, Any]) -> None:
+    """Map standard OTel tool spans onto the home keys the mandate engine reads.
+
+    Adaptation layer per PLAN.md §9 / ADR 0013 decision 5: the engine keeps
+    its vocabulary, so a trace with only standard semconv (no `tool.result.status`,
+    arguments packed in one JSON blob) still yields tool errors and per-argument
+    values. Home keys always win — an explicit attribute is never overwritten.
+    """
+    if kind is not SpanKind.TOOL_CALL:
+        return
+    if _TOOL_STATUS_ATTR not in attributes and _is_status_error(span):
+        attributes[_TOOL_STATUS_ATTR] = "error"
+    raw_arguments = attributes.get(_TOOL_ARGS_JSON_ATTR)
+    if isinstance(raw_arguments, str):
+        _flatten_tool_arguments(raw_arguments, attributes)
+
+
+def _flatten_tool_arguments(raw: str, attributes: dict[str, Any]) -> None:
+    """`gen_ai.tool.call.arguments` (JSON object string) → `tool.arguments.<key>`."""
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return  # a malformed blob is left as-is, not fatal to the whole trace
+    if not isinstance(parsed, dict):
+        return
+    for key, value in parsed.items():
+        if isinstance(value, str | int | float):  # scalars only; bool is an int
+            attributes.setdefault(f"{_TOOL_ARGS_PREFIX}{key}", value)
+
+
 def _timestamp(nanos: str) -> datetime:
     seconds, nanoseconds = divmod(int(nanos), 1_000_000_000)
     return datetime.fromtimestamp(seconds, tz=UTC).replace(microsecond=nanoseconds // 1_000)
@@ -61,12 +104,14 @@ def _timestamp(nanos: str) -> datetime:
 
 def _span_to_event(span: dict[str, Any]) -> TraceEvent:
     attributes = _attributes(span.get("attributes", []))
+    kind = _kind(attributes)
+    _adapt_semconv(span, kind, attributes)
     parent_span_id = span.get("parentSpanId") or None
     return TraceEvent(
         event_id=EventId(span["spanId"]),
         trace_id=span["traceId"],
         parent_span_id=parent_span_id,
-        kind=_kind(attributes),
+        kind=kind,
         name=span["name"],
         start_time=_timestamp(span["startTimeUnixNano"]),
         end_time=_timestamp(span["endTimeUnixNano"]),
@@ -97,6 +142,28 @@ def ingest_otlp_json(payload: dict[str, object]) -> list[TraceEvent]:
 
 
 def ingest_otlp_file(path: Path) -> list[TraceEvent]:
-    """Read an OTLP JSON file from disk and delegate to ingest_otlp_json."""
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    return ingest_otlp_json(payload)
+    """Read one or more OTLP JSON payloads from a file into TraceEvents.
+
+    Decodes the file as a stream of JSON values, so every real shape lands in
+    one path: a single payload (pretty-printed over many lines), the
+    newline-delimited payloads the OTel Collector file exporter writes (so the
+    `agent → Collector → alfred watch` bridge works), or several concatenated.
+    A malformed value raises `TraceIngestionError` naming the line it starts on.
+    """
+    text = Path(path).read_text(encoding="utf-8")
+    decoder = json.JSONDecoder()
+    events: list[TraceEvent] = []
+    index, length = 0, len(text)
+    while (index := _skip_whitespace(text, index)) < length:
+        try:
+            payload, index = decoder.raw_decode(text, index)
+        except json.JSONDecodeError as exc:
+            raise TraceIngestionError(f"Malformed OTLP JSON at line {exc.lineno}: {exc}") from exc
+        events.extend(ingest_otlp_json(payload))
+    return events
+
+
+def _skip_whitespace(text: str, index: int) -> int:
+    while index < len(text) and text[index].isspace():
+        index += 1
+    return index

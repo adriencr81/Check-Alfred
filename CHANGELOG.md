@@ -40,6 +40,14 @@ entries below are the work done so far towards the v0.1 roadmap
   pricing moves to a shared `alfred.trace.cost` module so budget checks
   (`budget_exceeded`, `budget_used`) and the digest cost line agree to
   the cent on traces without `gen_ai.usage.cost_eur`.
+- Brique 10 — real-world ingestion: `ingest_otlp_file` reads the
+  newline-delimited OTLP payloads the OTel Collector file exporter writes
+  (as well as single-payload files), so the `agent → Collector →
+  alfred watch` bridge works; the ingestion adaptation layer maps standard
+  GenAI semconv onto the engine's home keys (`status.code` error →
+  `tool.result.status`, `gen_ai.tool.call.arguments` JSON blob →
+  `tool.arguments.<key>` scalars) without native keys ever being
+  overwritten. Collector config in `docs/integrate.md`.
 - Brique 7 — real-agent example (`examples/agents/refund_bot/`): a
   framework-free Claude tool loop handles support tickets with real tool
   executions, emits genuine OTLP traces, and `alfred watch` catches its
