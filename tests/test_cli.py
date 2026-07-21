@@ -21,6 +21,27 @@ def test_cli_init_creates_project(tmp_path: Path) -> None:
     assert (tmp_path / ".alfred" / "config.toml").is_file()
 
 
+def test_cli_init_writes_slack_webhook(tmp_path: Path) -> None:
+    url = "https://hooks.slack.com/services/T0/B0/xyz"
+    exit_code = main(
+        ["init", str(tmp_path), "--agent", "refund-bot-v3", "--slack-webhook", url]
+    )
+    assert exit_code == 0
+    from alfred.config import load_config
+
+    assert load_config(tmp_path).slack_webhook_url == url
+
+
+def test_cli_init_reports_error_on_invalid_slack_webhook(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = main(
+        ["init", str(tmp_path), "--agent", "refund-bot-v3", "--slack-webhook", "ftp://nope"]
+    )
+    assert exit_code == 1
+    assert "https" in capsys.readouterr().err
+
+
 def test_cli_init_reports_error_on_existing_project(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -76,10 +76,15 @@ for the commented reference.
 ## 3. Watch the traces
 
 ```bash
-alfred init my-project --agent support-bot
+alfred init my-project --agent support-bot \
+  --slack-webhook https://hooks.slack.com/services/T0/B0/xyz   # webhook is optional
 cp mandate.yaml my-project/mandate.yaml
 alfred watch traces/ --project my-project
 ```
+
+Pass `--slack-webhook` to have `init` write the webhook into
+`.alfred/config.toml` for you (validated as an `https://` URL); omit it and
+the digest goes to stdout only until you add the webhook yourself.
 
 Every line of the resulting digest is computed from identifiable trace
 events (the `[evt:…]` IDs) — never self-reported by the agent, never

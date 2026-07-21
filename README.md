@@ -79,9 +79,9 @@ Once v0.1 ships to PyPI:
 
 ```bash
 pip install alfred-ai
-alfred init          # generates mandate.yaml + Slack config
-alfred watch         # ingests OTLP traces, posts the daily
-alfred demo          # instrumented fake agent → real digest, no setup
+alfred init --slack-webhook https://hooks.slack.com/…  # mandate.yaml + Slack config
+alfred watch traces/                                   # ingests OTLP traces, posts the daily
+alfred demo                                            # fake agent → real digest, no setup
 ```
 
 ## Plug in your own agent

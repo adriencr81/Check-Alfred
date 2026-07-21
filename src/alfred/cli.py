@@ -26,7 +26,7 @@ from alfred.watch import watch_once
 
 def _cmd_init(args: argparse.Namespace) -> int:
     try:
-        init_project(args.directory, agent=args.agent)
+        init_project(args.directory, agent=args.agent, slack_webhook=args.slack_webhook)
     except ConfigError as exc:
         print(f"alfred init: {exc}", file=sys.stderr)
         return 1
@@ -82,6 +82,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     init_parser.add_argument("directory", nargs="?", default=".")
     init_parser.add_argument("--agent", default="your-agent")
+    init_parser.add_argument(
+        "--slack-webhook",
+        default=None,
+        metavar="URL",
+        help="Slack incoming webhook (https://…); written to config so `watch` posts the digest",
+    )
     init_parser.set_defaults(func=_cmd_init)
 
     watch_parser = subparsers.add_parser(

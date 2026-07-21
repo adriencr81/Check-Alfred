@@ -42,6 +42,19 @@ def _scaffold_mandate(agent: str) -> Mandate:
     )
 
 
+def _validate_webhook(url: str) -> str:
+    """Return `url` if it is a plausible Slack incoming webhook, else raise.
+
+    Slack incoming webhooks are always HTTPS. Reject anything else loudly at
+    `init` time rather than writing a config that `alfred watch` would only
+    fail on later — same "fail loudly" stance as the existing overwrite guard
+    and `deliver.slack._urllib_transport`'s scheme check.
+    """
+    if not url.startswith("https://"):
+        raise ConfigError(f"slack webhook must be an https:// URL, got {url!r}")
+    return url
+
+
 def _dump_toml(data: dict[str, str]) -> str:
     """Serialize flat string key-values to TOML.
 
@@ -52,11 +65,14 @@ def _dump_toml(data: dict[str, str]) -> str:
     return "".join(f"{key} = {json.dumps(value)}\n" for key, value in data.items())
 
 
-def init_project(directory: Path | str, agent: str) -> None:
+def init_project(directory: Path | str, agent: str, slack_webhook: str | None = None) -> None:
     """Scaffold a new Alfred project: `mandate.yaml` + `.alfred/config.toml`.
 
-    Raises `ConfigError` if either file already exists — `init` never
-    silently overwrites an existing project.
+    When `slack_webhook` is given it is validated and written as
+    `slack_webhook_url` so `alfred watch` posts the digest to Slack with no
+    hand-editing of the config. Raises `ConfigError` if either file already
+    exists — `init` never silently overwrites an existing project — or if the
+    webhook is not an https:// URL.
     """
     root = Path(directory)
     mandate_path = root / _MANDATE_FILENAME
@@ -66,18 +82,17 @@ def init_project(directory: Path | str, agent: str) -> None:
     if config_path.exists():
         raise ConfigError(f"{config_path} already exists — refusing to overwrite")
 
+    config_values = {
+        "mandate_path": _MANDATE_FILENAME,
+        "trace_db_path": _DEFAULT_TRACE_DB_RELATIVE_PATH,
+    }
+    if slack_webhook is not None:
+        config_values["slack_webhook_url"] = _validate_webhook(slack_webhook)
+
     root.mkdir(parents=True, exist_ok=True)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     mandate_path.write_text(dump_mandate(_scaffold_mandate(agent)), encoding="utf-8")
-    config_path.write_text(
-        _dump_toml(
-            {
-                "mandate_path": _MANDATE_FILENAME,
-                "trace_db_path": _DEFAULT_TRACE_DB_RELATIVE_PATH,
-            }
-        ),
-        encoding="utf-8",
-    )
+    config_path.write_text(_dump_toml(config_values), encoding="utf-8")
 
 
 def load_config(directory: Path | str) -> AlfredConfig:
