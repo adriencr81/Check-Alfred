@@ -1,10 +1,11 @@
-"""Falsifiable spec for token-priced cost of Anthropic (Claude) models.
+"""Falsifiable spec for token-priced cost of the multi-provider pricing table.
 
 Brique — multi-provider cost. The pricing table in alfred.trace.cost only
-knew OpenAI models, so a Claude agent whose trace carries token counts but no
+knew a few OpenAI models, so an agent whose trace carries token counts but no
 `gen_ai.usage.cost_eur` had its budget computed as 0.0 in silence — the exact
 gap the S1 audit flagged. These tests pin the per-model rate the engine and
-the digest both read through event_cost_eur.
+the digest both read through event_cost_eur, across Anthropic, OpenAI and
+Google.
 """
 
 from __future__ import annotations
@@ -27,6 +28,21 @@ CLAUDE_RATES = [
     ("claude-fable-5", 0.010, 0.050),
 ]
 
+# OpenAI GPT-5.6 family (developers.openai.com); gpt-5.6 aliases to Sol.
+OPENAI_RATES = [
+    ("gpt-5.6-sol", 0.005, 0.030),
+    ("gpt-5.6", 0.005, 0.030),
+    ("gpt-5.6-terra", 0.0025, 0.015),
+    ("gpt-5.6-luna", 0.001, 0.006),
+]
+
+# Google Gemini (ai.google.dev); flat under-200k rate, no context tiering here.
+GEMINI_RATES = [
+    ("gemini-3.5-flash", 0.0015, 0.009),
+    ("gemini-3-flash-preview", 0.0005, 0.003),
+    ("gemini-3.1-flash-lite", 0.00025, 0.0015),
+]
+
 
 def _llm_event(model: str, input_tokens: int, output_tokens: int) -> TraceEvent:
     return TraceEvent(
@@ -47,6 +63,15 @@ def _llm_event(model: str, input_tokens: int, output_tokens: int) -> TraceEvent:
 
 @pytest.mark.parametrize(("model", "rate_in", "rate_out"), CLAUDE_RATES)
 def test_claude_model_priced_from_tokens(model: str, rate_in: float, rate_out: float) -> None:
+    event = _llm_event(model, input_tokens=1000, output_tokens=500)
+    expected = (1000 / 1000) * rate_in + (500 / 1000) * rate_out
+    assert event_cost_eur(event) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(("model", "rate_in", "rate_out"), OPENAI_RATES + GEMINI_RATES)
+def test_openai_and_gemini_model_priced_from_tokens(
+    model: str, rate_in: float, rate_out: float
+) -> None:
     event = _llm_event(model, input_tokens=1000, output_tokens=500)
     expected = (1000 / 1000) * rate_in + (500 / 1000) * rate_out
     assert event_cost_eur(event) == pytest.approx(expected)

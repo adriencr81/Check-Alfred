@@ -35,6 +35,15 @@ _PRICING_EUR_PER_1K_TOKENS: dict[str, tuple[float, float]] = {
     "claude-sonnet-4-6": (0.003, 0.015),
     "claude-haiku-4-5": (0.001, 0.005),
     "claude-fable-5": (0.010, 0.050),
+    # OpenAI (GPT-5.6 family; gpt-5.6 is the alias for Sol)
+    "gpt-5.6": (0.005, 0.030),
+    "gpt-5.6-sol": (0.005, 0.030),
+    "gpt-5.6-terra": (0.0025, 0.015),
+    "gpt-5.6-luna": (0.001, 0.006),
+    # Google (Gemini; flat under-200k rate — the table carries no context tier)
+    "gemini-3.5-flash": (0.0015, 0.009),
+    "gemini-3-flash-preview": (0.0005, 0.003),
+    "gemini-3.1-flash-lite": (0.00025, 0.0015),
 }
 
 
