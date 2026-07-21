@@ -4,7 +4,7 @@
 > soit modifier ce document, soit être documentée dans un ADR daté sous
 > `docs/adr/`. Pas de plan parallèle en tête ou en Notion.
 
-**Version** : 1.2 · **Date** : 2026-07-20 · **Cible produit** : v0.1 publique le **4 août 2026** (J+20).
+**Version** : 1.3 · **Date** : 2026-07-21 · **Cible produit** : v0.1 publique le **4 août 2026** (J+20).
 **Cible fondateur** : candidature YC **déposée le 2026-07-18** — traction démontrable avant la réponse YC.
 
 > Révision v1.1 (2026-07-18, ADR 0009) : les 6 briques §5 sont livrées à
@@ -20,6 +20,16 @@
 > externe avec *ses* agents ; B8 + B11 sont sur le chemin critique du
 > launch (maintenu au 4 août s'ils sont verts au 1er août, sinon 11 août).
 > Voir `docs/adr/0013-byoa-bring-your-own-agent-plan.md`.
+
+> Révision v1.3 (2026-07-21, ADR 0014) : le **connecteur natif LangGraph**
+> (§12, Brique 12) est avancé sur demande produit, en anticipé sur la v0.2 où
+> il était backlogué (§10, « priorisés par les issues »). Écart de
+> séquencement assumé et cloisonné : un `BaseCallbackHandler`
+> (`alfred.integrations.langgraph`) derrière l'extra optionnel `[langgraph]`,
+> pilotant les context managers d'`AgentTracer` — le cœur garde sa seule
+> dépendance `pyyaml`. Les autres connecteurs (CrewAI, OpenAI) et non-objectifs
+> du backlog §10 restent en v0.2+. Voir
+> `docs/adr/0014-langgraph-native-connector.md`.
 
 ---
 
@@ -606,6 +616,48 @@ réseau).
 
 **Definition of done** : le test 5 minutes BYOA passe, chronométré par une
 personne qui n'a pas écrit le code.
+
+### Brique 12 — Connecteur natif LangGraph (ajoutée en v1.3, ADR 0014)
+
+**Objectif** : un dev qui utilise LangGraph n'instrumente plus à la main.
+Il attache un callback handler à l'invocation de son graphe et Alfred
+enregistre ce que le graphe a réellement fait. Cible v0.2 avancée sur
+demande produit — cloisonnée derrière l'extra optionnel `[langgraph]`, le
+cœur garde `pyyaml` comme seule dépendance.
+
+**Forme cible** (les ~3 lignes promises par `GROWTH_PLAN_3M.md`) :
+
+```python
+from alfred.instrument import AgentTracer
+from alfred.integrations.langgraph import AlfredCallbackHandler
+
+tracer = AgentTracer(agent="support-bot", traces_dir="traces")
+graph.invoke(inputs, config={"callbacks": [AlfredCallbackHandler(tracer)]})
+tracer.flush()
+```
+
+Le handler ne réémet aucune clé : il pilote les context managers prouvés
+d'`AgentTracer` (`__enter__` sur `*_start`, `__exit__` sur `*_end`, indexés
+par `run_id`). La garantie « chaque fait ancré sur un event ID réel » (D5)
+est héritée, pas réimplémentée. `tracer.py` est inchangé.
+
+**Tests falsifiables** (`tests/test_integration_langgraph.py`, vrai graphe
+LangGraph + fake chat model, zéro réseau) :
+- `test_graph_run_ingests` : run → 1 `AGENT_TASK`, ≥1 `LLM_CALL`, ≥1
+  `TOOL_CALL`, event IDs uniques, enfants rattachés à la tâche.
+- `test_tool_arguments_flattened` : `tool.arguments.amount_eur` sur le span
+  outil ; `test_tool_error_recorded_as_status` : outil qui lève → statut
+  `error`.
+- `test_llm_usage_propagated` : tokens réels propagés depuis `usage_metadata`.
+- `test_digest_from_graph_trace_anchored` : chaque ligne du digest a
+  `sources` non-vide et ⊆ event IDs.
+- `test_overlimit_yields_forbidden_action` : approbation à 250 € sous mandat
+  cap 100 € → exactement une `Deviation FORBIDDEN_ACTION` ancrée sur l'event
+  ID du tool call ; `test_conform_run_yields_no_deviations` : miroir à zéro.
+
+**Definition of done** : idem §5 (`pytest -q`, `ruff`, `mypy --strict src/`
+verts) + `examples/agents/langgraph_bot/` (agent jouet zéro clé) et section
+« LangGraph connector » dans `docs/integrate.md`.
 
 ---
 
