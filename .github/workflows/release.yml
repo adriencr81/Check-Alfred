@@ -1,0 +1,44 @@
+name: Release
+
+# Publishes the built distribution via PyPI Trusted Publishing (OIDC) — no
+# stored token or password. This dry-run stage targets TestPyPI; flip the
+# environment/URL to the real PyPI for the v0.1 launch (see docs/RELEASING.md).
+#
+# Trigger manually (Actions tab → Release → Run workflow) to practice, or push
+# a version tag. The publish step only runs after a clean build.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-testpypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write # required for Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/

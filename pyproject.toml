@@ -7,14 +7,14 @@ name = "alfred-ai"
 version = "0.1.0.dev0"
 description = "Accountability layer for AI employees: mandate-anchored daily digests from agent traces."
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Adrien Deleuil" }]
 keywords = ["ai", "agents", "opentelemetry", "observability", "accountability", "llm"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -42,8 +42,8 @@ dev = [
 alfred = "alfred.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/alfred-ai/alfred"
-Issues = "https://github.com/alfred-ai/alfred/issues"
+Homepage = "https://github.com/adriencr81/Check-Alfred"
+Issues = "https://github.com/adriencr81/Check-Alfred/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/alfred"]
