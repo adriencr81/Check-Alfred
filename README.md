@@ -74,6 +74,23 @@ alfred watch         # ingests OTLP traces, posts the daily
 alfred demo          # instrumented fake agent → real digest, no setup
 ```
 
+## Plug in your own agent
+
+Alfred verifies *your* agents. The floor is 5 minutes and no credentials:
+[`examples/agents/minimal/`](examples/agents/minimal/) is a ~30-line agent
+with no LLM and no API key — run it, `alfred watch` it, watch Alfred catch its
+over-cap approval. Three honest paths get your real agent's runs to Alfred:
+
+| Path | For agents that… | Status |
+|---|---|---|
+| **`alfred.instrument` SDK** | you can add ~10 lines to (wrap the loop, model call, tool call) | **works today** — [`docs/integrate.md`](docs/integrate.md) |
+| **OTel Collector bridge** | already emit OpenTelemetry GenAI spans | **works today** — point the Collector's file exporter at the watched folder ([bridge config](docs/integrate.md#otel-collector-bridge)) |
+| **Native connectors** | run on a managed platform (no code change) | **v0.2** — not built yet |
+
+Whatever the path, the guarantee is the same: every digest line is computed
+from an identifiable trace event, never self-reported. What Alfred can't see in
+the trace, it doesn't claim.
+
 ## Development
 
 ```bash
