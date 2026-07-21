@@ -6,8 +6,11 @@
 > agent traces into a daily stand-up your team can actually trust — every line
 > anchored to a trace event ID.
 
-**Status** — feature-complete for v0.1 (112 tests green, mypy --strict, CI + CodeQL).
-Public **v0.1 targeted for early August 2026**. Full roadmap: [PLAN.md](PLAN.md).
+**Status** — v0.1 core feature-complete, plus a "Bring Your Own Agent" sprint
+landed: a public `alfred.instrument` SDK, real-world OTel Collector ingestion,
+and a 5-minute example that needs no API key. 151 tests green, mypy --strict,
+CI + CodeQL. Public **v0.1 targeted for early August 2026**. Full roadmap:
+[PLAN.md](PLAN.md).
 
 ---
 
@@ -102,12 +105,15 @@ ruff check . && mypy --strict src/
 Layout:
 
 ```
-src/alfred/trace/     # Brique 1 — OTLP ingest, TraceEvent, SQLite store
-src/alfred/mandate/   # Brique 2 — YAML mandate → typed Deviations
-src/alfred/report/    # Brique 3 — computed Digest, sources per line
-src/alfred/narrate/   # Brique 4 — verified LLM rewrite (the anchoring test lives here)
-src/alfred/deliver/   # Brique 5 — Slack / stdout
-src/alfred/demo/      # Brique 6 — instrumented fake agent
+src/alfred/trace/      # Brique 1 — OTLP ingest, TraceEvent, SQLite store
+                       #   + B9 shared token→€ cost, B10 NDJSON / GenAI semconv adaptation
+src/alfred/mandate/    # Brique 2 — YAML mandate → typed Deviations (+ B9 structured rules)
+src/alfred/report/     # Brique 3 — computed Digest, sources per line
+src/alfred/narrate/    # Brique 4 — verified LLM rewrite (the anchoring test lives here)
+src/alfred/deliver/    # Brique 5 — Slack / stdout
+src/alfred/demo/       # Brique 6 — instrumented fake agent
+src/alfred/instrument/ # Brique 8 — public instrumentation SDK (AgentTracer)
+examples/agents/       # B7 refund_bot (real LLM), B11 minimal (no LLM, no API key)
 ```
 
 The [`CLAUDE.md`](CLAUDE.md) file encodes the workflow rules for anyone (human or
@@ -116,15 +122,28 @@ proof-of-run required at each commit.
 
 ## Roadmap
 
-Six bricks, one per week, launch at J+45. Each brick is a signed contract with
-falsifiable tests and a definition-of-done. See [PLAN.md §5](PLAN.md).
+Each brick is a signed contract with falsifiable tests and a definition-of-done.
+See [PLAN.md §5](PLAN.md) for the v0.1 core and [§12](PLAN.md) for the
+"Bring Your Own Agent" sprint.
 
-- **Brique 1** — trace store (this repo currently)
+**v0.1 core — done:**
+
+- **Brique 1** — trace store: OTLP ingest, `TraceEvent`, SQLite
 - **Brique 2** — mandate engine v0
 - **Brique 3** — report engine
 - **Brique 4** — verified NLG (the test that *is* the product)
 - **Brique 5** — Slack delivery + CLI
-- **Brique 6** — `alfred demo` (done, see Quickstart above) + launch polish → **public v0.1 on PyPI**
+- **Brique 6** — `alfred demo` + launch polish → **public v0.1 on PyPI**
+
+**Bring Your Own Agent sprint — done:** make Alfred work for a dev who
+downloads it for *their* agents
+([ADR 0013](docs/adr/0013-byoa-bring-your-own-agent-plan.md)).
+
+- **Brique 7** — real refund-bot example: a framework-free Claude tool loop whose over-limit refund Alfred catches
+- **Brique 8** — public `alfred.instrument` SDK: any loop → an ingestible OTLP trace in ~10 lines
+- **Brique 9** — generic mandate (structured `tool:` / `when:` rules) + cost computed from tokens
+- **Brique 10** — real-world ingestion: OTel Collector NDJSON + standard GenAI semconv adaptation
+- **Brique 11** — onboarding + the 5-minute BYOA example (no LLM, no API key)
 
 Post-v0.1: native connectors (v0.2), performance review — behavioral drift & cost-per-task (v0.3), evidence file export (v0.4 — the bridge to the closed-source engine).
 
