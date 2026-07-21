@@ -36,7 +36,7 @@ def test_ingest_preserves_trace_id(otlp_sample_payload: dict[str, object]) -> No
 
 def test_ingest_normalizes_timestamps_utc(otlp_sample_payload: dict[str, object]) -> None:
     """OTLP nanosecond timestamps must land as UTC datetimes."""
-    events = {e.event_id: e for e in ingest_otlp_json(otlp_sample_payload)}
+    events = {str(e.event_id): e for e in ingest_otlp_json(otlp_sample_payload)}
     root = events["00f067aa0ba902b7"]
     assert root.start_time == datetime(2026, 8, 29, 21, 0, 0, tzinfo=UTC)
     assert root.end_time == datetime(2026, 8, 29, 21, 0, 12, tzinfo=UTC)
@@ -44,7 +44,7 @@ def test_ingest_normalizes_timestamps_utc(otlp_sample_payload: dict[str, object]
 
 def test_ingest_extracts_gen_ai_usage(otlp_sample_payload: dict[str, object]) -> None:
     """Downstream cost accounting depends on gen_ai.usage.* being extractable."""
-    events = {e.event_id: e for e in ingest_otlp_json(otlp_sample_payload)}
+    events = {str(e.event_id): e for e in ingest_otlp_json(otlp_sample_payload)}
     chat = events["a1b2c3d4e5f60718"]
     assert chat.attributes["gen_ai.usage.input_tokens"] == 1284
     assert chat.attributes["gen_ai.usage.output_tokens"] == 192
@@ -52,7 +52,7 @@ def test_ingest_extracts_gen_ai_usage(otlp_sample_payload: dict[str, object]) ->
 
 
 def test_ingest_extracts_parent_span(otlp_sample_payload: dict[str, object]) -> None:
-    events = {e.event_id: e for e in ingest_otlp_json(otlp_sample_payload)}
+    events = {str(e.event_id): e for e in ingest_otlp_json(otlp_sample_payload)}
     assert events["00f067aa0ba902b7"].parent_span_id is None
     assert events["a1b2c3d4e5f60718"].parent_span_id == "00f067aa0ba902b7"
 
@@ -62,14 +62,14 @@ def test_ingest_kind_is_derived_from_gen_ai_operation_name(
 ) -> None:
     """`.kind` must be inferred from `gen_ai.operation.name` (OTel GenAI semconv),
     not from ad-hoc attribute-key prefixes — see docs/adr/0003."""
-    events = {e.event_id: e for e in ingest_otlp_json(otlp_sample_payload)}
+    events = {str(e.event_id): e for e in ingest_otlp_json(otlp_sample_payload)}
     assert events["00f067aa0ba902b7"].kind == SpanKind.AGENT_TASK
     assert events["a1b2c3d4e5f60718"].kind == SpanKind.LLM_CALL
     assert events["b2c3d4e5f6071829"].kind == SpanKind.TOOL_CALL
 
 
 def test_ingest_kind_is_unknown_without_operation_name() -> None:
-    payload = {
+    payload: dict[str, object] = {
         "resourceSpans": [
             {
                 "scopeSpans": [
