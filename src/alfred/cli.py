@@ -13,16 +13,17 @@ from collections.abc import Callable
 from pathlib import Path
 
 from alfred import __version__
-from alfred.config import ConfigError, init_project, load_config
+from alfred.config import AlfredConfig, ConfigError, init_project, load_config
 from alfred.deliver import slack, stdout
 from alfred.demo import build_demo_payload, demo_mandate
 from alfred.mandate.model import MandateError
 from alfred.mandate.yaml_io import load_mandate
 from alfred.report.build import build_digest
+from alfred.report.model import Digest
 from alfred.schedule import ScheduleError, build_cron_line
 from alfred.trace.ingest import ingest_otlp_json
 from alfred.trace.store import TraceStore
-from alfred.watch import watch_once
+from alfred.watch import watch_loop, watch_once
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
@@ -35,6 +36,22 @@ def _cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _deliver(digests: list[Digest], config: AlfredConfig) -> None:
+    """Deliver each digest to stdout and, if configured, to Slack.
+
+    Shared by the single-pass and `--loop` paths. When empty (no new trace
+    files) it prints one notice; in loop mode that keeps each idle pass quiet
+    but visible.
+    """
+    if not digests:
+        print("alfred watch: no new trace files.")
+        return
+    for digest in digests:
+        stdout.deliver(digest)
+        if config.slack_webhook_url:
+            slack.send(digest, config.slack_webhook_url)
+
+
 def _cmd_watch(args: argparse.Namespace) -> int:
     project_dir = Path(args.project)
     try:
@@ -44,21 +61,25 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         print(f"alfred watch: {exc}", file=sys.stderr)
         return 1
 
+    traces_dir = Path(args.traces_dir)
     config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
     store = TraceStore(config.trace_db_path)
     try:
-        digests = watch_once(project_dir, Path(args.traces_dir), mandate, store)
+        if args.loop:
+            watch_loop(
+                project_dir,
+                traces_dir,
+                mandate,
+                store,
+                lambda digests: _deliver(digests, config),
+                interval_s=args.interval,
+            )
+        else:
+            _deliver(watch_once(project_dir, traces_dir, mandate, store), config)
+    except KeyboardInterrupt:
+        print("\nalfred watch: stopped.")
     finally:
         store.close()
-
-    if not digests:
-        print("alfred watch: no new trace files.")
-        return 0
-
-    for digest in digests:
-        stdout.deliver(digest)
-        if config.slack_webhook_url:
-            slack.send(digest, config.slack_webhook_url)
     return 0
 
 
@@ -112,6 +133,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     watch_parser.add_argument("traces_dir")
     watch_parser.add_argument("--project", default=".")
+    watch_parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="keep running, re-scanning every --interval seconds (Ctrl-C to stop)",
+    )
+    watch_parser.add_argument(
+        "--interval",
+        type=float,
+        default=60.0,
+        metavar="SECONDS",
+        help="seconds between passes when --loop is set (default 60)",
+    )
     watch_parser.set_defaults(func=_cmd_watch)
 
     schedule_parser = subparsers.add_parser(

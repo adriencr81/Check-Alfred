@@ -12,8 +12,9 @@ from pathlib import Path
 import pytest
 
 from alfred.mandate.model import Mandate
+from alfred.report.model import Digest
 from alfred.trace.store import TraceStore
-from alfred.watch import watch_once
+from alfred.watch import watch_loop, watch_once
 
 
 def _mandate() -> Mandate:
@@ -73,6 +74,61 @@ def test_watch_returns_empty_when_no_json_files(project_dir: Path, tmp_path: Pat
     store = TraceStore(project_dir / "trace.db")
     assert watch_once(project_dir, empty_dir, _mandate(), store) == []
     store.close()
+
+
+def test_watch_loop_runs_max_passes_and_sleeps_between_them(
+    project_dir: Path, traces_dir: Path
+) -> None:
+    store = TraceStore(project_dir / "trace.db")
+    collected: list[list[Digest]] = []
+    sleeps: list[float] = []
+
+    watch_loop(
+        project_dir,
+        traces_dir,
+        _mandate(),
+        store,
+        collected.append,
+        interval_s=42.0,
+        sleep=sleeps.append,
+        max_passes=3,
+    )
+    store.close()
+
+    # Three passes: first delivers the one day's digest, the rest are empty
+    # (seen.json dedups), so no digest is re-emitted.
+    assert len(collected) == 3
+    assert len(collected[0]) == 1
+    assert collected[1] == [] and collected[2] == []
+    # Sleeps happen between passes only — not after the last.
+    assert sleeps == [42.0, 42.0]
+
+
+def test_watch_loop_delivers_a_file_that_arrives_between_passes(
+    project_dir: Path, traces_dir: Path, otlp_sample_path: Path
+) -> None:
+    store = TraceStore(project_dir / "trace.db")
+    collected: list[list[Digest]] = []
+
+    def on_digests(digests: list[Digest]) -> None:
+        collected.append(digests)
+        if len(collected) == 1:  # drop a new file in after the first pass
+            shutil.copy(otlp_sample_path, traces_dir / "day2.json")
+
+    watch_loop(
+        project_dir,
+        traces_dir,
+        _mandate(),
+        store,
+        on_digests,
+        interval_s=0.0,
+        sleep=lambda _s: None,
+        max_passes=2,
+    )
+    store.close()
+
+    assert len(collected[0]) == 1  # day1
+    assert len(collected[1]) == 1  # day2, picked up on the second pass
 
 
 def test_watch_persists_seen_state_across_processes(project_dir: Path, traces_dir: Path) -> None:

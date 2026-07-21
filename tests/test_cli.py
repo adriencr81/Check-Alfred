@@ -7,6 +7,7 @@ docs/adr/0008-brique6-demo-launch-polish-design.md.
 from __future__ import annotations
 
 import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -66,6 +67,32 @@ def test_cli_watch_ingests_and_prints_digest(
     out = capsys.readouterr().out
     assert "refund-bot-v3" in out
     assert "Tasks completed" in out
+
+
+def test_cli_watch_loop_stops_on_keyboard_interrupt(
+    tmp_path: Path,
+    otlp_sample_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+
+    def fake_sleep(_seconds: float) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(time, "sleep", fake_sleep)
+    exit_code = main(
+        ["watch", str(traces_dir), "--project", str(project_dir), "--loop", "--interval", "0"]
+    )
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "refund-bot-v3" in out  # first pass delivered before the interrupt
+    assert "stopped" in out
 
 
 def test_cli_watch_reports_no_new_files(

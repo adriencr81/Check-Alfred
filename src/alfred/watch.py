@@ -7,14 +7,19 @@ See PLAN.md §5 Brique 5 and docs/adr/0007-brique5-delivery-cli-design.md.
 by each event's own `start_time`, not "today", since an ingested file may
 carry a historical trace.
 
-No daemon, no polling loop: each invocation does one pass and exits. See
-the ADR for why (zero-infra philosophy, simpler to test, cron-friendly).
+The single pass is the default and the recommended path (re-run via cron,
+see `alfred schedule`). `watch_loop` adds an opt-in continuous mode for
+environments without cron (containers, CI); it wraps the same `watch_once`
+primitive and reuses `.alfred/seen.json` so no digest is re-emitted between
+passes. See docs/adr/0007 §1 and docs/adr/0015 for why.
 """
 
 from __future__ import annotations
 
 import json
+import time
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
@@ -70,3 +75,34 @@ def watch_once(
 
     _save_seen(project_dir, seen)
     return [build_digest(mandate, by_day[day], day) for day in sorted(by_day)]
+
+
+def watch_loop(
+    project_dir: Path,
+    traces_dir: Path,
+    mandate: Mandate,
+    store: TraceStore,
+    on_digests: Callable[[list[Digest]], None],
+    *,
+    interval_s: float,
+    sleep: Callable[[float], None] | None = None,
+    max_passes: int | None = None,
+) -> None:
+    """Run `watch_once` repeatedly, delivering each pass's digests.
+
+    Opt-in continuous mode (ADR 0015). Each pass reuses `.alfred/seen.json`,
+    so only newly-arrived trace files produce digests — no re-delivery. After
+    a pass, sleeps `interval_s` before the next, unless `max_passes` is
+    reached. `sleep` and `max_passes` are injected to keep the loop testable
+    without real time; production passes `max_passes=None` (loop forever) and
+    relies on `KeyboardInterrupt` to stop. `sleep` defaults to `time.sleep`,
+    resolved at call time so it stays monkeypatchable.
+    """
+    do_sleep = time.sleep if sleep is None else sleep
+    passes = 0
+    while True:
+        on_digests(watch_once(project_dir, traces_dir, mandate, store))
+        passes += 1
+        if max_passes is not None and passes >= max_passes:
+            return
+        do_sleep(interval_s)

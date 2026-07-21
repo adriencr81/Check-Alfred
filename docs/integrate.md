@@ -91,6 +91,29 @@ events (the `[evt:…]` IDs) — never self-reported by the agent, never
 invented by an LLM. See [verified_nlg.md](verified_nlg.md) for the
 guarantee.
 
+## 4. Make it daily
+
+`alfred watch` does one pass and exits — that's deliberate (no daemon, no
+infra; [ADR 0007](adr/0007-brique5-delivery-cli-design.md)). To get a
+*recurring* digest, pick one:
+
+- **Cron (recommended).** `alfred schedule` prints a ready-to-use crontab
+  line — no hand-rolled cron:
+
+  ```bash
+  alfred schedule traces/ --project my-project --at 09:00 >> mycrontab
+  crontab mycrontab
+  ```
+
+- **Loop (containers / CI without cron).** `alfred watch --loop` keeps
+  running, re-scanning every `--interval` seconds (default 60) until you stop
+  it (Ctrl-C). Only newly-arrived trace files produce a digest, so nothing is
+  re-delivered ([ADR 0015](adr/0015-watch-loop-opt-in.md)):
+
+  ```bash
+  alfred watch traces/ --project my-project --loop --interval 300
+  ```
+
 ## LangGraph connector
 
 If your agent runs on **LangGraph**, you don't wrap anything by hand. Attach
