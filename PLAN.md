@@ -693,6 +693,21 @@ autonomes sur un week-end sans humain dans la boucle » : l'alerte near-real-tim
 dans l'ADR : reste aveugle à ce qui sort du périmètre tracé (un agent qui
 « s'échappe » de son instrumentation). À cadrer en ADR daté avant tout code.
 
+**Idée en réserve — vitrine Hugging Face Space (démo zéro-install)** : un Space
+Gradio où l'on dépose un fichier de trace (OTLP/NDJSON) et où s'affichent le
+digest ancré et les déviations typées, URL partageable, sans `pip install` ni
+clé API. Prolonge le récit « test 5 minutes, sans credential » (Brique 11) en
+enlevant même le clone. Peu de logique neuve : fine couche Gradio par-dessus le
+moteur existant (`build_digest`, rendu markdown/stdout). **Distribution/démo, pas
+protection** — ne protège pas HF (hors sujet IDS/EDR). Canal du paquet reste
+PyPI ; le Space est une vitrine, pas un registre. À cadrer en ADR daté.
+
+**Idée en réserve — connecteur natif smolagents** : appliquer la recette du
+connecteur LangGraph (Brique 12) au framework d'agents de Hugging Face —
+callback/instrumentation → trace ancrée, sans réinstrumentation. Portail (pas
+démo) vers l'écosystème agents HF. Même patron que F5 (CrewAI / OpenAI Agents) ;
+vraie brique (module `integrations/smolagents.py` + exemple + tests + ADR daté).
+
 **Séquencement retenu** : F1 puis F2 d'abord — plus fort levier d'expérience
 *sans* toucher au périmètre payant, et les plus rapides à shipper post-launch.
 **F1 est en cours** (ADR 0017).
