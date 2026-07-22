@@ -95,6 +95,77 @@ def test_cli_watch_loop_stops_on_keyboard_interrupt(
     assert "stopped" in out
 
 
+def _watch_with_recorded_slack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[list[object], list[object]]:
+    """Replace Slack delivery with in-memory recorders so `watch` tests never
+    hit the network. Returns (digests_sent, alerts_sent)."""
+    from alfred.deliver import slack
+
+    digests_sent: list[object] = []
+    alerts_sent: list[object] = []
+    monkeypatch.setattr(slack, "send", lambda digest, url: digests_sent.append(digest))
+    monkeypatch.setattr(slack, "send_alert", lambda digest, url: alerts_sent.append(digest))
+    return digests_sent, alerts_sent
+
+
+def test_cli_watch_alerts_pushes_alert_on_deviation(
+    tmp_path: Path, otlp_sample_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_dir = tmp_path / "project"
+    url = "https://hooks.slack.com/services/T0/B0/xyz"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3", "--slack-webhook", url])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+    digests_sent, alerts_sent = _watch_with_recorded_slack(monkeypatch)
+
+    exit_code = main(
+        ["watch", str(traces_dir), "--project", str(project_dir), "--alerts"]
+    )
+    assert exit_code == 0
+    # The scaffolded mandate has no allowed_tools, so issue_refund trips a
+    # tool_not_allowed deviation → digest posted AND one alert pushed.
+    assert len(digests_sent) == 1
+    assert len(alerts_sent) == 1
+    assert alerts_sent[0].deviations  # the alert carries the offending deviation
+
+
+def test_cli_watch_without_alerts_flag_pushes_no_alert(
+    tmp_path: Path, otlp_sample_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_dir = tmp_path / "project"
+    url = "https://hooks.slack.com/services/T0/B0/xyz"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3", "--slack-webhook", url])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+    digests_sent, alerts_sent = _watch_with_recorded_slack(monkeypatch)
+
+    exit_code = main(["watch", str(traces_dir), "--project", str(project_dir)])
+    assert exit_code == 0
+    assert len(digests_sent) == 1
+    assert alerts_sent == []
+
+
+def test_cli_watch_alerts_without_webhook_warns(
+    tmp_path: Path, otlp_sample_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])  # no webhook
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+
+    exit_code = main(
+        ["watch", str(traces_dir), "--project", str(project_dir), "--alerts"]
+    )
+    assert exit_code == 0
+    err = capsys.readouterr().err
+    assert "--alerts" in err
+    assert "webhook" in err
+
+
 def test_cli_watch_reports_no_new_files(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

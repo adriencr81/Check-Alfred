@@ -56,6 +56,24 @@ def _deviation_section(deviations: tuple[Deviation, ...]) -> dict[str, Any]:
     return {"type": "section", "text": {"type": "mrkdwn", "text": f"{title}\n{body}"}}
 
 
+def _evidence_block(parts: list[str]) -> dict[str, Any]:
+    """Wrap evidence strings in a Block Kit context block — the shared
+    envelope for both the digest and the alert (their `parts` differ)."""
+    return {
+        "type": "context",
+        "elements": [{"type": "mrkdwn", "text": "Evidence — " + " · ".join(parts)}],
+    }
+
+
+def _alert_evidence_context(deviations: tuple[Deviation, ...]) -> dict[str, Any]:
+    return _evidence_block(
+        [
+            f"{deviation.type.value} {format_sources(deviation.event_ids)}"
+            for deviation in deviations
+        ]
+    )
+
+
 def _evidence_context(digest: Digest) -> dict[str, Any]:
     parts = [
         f"{_EVIDENCE_LABELS[line.kind]} {format_sources(line.sources)}" for line in digest.lines
@@ -63,10 +81,7 @@ def _evidence_context(digest: Digest) -> dict[str, Any]:
     parts.extend(
         f"deviation {format_sources(deviation.event_ids)}" for deviation in digest.deviations
     )
-    return {
-        "type": "context",
-        "elements": [{"type": "mrkdwn", "text": "Evidence — " + " · ".join(parts)}],
-    }
+    return _evidence_block(parts)
 
 
 def build_block_kit_payload(digest: Digest) -> dict[str, Any]:
@@ -87,6 +102,29 @@ def build_block_kit_payload(digest: Digest) -> dict[str, Any]:
     if digest.lines or digest.deviations:
         blocks.append(_evidence_context(digest))
     return {"text": f"{title} — {summary}", "blocks": blocks}
+
+
+def build_alert_payload(digest: Digest) -> dict[str, Any]:
+    """Build a focused deviation alert — the real-time counterpart to the
+    daily digest (ADR 0017). A distinct 🚨 header, the same deviation warning
+    section as the digest, and an evidence context of the offending event IDs,
+    so the alert inherits D5's anchoring rather than re-stating it.
+
+    Requires at least one deviation: alerting on a clean pass is a caller bug,
+    so this fails loudly rather than post an empty alarm."""
+    if not digest.deviations:
+        raise ValueError("cannot build an alert payload from a digest with no deviation")
+    title = f"🚨 Alfred alert · {digest.agent} · {digest.date.isoformat()}"
+    count = len(digest.deviations)
+    summary = f"{count} deviation{'s' if count > 1 else ''}"
+    return {
+        "text": f"{title} — {summary}",
+        "blocks": [
+            {"type": "header", "text": {"type": "plain_text", "text": title}},
+            _deviation_section(digest.deviations),
+            _alert_evidence_context(digest.deviations),
+        ],
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +153,19 @@ def _urllib_transport(request: HTTPRequest) -> None:
         raise DeliverError(f"Slack webhook unreachable: {exc.reason}") from exc
 
 
+def _post(
+    payload: dict[str, Any], webhook_url: str, transport: Transport, timeout_s: float
+) -> None:
+    body = json.dumps(payload).encode("utf-8")
+    request = HTTPRequest(
+        url=webhook_url,
+        headers={"Content-Type": "application/json"},
+        body=body,
+        timeout_s=timeout_s,
+    )
+    transport(request)
+
+
 def send(
     digest: Digest,
     webhook_url: str,
@@ -126,11 +177,15 @@ def send(
     Raises `DeliverError` if the webhook is unreachable or rejects the
     payload (fail loudly — no silent drop, matching CLAUDE.md's D5).
     """
-    body = json.dumps(build_block_kit_payload(digest)).encode("utf-8")
-    request = HTTPRequest(
-        url=webhook_url,
-        headers={"Content-Type": "application/json"},
-        body=body,
-        timeout_s=timeout_s,
-    )
-    transport(request)
+    _post(build_block_kit_payload(digest), webhook_url, transport, timeout_s)
+
+
+def send_alert(
+    digest: Digest,
+    webhook_url: str,
+    transport: Transport = _urllib_transport,
+    timeout_s: float = 10.0,
+) -> None:
+    """POST a deviation alert for `digest` to Slack the moment a `watch` pass
+    finds a deviation (ADR 0017). Same fail-loud contract as `send`."""
+    _post(build_alert_payload(digest), webhook_url, transport, timeout_s)
