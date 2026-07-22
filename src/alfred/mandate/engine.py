@@ -10,7 +10,7 @@ forbidden rules and token-based budgets (Brique 9) in ADR 0013.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 
 from alfred.mandate.model import Deviation, DeviationType, ForbiddenRule, Mandate, MandateError
 from alfred.trace.cost import event_cost_eur
@@ -142,24 +142,54 @@ def _check_budget_exceeded(mandate: Mandate, events: Sequence[TraceEvent]) -> li
     return []
 
 
+_MetricComputer = Callable[
+    [Mandate, Sequence[TraceEvent], Sequence[TraceEvent]], tuple[float, tuple[EventId, ...]]
+]
+
+
+def _tool_error_rate(
+    mandate: Mandate, events: Sequence[TraceEvent], tool_calls: Sequence[TraceEvent]
+) -> tuple[float, tuple[EventId, ...]]:
+    if not tool_calls:
+        return 0.0, ()
+    errored = [event for event in tool_calls if _is_error(event)]
+    return len(errored) / len(tool_calls), tuple(event.event_id for event in errored)
+
+
+def _budget_used(
+    mandate: Mandate, events: Sequence[TraceEvent], tool_calls: Sequence[TraceEvent]
+) -> tuple[float, tuple[EventId, ...]]:
+    if not mandate.daily_budget_eur:
+        return 0.0, ()
+    costs = [(event, event_cost_eur(event)) for event in events]
+    used = sum(cost for _, cost in costs) / mandate.daily_budget_eur
+    return used, tuple(event.event_id for event, cost in costs if cost > 0.0)
+
+
+# Dispatch table for `escalate_when` metrics. It is the single source of truth:
+# `KNOWN_ESCALATION_METRICS` is derived from its keys so the set can never drift
+# from what `watch` actually computes, and `alfred.mandate.lint` reads that set
+# to flag a typo'd metric statically — before it would crash a `watch` run.
+_METRIC_COMPUTERS: dict[str, _MetricComputer] = {
+    "tool_error_rate": _tool_error_rate,
+    "budget_used": _budget_used,
+}
+
+KNOWN_ESCALATION_METRICS = frozenset(_METRIC_COMPUTERS)
+
+
 def _metric_value(
     metric: str,
     mandate: Mandate,
     events: Sequence[TraceEvent],
     tool_calls: Sequence[TraceEvent],
 ) -> tuple[float, tuple[EventId, ...]]:
-    if metric == "tool_error_rate":
-        if not tool_calls:
-            return 0.0, ()
-        errored = [event for event in tool_calls if _is_error(event)]
-        return len(errored) / len(tool_calls), tuple(event.event_id for event in errored)
-    if metric == "budget_used":
-        if not mandate.daily_budget_eur:
-            return 0.0, ()
-        costs = [(event, event_cost_eur(event)) for event in events]
-        used = sum(cost for _, cost in costs) / mandate.daily_budget_eur
-        return used, tuple(event.event_id for event, cost in costs if cost > 0.0)
-    raise MandateError(f"Unknown escalation metric: {metric!r}")
+    computer = _METRIC_COMPUTERS.get(metric)
+    if computer is None:
+        raise MandateError(
+            f"Unknown escalation metric: {metric!r} (known: {sorted(KNOWN_ESCALATION_METRICS)})"
+        )
+    return computer(mandate, events, tool_calls)
 
 
 def _check_escalation_missed(

@@ -220,6 +220,73 @@ def test_cli_demo_runs_fake_agent_and_prints_digest(
     assert "read_pii" in out
 
 
+EXAMPLE_MANDATE = Path(__file__).parent.parent / "examples" / "mandates" / "refund-bot.yaml"
+
+
+def test_cli_mandate_lint_accepts_valid_mandate(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = main(["mandate", "lint", str(EXAMPLE_MANDATE)])
+    assert exit_code == 0
+    assert "is valid" in capsys.readouterr().out
+
+
+def test_cli_mandate_lint_errors_on_unknown_metric(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "mandate.yaml"
+    path.write_text(
+        "agent: bot\n"
+        "allowed_tools: [read_order]\n"
+        "daily_budget_eur: 5.0\n"
+        "forbidden_actions: []\n"
+        "escalate_when: [tool_errors > 0.1]\n",
+        encoding="utf-8",
+    )
+    exit_code = main(["mandate", "lint", str(path)])
+    assert exit_code == 1
+    assert "tool_errors" in capsys.readouterr().err
+
+
+def test_cli_mandate_init_from_traces_prints_reparsable_yaml(
+    tmp_path: Path, otlp_sample_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from alfred.mandate.yaml_io import load_mandate
+
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+
+    exit_code = main(["mandate", "init", "--from-traces", str(traces_dir)])
+    assert exit_code == 0
+
+    out = capsys.readouterr().out
+    written = tmp_path / "suggested.yaml"
+    written.write_text(out, encoding="utf-8")
+    mandate = load_mandate(written)
+    assert mandate.agent == "refund-bot-v3"  # observed gen_ai.agent.name
+    assert mandate.allowed_tools == frozenset({"issue_refund"})  # the only tool called
+    assert mandate.daily_budget_eur == 1.0  # ceil of the observed sub-euro cost
+
+
+def test_cli_mandate_init_from_traces_reports_empty_dir(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    empty = tmp_path / "traces"
+    empty.mkdir()
+    exit_code = main(["mandate", "init", "--from-traces", str(empty)])
+    assert exit_code == 1
+    assert "no trace events" in capsys.readouterr().err
+
+
+def test_cli_mandate_without_subcommand_prints_help(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = main(["mandate"])
+    assert exit_code == 0
+    assert "lint" in capsys.readouterr().out
+
+
 def test_cli_no_command_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main([])
     assert exit_code == 0

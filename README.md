@@ -81,10 +81,19 @@ Once v0.1 ships to PyPI:
 ```bash
 pip install alfred-ai
 alfred init --slack-webhook https://hooks.slack.com/…  # mandate.yaml + Slack config
+alfred mandate init --from-traces traces/ > mandate.yaml  # seed a mandate from what the agent did
+alfred mandate lint mandate.yaml                       # validate the mandate before you rely on it
 alfred schedule traces/ --at 09:00 >> mycrontab        # one daily crontab line
 alfred watch traces/                                   # one pass now (or --loop to keep running)
 alfred demo                                            # fake agent → real digest, no setup
 ```
+
+Writing the first `mandate.yaml` is the onboarding cliff, so Alfred meets you
+where the traces already are: `alfred mandate init --from-traces` proposes the
+`allowed_tools` and `daily_budget_eur` it actually *observed* (policy fields stay
+empty — those you declare, they aren't inferable from a trace), and
+`alfred mandate lint` catches a typo'd `escalate_when` metric before it crashes a
+`watch` run (exit 1 on error, so it drops into CI or pre-commit).
 
 `alfred watch` is a single pass by design (re-run via cron — `alfred schedule`
 prints the line for you). For environments without cron, `alfred watch --loop`
