@@ -16,12 +16,15 @@ from alfred import __version__
 from alfred.config import AlfredConfig, ConfigError, init_project, load_config
 from alfred.deliver import slack, stdout
 from alfred.demo import build_demo_payload, demo_mandate
+from alfred.mandate.bootstrap import suggest_mandate
+from alfred.mandate.lint import Severity, lint_mandate
 from alfred.mandate.model import MandateError
-from alfred.mandate.yaml_io import load_mandate
+from alfred.mandate.yaml_io import dump_mandate, load_mandate
 from alfred.report.build import build_digest
 from alfred.report.model import Digest
 from alfred.schedule import ScheduleError, build_cron_line
-from alfred.trace.ingest import ingest_otlp_json
+from alfred.trace.ingest import ingest_otlp_file, ingest_otlp_json
+from alfred.trace.model import TraceEvent
 from alfred.trace.store import TraceStore
 from alfred.watch import watch_loop, watch_once
 
@@ -110,6 +113,48 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_mandate_lint(args: argparse.Namespace) -> int:
+    findings = lint_mandate(args.path)
+    for finding in findings:
+        stream = sys.stderr if finding.severity is Severity.ERROR else sys.stdout
+        print(f"alfred mandate lint: {finding.severity}: {finding.message}", file=stream)
+    if any(finding.severity is Severity.ERROR for finding in findings):
+        return 1
+    warnings = len(findings)
+    tail = f" ({warnings} warning{'s' if warnings != 1 else ''})" if warnings else ""
+    print(f"alfred mandate lint: {args.path} is valid{tail}")
+    return 0
+
+
+_SUGGESTED_HEADER = (
+    "# Suggested mandate — observed from your traces.\n"
+    "# Review before use: allowed_tools and daily_budget_eur are what the agent\n"
+    "# DID, not what it MAY do. Add headroom to the budget, and fill in\n"
+    "# forbidden_actions / escalate_when — policy the human declares, never\n"
+    "# inferred from a trace.\n"
+)
+
+
+def _cmd_mandate_init(args: argparse.Namespace) -> int:
+    traces_dir = Path(args.from_traces)
+    events: list[TraceEvent] = []
+    try:
+        for file_path in sorted(traces_dir.glob("*.json")):
+            events.extend(ingest_otlp_file(file_path))
+    except OSError as exc:
+        print(f"alfred mandate init: cannot read traces: {exc}", file=sys.stderr)
+        return 1
+    if not events:
+        print(
+            f"alfred mandate init: no trace events found in {traces_dir} (expected *.json)",
+            file=sys.stderr,
+        )
+        return 1
+    mandate = suggest_mandate(events, agent=args.agent)
+    print(_SUGGESTED_HEADER + dump_mandate(mandate), end="")
+    return 0
+
+
 def _cmd_demo(args: argparse.Namespace) -> int:
     payload = build_demo_payload(args.agent)
     events = ingest_otlp_json(payload)
@@ -173,6 +218,39 @@ def main(argv: list[str] | None = None) -> int:
         "--at", default="09:00", metavar="HH:MM", help="daily run time (24h), default 09:00"
     )
     schedule_parser.set_defaults(func=_cmd_schedule)
+
+    mandate_parser = subparsers.add_parser(
+        "mandate", help="Bootstrap or validate a mandate.yaml (see `mandate lint`/`init`)"
+    )
+    mandate_sub = mandate_parser.add_subparsers(dest="mandate_command")
+
+    def _print_mandate_help(_args: argparse.Namespace) -> int:
+        mandate_parser.print_help()
+        return 0
+
+    mandate_parser.set_defaults(func=_print_mandate_help)
+
+    lint_parser = mandate_sub.add_parser(
+        "lint", help="Validate a mandate.yaml (exit 1 on error, 0 otherwise)"
+    )
+    lint_parser.add_argument("path", nargs="?", default="mandate.yaml")
+    lint_parser.set_defaults(func=_cmd_mandate_lint)
+
+    mandate_init_parser = mandate_sub.add_parser(
+        "init", help="Print a suggested mandate.yaml observed from OTLP trace files"
+    )
+    mandate_init_parser.add_argument(
+        "--from-traces",
+        required=True,
+        metavar="DIR",
+        help="directory of OTLP JSON trace files to observe tools and cost from",
+    )
+    mandate_init_parser.add_argument(
+        "--agent",
+        default=None,
+        help="agent name to write (default: observed gen_ai.agent.name, else 'your-agent')",
+    )
+    mandate_init_parser.set_defaults(func=_cmd_mandate_init)
 
     demo_parser = subparsers.add_parser(
         "demo", help="Run a fake instrumented agent → real digest, zero setup"
