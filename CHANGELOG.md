@@ -11,6 +11,14 @@ entries below are the work done so far towards the v0.1 roadmap
 
 ### Added
 
+- Real-time deviation alerts — opt-in `alfred watch --alerts` pushes a focused
+  Slack alert the moment a pass catches a deviation, instead of waiting for the
+  daily digest (pair with `--loop` for near real-time). The alert reuses the
+  digest's deviation section and anchors every line on the offending event IDs
+  (D5 inherited, not re-stated); it shares the proven Slack transport, adds no
+  dependency, and warns loudly if `--alerts` is set without a webhook. First of
+  the five post-launch product features (PLAN.md §13). See
+  `docs/adr/0017-realtime-deviation-alerts.md`.
 - Brique 12 — native LangGraph connector (`alfred.integrations.langgraph`):
   attach `AlfredCallbackHandler` to a graph invocation and every model and
   tool call becomes an Alfred-ingestible span, no manual instrumentation

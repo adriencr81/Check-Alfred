@@ -15,7 +15,15 @@ from typing import cast
 
 import pytest
 
-from alfred.deliver.slack import DeliverError, HTTPRequest, Transport, build_block_kit_payload, send
+from alfred.deliver.slack import (
+    DeliverError,
+    HTTPRequest,
+    Transport,
+    build_alert_payload,
+    build_block_kit_payload,
+    send,
+    send_alert,
+)
 from alfred.mandate.model import Deviation, DeviationType, Mandate
 from alfred.report.build import build_digest
 from alfred.report.model import Digest, Line, LineKind
@@ -118,6 +126,38 @@ def test_slack_payload_is_valid_block_kit() -> None:
         assert_valid_block_kit_payload(payload, _constraints())
 
 
+def test_alert_payload_has_alert_header_and_deviation_section() -> None:
+    payload = build_alert_payload(_digest_with_deviation())
+    blocks = payload["blocks"]
+    assert blocks[0]["type"] == "header"
+    header = blocks[0]["text"]["text"]
+    assert "🚨" in header
+    assert "refund-bot-v3" in header
+    warning = blocks[1]["text"]["text"]
+    assert "forbidden_action" in warning
+    assert "amount_eur=250.0 > 100.0" in warning
+    assert payload["text"].endswith("— 1 deviation")
+
+
+def test_alert_payload_evidence_lists_deviation_event_ids() -> None:
+    payload = build_alert_payload(_digest_with_deviation())
+    context = payload["blocks"][-1]
+    assert context["type"] == "context"
+    evidence = context["elements"][0]["text"]
+    assert "forbidden_action [evt:78480053…]" in evidence
+    assert _LONG_DEVIATION_ID not in json.dumps(payload)
+
+
+def test_alert_payload_is_valid_block_kit() -> None:
+    payload = build_alert_payload(_digest_with_deviation())
+    assert_valid_block_kit_payload(payload, _constraints())
+
+
+def test_build_alert_payload_requires_a_deviation() -> None:
+    with pytest.raises(ValueError, match="deviation"):
+        build_alert_payload(_digest())
+
+
 def _fake_transport(captured: list[HTTPRequest]) -> Transport:
     def transport(request: HTTPRequest) -> None:
         captured.append(request)
@@ -138,6 +178,17 @@ def test_send_posts_expected_request() -> None:
     assert request.url == "https://hooks.slack.com/services/T0/B0/xyz"
     assert request.headers["Content-Type"] == "application/json"
     assert json.loads(request.body) == build_block_kit_payload(_digest())
+
+
+def test_send_alert_posts_alert_payload() -> None:
+    captured: list[HTTPRequest] = []
+    send_alert(
+        _digest_with_deviation(),
+        "https://hooks.slack.com/services/T0/B0/xyz",
+        transport=_fake_transport(captured),
+    )
+    assert len(captured) == 1
+    assert json.loads(captured[0].body) == build_alert_payload(_digest_with_deviation())
 
 
 def test_send_propagates_transport_failure() -> None:

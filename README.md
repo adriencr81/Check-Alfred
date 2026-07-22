@@ -88,7 +88,9 @@ alfred demo                                            # fake agent → real dig
 
 `alfred watch` is a single pass by design (re-run via cron — `alfred schedule`
 prints the line for you). For environments without cron, `alfred watch --loop`
-re-scans on an interval until you stop it.
+re-scans on an interval until you stop it. Add `--alerts` (with a Slack webhook)
+to also push a deviation the moment it's caught, instead of only in the daily
+digest — pair it with `--loop` for near real-time.
 
 ## Plug in your own agent
 

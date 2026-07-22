@@ -36,12 +36,13 @@ def _cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
-def _deliver(digests: list[Digest], config: AlfredConfig) -> None:
+def _deliver(digests: list[Digest], config: AlfredConfig, *, alerts: bool = False) -> None:
     """Deliver each digest to stdout and, if configured, to Slack.
 
     Shared by the single-pass and `--loop` paths. When empty (no new trace
     files) it prints one notice; in loop mode that keeps each idle pass quiet
-    but visible.
+    but visible. With `alerts` set, a digest that carries deviations also
+    triggers an immediate Slack alert (ADR 0017) alongside the digest.
     """
     if not digests:
         print("alfred watch: no new trace files.")
@@ -50,6 +51,8 @@ def _deliver(digests: list[Digest], config: AlfredConfig) -> None:
         stdout.deliver(digest)
         if config.slack_webhook_url:
             slack.send(digest, config.slack_webhook_url)
+            if alerts and digest.deviations:
+                slack.send_alert(digest, config.slack_webhook_url)
 
 
 def _cmd_watch(args: argparse.Namespace) -> int:
@@ -61,6 +64,13 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         print(f"alfred watch: {exc}", file=sys.stderr)
         return 1
 
+    if args.alerts and not config.slack_webhook_url:
+        print(
+            "alfred watch: --alerts needs a Slack webhook; none configured — run "
+            "`alfred init --slack-webhook URL`. Deviations still show in the digest.",
+            file=sys.stderr,
+        )
+
     traces_dir = Path(args.traces_dir)
     config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
     store = TraceStore(config.trace_db_path)
@@ -71,11 +81,12 @@ def _cmd_watch(args: argparse.Namespace) -> int:
                 traces_dir,
                 mandate,
                 store,
-                lambda digests: _deliver(digests, config),
+                lambda digests: _deliver(digests, config, alerts=args.alerts),
                 interval_s=args.interval,
             )
         else:
-            _deliver(watch_once(project_dir, traces_dir, mandate, store), config)
+            digests = watch_once(project_dir, traces_dir, mandate, store)
+            _deliver(digests, config, alerts=args.alerts)
     except KeyboardInterrupt:
         print("\nalfred watch: stopped.")
     finally:
@@ -144,6 +155,12 @@ def main(argv: list[str] | None = None) -> int:
         default=60.0,
         metavar="SECONDS",
         help="seconds between passes when --loop is set (default 60)",
+    )
+    watch_parser.add_argument(
+        "--alerts",
+        action="store_true",
+        help="also push an immediate Slack alert whenever a pass finds a deviation "
+        "(needs a configured webhook; pair with --loop for near real-time)",
     )
     watch_parser.set_defaults(func=_cmd_watch)
 

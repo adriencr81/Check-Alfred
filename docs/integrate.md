@@ -114,6 +114,20 @@ infra; [ADR 0007](adr/0007-brique5-delivery-cli-design.md)). To get a
   alfred watch traces/ --project my-project --loop --interval 300
   ```
 
+The digest is a daily review; a 250 € over-cap refund shouldn't wait until
+tomorrow morning. Add `--alerts` (needs a Slack webhook) and every pass that
+catches a deviation also pushes an immediate, focused Slack alert — anchored on
+the offending event IDs, same as the digest ([ADR
+0017](adr/0017-realtime-deviation-alerts.md)). Pair it with `--loop` for near
+real-time:
+
+```bash
+alfred watch traces/ --project my-project --loop --interval 60 --alerts
+```
+
+Without a configured webhook `--alerts` warns and is a no-op (deviations still
+appear in the digest); alerts are a Slack push channel, not a stdout one.
+
 ## LangGraph connector
 
 If your agent runs on **LangGraph**, you don't wrap anything by hand. Attach
