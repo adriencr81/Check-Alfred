@@ -661,4 +661,30 @@ verts) + `examples/agents/langgraph_bot/` (agent jouet zéro clé) et section
 
 ---
 
+## 13. Features produit post-launch (backlog priorisé, 2026-07-22)
+
+Cinq features retenues pour améliorer le produit *et* l'expérience client,
+classées par levier. Chacune reste fidèle à la thèse (chaque affirmation ancrée
+sur un event ID, rapport *manager* pas dashboard *dev*) et exige un ADR daté
+avant code, mêmes DoD que §5 (`pytest -q`, `ruff`, `mypy --strict src/` verts).
+
+| # | Feature | Pourquoi (expérience client) | Fit roadmap |
+|---|---|---|---|
+| F1 | **Alertes de déviation en temps réel** — push Slack immédiat dès qu'une passe trouve une déviation, en plus du digest quotidien. | Un manager ne découvre plus une erreur à 10 k€ le lendemain matin. Le plus gros trou d'expérience du produit. | Complémentaire, non listé au backlog §10. **ADR 0017.** |
+| F2 | **Bootstrap du mandat depuis les traces + `alfred mandate lint`** — `mandate init --from-traces` propose outils autorisés et budget observés ; `lint` valide le YAML. | Tue la falaise d'onboarding (écrire le `mandate.yaml` juste). Raccourcit le time-to-value du « test 5 minutes BYOA » (Brique 11). | Prolonge la Brique 11. Non listé au backlog. |
+| F3 | **Digest contextualisé par baseline glissante** — chaque chiffre gagne sa comparaison (« Coût 3.42 € — +180 % vs moy. 7 j ⚠️ »). | Transforme un nombre brut en jugement (« est-ce normal ? »). Cœur du créneau « rapport manager ». | Version *légère* de la dérive de comportement (v0.3), baseline seulement — pas le bench rejoué. |
+| F4 | **Rapport HTML statique partageable** (`alfred report --html`) — fichier autonome, chaque ligne cliquable vers ses events source. | Le digest Slack est éphémère ; un manager veut *forwarder* la preuve navigable. | À cadrer en lecture seule, **délibérément plus pauvre** que l'export « dossier de preuve » payant (v0.4) pour ne pas le cannibaliser. Zéro infra (fichier généré, pas de dashboard web §10). |
+| F5 | **Connecteurs natifs CrewAI + OpenAI Agents SDK** — la recette du connecteur LangGraph (Brique 12) pour les deux autres frameworks dominants. | Le *portail* avant toute expérience : un client ne peut pas brancher son stack sinon. | Roadmapé v0.2 (§6.4, « priorisés par les issues » — à confirmer par la demande réelle). |
+
+**Mention honorable** : redaction PII/secrets avant stockage/envoi (feature de
+confiance pour les secteurs régulés cibles YC — assurance/finance/santé). À
+monter dans le top 5 si la priorité passe de l'adoption communautaire aux
+secteurs régulés.
+
+**Séquencement retenu** : F1 puis F2 d'abord — plus fort levier d'expérience
+*sans* toucher au périmètre payant, et les plus rapides à shipper post-launch.
+**F1 est en cours** (ADR 0017).
+
+---
+
 *Modifications : tout écart à ce document doit être précédé d'une entrée `docs/adr/NNNN-titre.md` datée et signée. Aucun refactor cosmétique.*
