@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterator, Sequence
+from typing import Any
 
 from alfred.mandate.model import Deviation, DeviationType, ForbiddenRule, Mandate, MandateError
 from alfred.trace.cost import event_cost_eur
@@ -20,7 +21,15 @@ _FORBIDDEN_PATTERN = re.compile(r"^(?P<tool>.+?)_above_(?P<amount>\d+(?:\.\d+)?)
 
 _TOOL_NAME_ATTR = "gen_ai.tool.name"
 _TOOL_STATUS_ATTR = "tool.result.status"
+_TOOL_ARGS_PREFIX = "tool.arguments."
 _ESCALATED_ATTR = "alfred.escalated"
+
+# A run of this many identical consecutive tool calls (same tool + same
+# arguments) is read as an agent spinning without progress (ADR: silent-failure
+# detection). Fixed, not mandate-configurable, until a real need to tune it.
+_LOOP_THRESHOLD = 3
+
+_CallSignature = tuple[str, tuple[tuple[str, Any], ...]]
 
 
 def _tool_calls(events: Sequence[TraceEvent]) -> list[TraceEvent]:
@@ -217,6 +226,62 @@ def _check_escalation_missed(
     return deviations
 
 
+def _call_signature(event: TraceEvent) -> _CallSignature | None:
+    """`(tool, sorted arguments)` — identical signatures mean an identical call.
+
+    Returns None for a tool call without a resolvable name, so it can never
+    extend or start a run.
+    """
+    tool = _tool_name(event)
+    if tool is None:
+        return None
+    arguments = tuple(
+        sorted(
+            (key, value)
+            for key, value in event.attributes.items()
+            if key.startswith(_TOOL_ARGS_PREFIX)
+        )
+    )
+    return tool, arguments
+
+
+def _loop_deviation(run: Sequence[TraceEvent], signature: _CallSignature | None) -> list[Deviation]:
+    if signature is None or len(run) < _LOOP_THRESHOLD:
+        return []
+    tool, _ = signature
+    return [
+        Deviation(
+            type=DeviationType.LOOP_DETECTED,
+            event_ids=tuple(event.event_id for event in run),
+            message=f"tool '{tool}' called {len(run)} times in a row with identical arguments",
+            details={"tool": tool, "count": len(run)},
+        )
+    ]
+
+
+def _check_repeated_action(tool_calls: Sequence[TraceEvent]) -> list[Deviation]:
+    """Flag every run of ≥ `_LOOP_THRESHOLD` identical consecutive tool calls.
+
+    Identical = same tool name and the same `tool.arguments.*` — the signature
+    of an agent stuck retrying without progress. Anchored to every event in the
+    run. Consecutive is judged over the tool-call subsequence ordered by
+    `start_time`, so interleaved LLM/agent spans don't break a loop apart.
+    """
+    deviations: list[Deviation] = []
+    run: list[TraceEvent] = []
+    run_signature: _CallSignature | None = None
+    for event in sorted(tool_calls, key=lambda event: event.start_time):
+        signature = _call_signature(event)
+        if signature is not None and signature == run_signature:
+            run.append(event)
+            continue
+        deviations.extend(_loop_deviation(run, run_signature))
+        run = [event] if signature is not None else []
+        run_signature = signature
+    deviations.extend(_loop_deviation(run, run_signature))
+    return deviations
+
+
 def evaluate(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
     """Compare a single trace's events against a mandate.
 
@@ -230,4 +295,5 @@ def evaluate(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
         *_check_forbidden_actions(mandate, tool_calls),
         *_check_budget_exceeded(mandate, events),
         *_check_escalation_missed(mandate, events, tool_calls),
+        *_check_repeated_action(tool_calls),
     ]

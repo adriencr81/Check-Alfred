@@ -218,6 +218,36 @@ def test_escalation_missed_absent_below_threshold() -> None:
     assert not any(d.type.value == "escalation_missed" for d in deviations)
 
 
+def test_loop_detected_on_repeated_identical_calls() -> None:
+    events = [
+        _event(eid, attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "A"})
+        for eid in ("e1", "e2", "e3")
+    ]
+    deviations = evaluate(_mandate(), events)
+    matches = [d for d in deviations if d.type.value == "loop_detected"]
+    assert len(matches) == 1
+    assert matches[0].event_ids == (EventId("e1"), EventId("e2"), EventId("e3"))
+
+
+def test_loop_absent_when_arguments_change() -> None:
+    events = [
+        _event("e1", attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "A"}),
+        _event("e2", attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "B"}),
+        _event("e3", attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "C"}),
+    ]
+    deviations = evaluate(_mandate(), events)
+    assert not any(d.type.value == "loop_detected" for d in deviations)
+
+
+def test_loop_absent_below_threshold() -> None:
+    events = [
+        _event(eid, attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "A"})
+        for eid in ("e1", "e2")
+    ]
+    deviations = evaluate(_mandate(), events)
+    assert not any(d.type.value == "loop_detected" for d in deviations)
+
+
 def test_deviation_carries_event_ids_present_in_trace() -> None:
     events = [
         _event("e1", attributes={"gen_ai.tool.name": "read_pii"}),

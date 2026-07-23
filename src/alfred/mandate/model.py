@@ -23,6 +23,7 @@ class DeviationType(StrEnum):
     BUDGET_EXCEEDED = "budget_exceeded"
     FORBIDDEN_ACTION = "forbidden_action"
     ESCALATION_MISSED = "escalation_missed"
+    LOOP_DETECTED = "loop_detected"
 
 
 def _compare(value: float, operator: str, threshold: float) -> bool:
