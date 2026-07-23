@@ -11,6 +11,16 @@ entries below are the work done so far towards the v0.1 roadmap
 
 ### Added
 
+- Baseline-contextualized digest — every digest number now reads against its
+  own rolling 7-day average (`Cost 3.42 € — +185% vs 7-day avg ⚠️`), turning a
+  raw figure into a judgment ("is this normal?"). The mean is computed over the
+  active days of the window and, like every report assertion, is anchored to the
+  historical event IDs that produced it — no self-declared summary. A ⚠️ marks a
+  doubling or more (±100%); comparisons appear only from three active days.
+  `alfred watch` loads the window from the trace store; the plain digest is
+  unchanged when there's no history. Third of the five post-launch product
+  features (PLAN.md §13 F3). See
+  `docs/adr/0019-baseline-contextualized-digest.md`.
 - Real-time deviation alerts — opt-in `alfred watch --alerts` pushes a focused
   Slack alert the moment a pass catches a deviation, instead of waiting for the
   daily digest (pair with `--loop` for near real-time). The alert reuses the

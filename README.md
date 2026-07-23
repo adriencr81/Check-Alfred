@@ -32,11 +32,16 @@ not a feature — and there's a test that says so (see [PLAN.md §5 Brique 4](PL
 ```
 Alfred · refund-bot-v3 · 2026-08-30
 
-Tasks completed:          47   [evt:a1c, a1d, a1e, …]
-Cost (tokens → €):     3.42 €   [evt:c0f, …]
-Escalations:               3   [evt:e01, e02, e03]
+Tasks completed:          47   [evt:a1c, a1d, a1e, …]   (+7% vs 7-day avg)
+Cost (tokens → €):     3.42 €   [evt:c0f, …]   (+185% vs 7-day avg ⚠️)
+Escalations:               3   [evt:e01, e02, e03]   (+200% vs 7-day avg ⚠️)
 Deviations (mandate):      1   [evt:d0a] — tool_not_allowed: `read_pii`
 ```
+
+Each number reads against its own rolling 7-day average, so a manager sees not
+just *what* happened but whether it's *normal* (⚠️ marks a doubling or more).
+The comparison is itself computed from the prior days' trace events — never a
+self-declared summary. See `docs/adr/0019-baseline-contextualized-digest.md`.
 
 Delivered to Slack (v0.1), Teams (v0.2), or stdout / markdown (always).
 
