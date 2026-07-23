@@ -25,11 +25,30 @@ _MAX_DISPLAYED_SOURCES = 3
 _TRUNCATE_IDS_LONGER_THAN = 12
 _DISPLAYED_ID_PREFIX = 8
 
+# A number that doubles (or halves) vs its rolling mean earns a ⚠️ (F3,
+# docs/adr/0019). Symmetric: a collapse can matter as much as a spike.
+_WARN_DELTA = 1.0
+
 
 def format_value(line: Line) -> str:
     if line.kind is LineKind.COST_EUR:
         return f"{line.value:.2f} €"
     return str(int(line.value))
+
+
+def format_baseline(line: Line) -> str | None:
+    """Display form of a line's rolling comparison, e.g. `+180% vs 7-day avg ⚠️`.
+
+    Returns `None` when the line carries no baseline. The mean is always > 0
+    when a `Baseline` exists (see `report.model.Baseline`), so the ratio is
+    always defined.
+    """
+    baseline = line.baseline
+    if baseline is None:
+        return None
+    delta = (line.value - baseline.mean) / baseline.mean
+    warn = " ⚠️" if abs(delta) >= _WARN_DELTA else ""
+    return f"{delta * 100:+.0f}% vs {baseline.window_days}-day avg{warn}"
 
 
 def _format_event_id(event_id: EventId) -> str:
@@ -53,7 +72,9 @@ def format_sources(event_ids: tuple[EventId, ...]) -> str:
 
 def _render_line(line: Line) -> str:
     label = LABELS[line.kind]
-    return f"{label}: {format_value(line):>10}   {format_sources(line.sources)}"
+    row = f"{label}: {format_value(line):>10}   {format_sources(line.sources)}"
+    baseline = format_baseline(line)
+    return f"{row}   ({baseline})" if baseline is not None else row
 
 
 def _render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
