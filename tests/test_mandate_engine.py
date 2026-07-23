@@ -7,12 +7,13 @@ docs/adr/0004-brique2-mandate-engine-design.md.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
 
 from alfred.mandate.engine import evaluate
-from alfred.mandate.model import EscalationRule, ForbiddenRule, Mandate
+from alfred.mandate.model import EscalationRule, ForbiddenRule, Mandate, RequiredAction
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
 
@@ -216,6 +217,82 @@ def test_escalation_missed_absent_below_threshold() -> None:
     ]
     deviations = evaluate(_mandate(), events)
     assert not any(d.type.value == "escalation_missed" for d in deviations)
+
+
+def _notify_mandate() -> Mandate:
+    """A mandate requiring `notify_customer` whenever `issue_refund` runs."""
+    return Mandate(
+        agent="refund-bot-v3",
+        allowed_tools=frozenset({"issue_refund", "notify_customer"}),
+        daily_budget_eur=5.0,
+        forbidden_actions=(),
+        escalate_when=(),
+        required_actions=(RequiredAction("issue_refund", "notify_customer"),),
+    )
+
+
+def test_required_action_missing_detected() -> None:
+    events = [_event("e1", attributes={"gen_ai.tool.name": "issue_refund"})]
+    deviations = evaluate(_notify_mandate(), events)
+    matches = [d for d in deviations if d.type.value == "required_action_missing"]
+    assert len(matches) == 1
+    assert matches[0].event_ids == (EventId("e1"),)
+
+
+def test_required_action_satisfied_when_follow_up_present() -> None:
+    events = [
+        _event("e1", attributes={"gen_ai.tool.name": "issue_refund"}),
+        _event("e2", attributes={"gen_ai.tool.name": "notify_customer"}),
+    ]
+    deviations = evaluate(_notify_mandate(), events)
+    assert not any(d.type.value == "required_action_missing" for d in deviations)
+
+
+def test_required_action_not_triggered_without_when_tool() -> None:
+    events = [_event("e1", attributes={"gen_ai.tool.name": "notify_customer"})]
+    deviations = evaluate(_notify_mandate(), events)
+    assert not any(d.type.value == "required_action_missing" for d in deviations)
+
+
+def test_loop_detected_on_repeated_identical_calls() -> None:
+    events = [
+        _event(eid, attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "A"})
+        for eid in ("e1", "e2", "e3")
+    ]
+    deviations = evaluate(_mandate(), events)
+    matches = [d for d in deviations if d.type.value == "loop_detected"]
+    assert len(matches) == 1
+    assert matches[0].event_ids == (EventId("e1"), EventId("e2"), EventId("e3"))
+
+
+def test_loop_absent_when_arguments_change() -> None:
+    events = [
+        _event("e1", attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "A"}),
+        _event("e2", attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "B"}),
+        _event("e3", attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "C"}),
+    ]
+    deviations = evaluate(_mandate(), events)
+    assert not any(d.type.value == "loop_detected" for d in deviations)
+
+
+def test_loop_absent_below_threshold() -> None:
+    events = [
+        _event(eid, attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "A"})
+        for eid in ("e1", "e2")
+    ]
+    deviations = evaluate(_mandate(), events)
+    assert not any(d.type.value == "loop_detected" for d in deviations)
+
+
+def test_loop_threshold_from_mandate_lowers_the_bar() -> None:
+    mandate = replace(_mandate(), loop_threshold=2)
+    events = [
+        _event(eid, attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "A"})
+        for eid in ("e1", "e2")
+    ]
+    matches = [d for d in evaluate(mandate, events) if d.type.value == "loop_detected"]
+    assert len(matches) == 1
+    assert matches[0].event_ids == (EventId("e1"), EventId("e2"))
 
 
 def test_deviation_carries_event_ids_present_in_trace() -> None:

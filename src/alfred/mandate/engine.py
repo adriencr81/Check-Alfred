@@ -9,8 +9,10 @@ forbidden rules and token-based budgets (Brique 9) in ADR 0013.
 
 from __future__ import annotations
 
+import itertools
 import re
 from collections.abc import Callable, Iterator, Sequence
+from typing import Any
 
 from alfred.mandate.model import Deviation, DeviationType, ForbiddenRule, Mandate, MandateError
 from alfred.trace.cost import event_cost_eur
@@ -20,7 +22,10 @@ _FORBIDDEN_PATTERN = re.compile(r"^(?P<tool>.+?)_above_(?P<amount>\d+(?:\.\d+)?)
 
 _TOOL_NAME_ATTR = "gen_ai.tool.name"
 _TOOL_STATUS_ATTR = "tool.result.status"
+_TOOL_ARGS_PREFIX = "tool.arguments."
 _ESCALATED_ATTR = "alfred.escalated"
+
+_CallSignature = tuple[str, tuple[tuple[str, Any], ...]]
 
 
 def _tool_calls(events: Sequence[TraceEvent]) -> list[TraceEvent]:
@@ -63,7 +68,7 @@ def _rule_matches(
     rule: ForbiddenRule, tool_calls: Sequence[TraceEvent]
 ) -> Iterator[tuple[TraceEvent, float]]:
     """Yield (event, argument value) for each tool call breaching `rule`."""
-    arg_attr = f"tool.arguments.{rule.arg}"
+    arg_attr = f"{_TOOL_ARGS_PREFIX}{rule.arg}"
     for event in tool_calls:
         if _tool_name(event) != rule.tool:
             continue
@@ -217,6 +222,90 @@ def _check_escalation_missed(
     return deviations
 
 
+def _check_required_actions(
+    mandate: Mandate, tool_calls: Sequence[TraceEvent]
+) -> list[Deviation]:
+    """Flag a conditional obligation that was triggered but left unsatisfied.
+
+    For each `required_actions` rule, if `when_tool` was called in the trace
+    but `require_tool` never was, raise one deviation anchored to every
+    `when_tool` event — the events that created (and prove) the obligation.
+    """
+    by_tool: dict[str, list[TraceEvent]] = {}
+    for event in tool_calls:
+        if (name := _tool_name(event)) is not None:
+            by_tool.setdefault(name, []).append(event)
+    deviations: list[Deviation] = []
+    for rule in mandate.required_actions:
+        if rule.require_tool in by_tool:
+            continue
+        anchors = by_tool.get(rule.when_tool)
+        if not anchors:
+            continue
+        deviations.append(
+            Deviation(
+                type=DeviationType.REQUIRED_ACTION_MISSING,
+                event_ids=tuple(event.event_id for event in anchors),
+                message=(
+                    f"required action missing: '{rule.when_tool}' was called but "
+                    f"'{rule.require_tool}' never was"
+                ),
+                details={"when_tool": rule.when_tool, "require_tool": rule.require_tool},
+            )
+        )
+    return deviations
+
+
+def _call_signature(event: TraceEvent) -> _CallSignature | None:
+    """`(tool, sorted arguments)` — identical signatures mean an identical call.
+
+    Returns None for a tool call without a resolvable name, so it can never
+    extend or start a run.
+    """
+    tool = _tool_name(event)
+    if tool is None:
+        return None
+    arguments = tuple(
+        sorted(
+            (key, value)
+            for key, value in event.attributes.items()
+            if key.startswith(_TOOL_ARGS_PREFIX)
+        )
+    )
+    return tool, arguments
+
+
+def _loop_deviation(
+    run: Sequence[TraceEvent], signature: _CallSignature | None, threshold: int
+) -> list[Deviation]:
+    if signature is None or len(run) < threshold:
+        return []
+    tool, _ = signature
+    return [
+        Deviation(
+            type=DeviationType.LOOP_DETECTED,
+            event_ids=tuple(event.event_id for event in run),
+            message=f"tool '{tool}' called {len(run)} times in a row with identical arguments",
+            details={"tool": tool, "count": len(run)},
+        )
+    ]
+
+
+def _check_repeated_action(mandate: Mandate, tool_calls: Sequence[TraceEvent]) -> list[Deviation]:
+    """Flag every run of ≥ `mandate.loop_threshold` identical consecutive calls.
+
+    Identical = same tool name and the same `tool.arguments.*` — the signature
+    of an agent stuck retrying without progress. Anchored to every event in the
+    run. Consecutive is judged over the tool-call subsequence ordered by
+    `start_time`, so interleaved LLM/agent spans don't break a loop apart.
+    """
+    ordered = sorted(tool_calls, key=lambda event: event.start_time)
+    deviations: list[Deviation] = []
+    for signature, group in itertools.groupby(ordered, key=_call_signature):
+        deviations.extend(_loop_deviation(list(group), signature, mandate.loop_threshold))
+    return deviations
+
+
 def evaluate(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
     """Compare a single trace's events against a mandate.
 
@@ -230,4 +319,6 @@ def evaluate(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
         *_check_forbidden_actions(mandate, tool_calls),
         *_check_budget_exceeded(mandate, events),
         *_check_escalation_missed(mandate, events, tool_calls),
+        *_check_required_actions(mandate, tool_calls),
+        *_check_repeated_action(mandate, tool_calls),
     ]
