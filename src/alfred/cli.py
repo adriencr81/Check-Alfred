@@ -58,6 +58,25 @@ def _cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_narrate_client(
+    config: AlfredConfig, *, enabled: bool
+) -> tuple[LLMClient | None, bool]:
+    """Resolve the narration client for a command that accepts `--narrate`.
+
+    Returns `(client, ok)`: `(None, True)` when `--narrate` is off; `(None,
+    False)` — after printing the shared guidance — when it is on but no endpoint
+    resolves, so the caller just `return 1`. The single source of the fail-loud
+    behavior shared by `watch` and `report`.
+    """
+    if not enabled:
+        return None, True
+    client = build_llm_client(config)
+    if client is None:
+        print(_NARRATE_UNCONFIGURED, file=sys.stderr)
+        return None, False
+    return client, True
+
+
 def _deliver(
     digests: list[Digest],
     config: AlfredConfig,
@@ -106,9 +125,8 @@ def _cmd_watch(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    narrate_client = build_llm_client(config) if args.narrate else None
-    if args.narrate and narrate_client is None:
-        print(_NARRATE_UNCONFIGURED, file=sys.stderr)
+    narrate_client, ok = _resolve_narrate_client(config, enabled=args.narrate)
+    if not ok:
         return 1
 
     traces_dir = Path(args.traces_dir)
@@ -169,9 +187,8 @@ def _cmd_report(args: argparse.Namespace) -> int:
         print(f"alfred report: {exc}", file=sys.stderr)
         return 1
 
-    narrate_client = build_llm_client(config) if args.narrate else None
-    if args.narrate and narrate_client is None:
-        print(_NARRATE_UNCONFIGURED, file=sys.stderr)
+    narrate_client, ok = _resolve_narrate_client(config, enabled=args.narrate)
+    if not ok:
         return 1
 
     traces_dir = Path(args.traces_dir)

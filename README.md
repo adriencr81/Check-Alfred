@@ -133,6 +133,14 @@ re-scans on an interval until you stop it. Add `--alerts` (with a Slack webhook)
 to also push a deviation the moment it's caught, instead of only in the daily
 digest — pair it with `--loop` for near real-time.
 
+By default the digest is the raw computed table. `--narrate` rewrites it as
+verified LLM prose — the LLM only rephrases, and a sentence citing an event it
+wasn't given fails the run instead of shipping. Declare the endpoint in config
+(`alfred init --llm-base-url … --llm-model …`, any OpenAI-compatible endpoint)
+and export `ALFRED_LLM_API_KEY`; without them `--narrate` exits 1 rather than
+degrade silently. `alfred demo` stays LLM-free. See
+[`docs/integrate.md`](docs/integrate.md#narrated-digest-verified-prose).
+
 The Slack digest is ephemeral, so `alfred report traces/ --html` writes a
 self-contained HTML file per day into `--out` (default the current directory) —
 inline styles, zero JavaScript, no network — that a manager can forward. Each

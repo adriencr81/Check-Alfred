@@ -128,6 +128,30 @@ alfred watch traces/ --project my-project --loop --interval 60 --alerts
 Without a configured webhook `--alerts` warns and is a no-op (deviations still
 appear in the digest); alerts are a Slack push channel, not a stdout one.
 
+### Narrated digest (verified prose)
+
+By default the digest is the raw computed table. Add `--narrate` and each
+stdout digest is rewritten as short prose by an LLM — but the LLM only ever
+rephrases what was computed: every sentence's `[evt:…]` citation is checked
+against that line's source events, and a hallucinated citation fails the run
+rather than shipping. `alfred report --html --narrate` prepends the same prose
+above the HTML table.
+
+Declare the endpoint once (the API key stays in the environment, never on
+disk), then narrate:
+
+```bash
+alfred init my-project --agent my-agent \
+  --llm-base-url https://api.openai.com/v1 --llm-model gpt-4o-mini
+export ALFRED_LLM_API_KEY=sk-…
+alfred watch traces/ --project my-project --narrate
+```
+
+Any OpenAI-compatible `/chat/completions` endpoint works. Without a resolvable
+endpoint (missing config keys or `ALFRED_LLM_API_KEY`), `--narrate` fails loudly
+with exit 1 — it never silently falls back to the raw digest. `alfred demo`
+stays LLM-free.
+
 ## LangGraph connector
 
 If your agent runs on **LangGraph**, you don't wrap anything by hand. Attach
