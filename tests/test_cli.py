@@ -286,6 +286,45 @@ def test_cli_report_writes_html_file(tmp_path: Path, otlp_sample_path: Path) -> 
     assert 'href="#evt-' in html  # lines are clickable to their source events
 
 
+def test_cli_report_narrate_embeds_prose(
+    tmp_path: Path, otlp_sample_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+    out_dir = tmp_path / "out"
+    _stub_narration(monkeypatch)
+
+    exit_code = main(
+        [
+            "report", str(traces_dir), "--project", str(project_dir),
+            "--html", "--out", str(out_dir), "--narrate",
+        ]
+    )
+    assert exit_code == 0
+    html = next(out_dir.glob("*.html")).read_text(encoding="utf-8")
+    assert 'class="narrative"' in html
+    assert "Narrated line." in html
+
+
+def test_cli_report_narrate_without_endpoint_errors(
+    tmp_path: Path, otlp_sample_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])  # no LLM endpoint
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+
+    exit_code = main(
+        ["report", str(traces_dir), "--project", str(project_dir), "--html", "--narrate"]
+    )
+    assert exit_code == 1
+    assert "ALFRED_LLM_API_KEY" in capsys.readouterr().err
+
+
 def test_cli_report_is_rerunnable(tmp_path: Path, otlp_sample_path: Path) -> None:
     # Unlike `watch`, `report` tracks no seen files — a second run over the same
     # directory still produces the report (falsifies any seen.json coupling).

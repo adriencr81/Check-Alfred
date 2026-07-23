@@ -169,6 +169,11 @@ def _cmd_report(args: argparse.Namespace) -> int:
         print(f"alfred report: {exc}", file=sys.stderr)
         return 1
 
+    narrate_client = build_llm_client(config) if args.narrate else None
+    if args.narrate and narrate_client is None:
+        print(_NARRATE_UNCONFIGURED, file=sys.stderr)
+        return 1
+
     traces_dir = Path(args.traces_dir)
     try:
         events = _read_trace_events(traces_dir)
@@ -196,8 +201,13 @@ def _cmd_report(args: argparse.Namespace) -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     for digest in digests:
+        narrative = (
+            tuple(sentence.text for sentence in narrate(digest, narrate_client).sentences)
+            if narrate_client is not None
+            else ()
+        )
         path = out_dir / f"alfred-{_slug(digest.agent)}-{digest.date.isoformat()}.html"
-        path.write_text(render_html(digest), encoding="utf-8")
+        path.write_text(render_html(digest, narrative=narrative), encoding="utf-8")
         print(f"alfred report: wrote {path}")
     return 0
 
@@ -347,6 +357,12 @@ def main(argv: list[str] | None = None) -> int:
         default=".",
         metavar="DIR",
         help="output directory for alfred-<agent>-<date>.html files (default: current dir)",
+    )
+    report_parser.add_argument(
+        "--narrate",
+        action="store_true",
+        help="prepend a verified LLM prose summary to each report (needs an LLM endpoint in "
+        "config + ALFRED_LLM_API_KEY; citations are checked against the computed sources)",
     )
     report_parser.set_defaults(func=_cmd_report)
 
