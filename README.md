@@ -60,9 +60,9 @@ mandate, anchored to the event(s) that prove it:
   `required_actions` rule's `when_tool` ran but its mandatory `require_tool`
   never did in the same trace (e.g. a refund issued without ever notifying the
   customer). Anchored to the `when_tool` event(s).
-- **`loop_detected`** — the same tool called three or more times in a row with
-  identical arguments: an agent spinning without progress. Anchored to every
-  event in the run.
+- **`loop_detected`** — the same tool called `loop_threshold` or more times in
+  a row with identical arguments (default 3): an agent spinning without
+  progress. Anchored to every event in the run.
 
 The last two catch **silent failures** — the run completes with no error
 status and looks successful, so nothing else flags them. Alfred only sees what

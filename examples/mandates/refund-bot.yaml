@@ -41,6 +41,11 @@ escalate_when:
   - tool_error_rate > 0.10
   - budget_used > 0.80
 
+# A run of this many identical consecutive tool calls (same tool + same
+# arguments) raises a `loop_detected` deviation — an agent spinning without
+# progress. Optional; defaults to 3 when omitted.
+loop_threshold: 3
+
 # Conditional obligations. If `when_tool` is called in a trace but
 # `require_tool` never is, a `required_action_missing` deviation is raised,
 # anchored to the `when_tool` event(s). Catches the silent failure of an

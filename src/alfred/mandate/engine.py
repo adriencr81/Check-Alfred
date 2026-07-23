@@ -25,11 +25,6 @@ _TOOL_STATUS_ATTR = "tool.result.status"
 _TOOL_ARGS_PREFIX = "tool.arguments."
 _ESCALATED_ATTR = "alfred.escalated"
 
-# A run of this many identical consecutive tool calls (same tool + same
-# arguments) is read as an agent spinning without progress (ADR: silent-failure
-# detection). Fixed, not mandate-configurable, until a real need to tune it.
-_LOOP_THRESHOLD = 3
-
 _CallSignature = tuple[str, tuple[tuple[str, Any], ...]]
 
 
@@ -280,8 +275,10 @@ def _call_signature(event: TraceEvent) -> _CallSignature | None:
     return tool, arguments
 
 
-def _loop_deviation(run: Sequence[TraceEvent], signature: _CallSignature | None) -> list[Deviation]:
-    if signature is None or len(run) < _LOOP_THRESHOLD:
+def _loop_deviation(
+    run: Sequence[TraceEvent], signature: _CallSignature | None, threshold: int
+) -> list[Deviation]:
+    if signature is None or len(run) < threshold:
         return []
     tool, _ = signature
     return [
@@ -294,8 +291,8 @@ def _loop_deviation(run: Sequence[TraceEvent], signature: _CallSignature | None)
     ]
 
 
-def _check_repeated_action(tool_calls: Sequence[TraceEvent]) -> list[Deviation]:
-    """Flag every run of ≥ `_LOOP_THRESHOLD` identical consecutive tool calls.
+def _check_repeated_action(mandate: Mandate, tool_calls: Sequence[TraceEvent]) -> list[Deviation]:
+    """Flag every run of ≥ `mandate.loop_threshold` identical consecutive calls.
 
     Identical = same tool name and the same `tool.arguments.*` — the signature
     of an agent stuck retrying without progress. Anchored to every event in the
@@ -305,7 +302,7 @@ def _check_repeated_action(tool_calls: Sequence[TraceEvent]) -> list[Deviation]:
     ordered = sorted(tool_calls, key=lambda event: event.start_time)
     deviations: list[Deviation] = []
     for signature, group in itertools.groupby(ordered, key=_call_signature):
-        deviations.extend(_loop_deviation(list(group), signature))
+        deviations.extend(_loop_deviation(list(group), signature, mandate.loop_threshold))
     return deviations
 
 
@@ -323,5 +320,5 @@ def evaluate(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
         *_check_budget_exceeded(mandate, events),
         *_check_escalation_missed(mandate, events, tool_calls),
         *_check_required_actions(mandate, tool_calls),
-        *_check_repeated_action(tool_calls),
+        *_check_repeated_action(mandate, tool_calls),
     ]

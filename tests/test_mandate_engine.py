@@ -7,6 +7,7 @@ docs/adr/0004-brique2-mandate-engine-design.md.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -281,6 +282,17 @@ def test_loop_absent_below_threshold() -> None:
     ]
     deviations = evaluate(_mandate(), events)
     assert not any(d.type.value == "loop_detected" for d in deviations)
+
+
+def test_loop_threshold_from_mandate_lowers_the_bar() -> None:
+    mandate = replace(_mandate(), loop_threshold=2)
+    events = [
+        _event(eid, attributes={"gen_ai.tool.name": "read_order", "tool.arguments.id": "A"})
+        for eid in ("e1", "e2")
+    ]
+    matches = [d for d in evaluate(mandate, events) if d.type.value == "loop_detected"]
+    assert len(matches) == 1
+    assert matches[0].event_ids == (EventId("e1"), EventId("e2"))
 
 
 def test_deviation_carries_event_ids_present_in_trace() -> None:

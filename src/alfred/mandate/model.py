@@ -98,6 +98,9 @@ class Mandate:
     forbidden_actions: tuple[str | ForbiddenRule, ...]
     escalate_when: tuple[EscalationRule, ...]
     required_actions: tuple[RequiredAction, ...] = ()
+    # A run of this many identical consecutive tool calls (same tool + same
+    # arguments) is read as an agent spinning without progress.
+    loop_threshold: int = 3
 
 
 @dataclass(frozen=True, slots=True)

@@ -104,6 +104,7 @@ def _mandate_from_dict(raw: dict[str, Any]) -> Mandate:
             required_actions=tuple(
                 _parse_required_action(entry) for entry in raw.get("required_actions", [])
             ),
+            loop_threshold=int(raw.get("loop_threshold", 3)),
         )
     except (TypeError, ValueError) as exc:
         raise MandateError(f"Malformed mandate: {exc}") from exc
@@ -136,6 +137,7 @@ def dump_mandate(mandate: Mandate) -> str:
         "escalate_when": [
             f"{rule.metric} {rule.operator} {rule.threshold}" for rule in mandate.escalate_when
         ],
+        "loop_threshold": mandate.loop_threshold,
     }
     if mandate.required_actions:
         raw["required_actions"] = [

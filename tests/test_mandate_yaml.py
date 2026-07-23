@@ -118,6 +118,33 @@ def test_load_mandate_malformed_required_action_raises(tmp_path: Path) -> None:
         load_mandate(path)
 
 
+def test_load_mandate_loop_threshold_defaults_to_3(tmp_path: Path) -> None:
+    path = tmp_path / "mandate.yaml"
+    path.write_text(
+        "agent: refund-bot-v3\n"
+        "allowed_tools: [read_order]\n"
+        "daily_budget_eur: 5.0\n"
+        "forbidden_actions: []\n"
+        "escalate_when: []\n",
+        encoding="utf-8",
+    )
+    assert load_mandate(path).loop_threshold == 3
+
+
+def test_load_mandate_loop_threshold_override(tmp_path: Path) -> None:
+    path = tmp_path / "mandate.yaml"
+    path.write_text(
+        "agent: refund-bot-v3\n"
+        "allowed_tools: [read_order]\n"
+        "daily_budget_eur: 5.0\n"
+        "forbidden_actions: []\n"
+        "escalate_when: []\n"
+        "loop_threshold: 5\n",
+        encoding="utf-8",
+    )
+    assert load_mandate(path).loop_threshold == 5
+
+
 def test_load_mandate_missing_key_raises(tmp_path: Path) -> None:
     path = tmp_path / "mandate.yaml"
     path.write_text("agent: refund-bot-v3\n", encoding="utf-8")
