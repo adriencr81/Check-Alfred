@@ -27,6 +27,9 @@ dependencies = ["pyyaml>=6.0"]
 # Native LangGraph connector (alfred.integrations.langgraph). Optional: the core
 # package keeps its single pyyaml dependency. See docs/adr/0014.
 langgraph = ["langgraph>=1.0"]
+# Native OpenAI Agents SDK connector (alfred.integrations.openai_agents). Same
+# discipline: optional, the core keeps its single pyyaml dependency. See docs/adr/0021.
+openai-agents = ["openai-agents>=0.1"]
 dev = [
   "pytest>=8.0",
   "pytest-cov>=5.0",
@@ -34,8 +37,9 @@ dev = [
   "mypy>=1.10",
   "types-PyYAML>=6.0",
   "pre-commit>=3.0",
-  # CI installs .[dev], so the LangGraph connector's e2e test runs on every push.
+  # CI installs .[dev], so both native connectors' e2e tests run on every push.
   "langgraph>=1.0",
+  "openai-agents>=0.1",
 ]
 
 [project.scripts]
