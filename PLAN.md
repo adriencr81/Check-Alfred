@@ -673,7 +673,7 @@ avant code, mêmes DoD que §5 (`pytest -q`, `ruff`, `mypy --strict src/` verts)
 | F1 | **Alertes de déviation en temps réel** — push Slack immédiat dès qu'une passe trouve une déviation, en plus du digest quotidien. | Un manager ne découvre plus une erreur à 10 k€ le lendemain matin. Le plus gros trou d'expérience du produit. | Complémentaire, non listé au backlog §10. **ADR 0017.** |
 | F2 | **Bootstrap du mandat depuis les traces + `alfred mandate lint`** — `mandate init --from-traces` propose outils autorisés et budget observés ; `lint` valide le YAML. | Tue la falaise d'onboarding (écrire le `mandate.yaml` juste). Raccourcit le time-to-value du « test 5 minutes BYOA » (Brique 11). | Prolonge la Brique 11. Non listé au backlog. |
 | F3 | **Digest contextualisé par baseline glissante** — chaque chiffre gagne sa comparaison (« Coût 3.42 € — +180 % vs moy. 7 j ⚠️ »). | Transforme un nombre brut en jugement (« est-ce normal ? »). Cœur du créneau « rapport manager ». | Version *légère* de la dérive de comportement (v0.3), baseline seulement — pas le bench rejoué. **ADR 0019.** |
-| F4 | **Rapport HTML statique partageable** (`alfred report --html`) — fichier autonome, chaque ligne cliquable vers ses events source. | Le digest Slack est éphémère ; un manager veut *forwarder* la preuve navigable. | À cadrer en lecture seule, **délibérément plus pauvre** que l'export « dossier de preuve » payant (v0.4) pour ne pas le cannibaliser. Zéro infra (fichier généré, pas de dashboard web §10). |
+| F4 | **Rapport HTML statique partageable** (`alfred report --html`) — fichier autonome, chaque ligne cliquable vers ses events source. | Le digest Slack est éphémère ; un manager veut *forwarder* la preuve navigable. | À cadrer en lecture seule, **délibérément plus pauvre** que l'export « dossier de preuve » payant (v0.4) pour ne pas le cannibaliser. Zéro infra (fichier généré, pas de dashboard web §10). **ADR 0020.** |
 | F5 | **Connecteurs natifs CrewAI + OpenAI Agents SDK** — la recette du connecteur LangGraph (Brique 12) pour les deux autres frameworks dominants. | Le *portail* avant toute expérience : un client ne peut pas brancher son stack sinon. | Roadmapé v0.2 (§6.4, « priorisés par les issues » — à confirmer par la demande réelle). |
 
 **Mention honorable** : redaction PII/secrets avant stockage/envoi (feature de
@@ -710,7 +710,8 @@ vraie brique (module `integrations/smolagents.py` + exemple + tests + ADR daté)
 
 **Séquencement retenu** : F1 puis F2 d'abord — plus fort levier d'expérience
 *sans* toucher au périmètre payant, et les plus rapides à shipper post-launch.
-**F1 est en cours** (ADR 0017).
+**F1–F4 sont livrées** (ADR 0017, 0018, 0019, 0020) ; reste F5 (v0.2, priorisé
+par la demande réelle).
 
 ---
 

@@ -189,6 +189,82 @@ def test_cli_watch_reports_missing_project(
     assert "no Alfred project found" in capsys.readouterr().err
 
 
+def test_cli_report_writes_html_file(tmp_path: Path, otlp_sample_path: Path) -> None:
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+    out_dir = tmp_path / "out"
+
+    exit_code = main(
+        ["report", str(traces_dir), "--project", str(project_dir), "--html", "--out", str(out_dir)]
+    )
+    assert exit_code == 0
+    written = list(out_dir.glob("alfred-refund-bot-v3-*.html"))
+    assert len(written) == 1
+    html = written[0].read_text(encoding="utf-8")
+    assert "refund-bot-v3" in html
+    assert 'href="#evt-' in html  # lines are clickable to their source events
+
+
+def test_cli_report_is_rerunnable(tmp_path: Path, otlp_sample_path: Path) -> None:
+    # Unlike `watch`, `report` tracks no seen files — a second run over the same
+    # directory still produces the report (falsifies any seen.json coupling).
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+    out_dir = tmp_path / "out"
+    argv = [
+        "report", str(traces_dir), "--project", str(project_dir), "--html", "--out", str(out_dir)
+    ]
+
+    assert main(argv) == 0
+    assert main(argv) == 0
+    assert len(list(out_dir.glob("*.html"))) == 1
+
+
+def test_cli_report_requires_html_flag(
+    tmp_path: Path, otlp_sample_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+
+    exit_code = main(["report", str(traces_dir), "--project", str(project_dir)])
+    assert exit_code == 1
+    assert "--html" in capsys.readouterr().err
+
+
+def test_cli_report_reports_empty_dir(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    empty = tmp_path / "traces"
+    empty.mkdir()
+
+    exit_code = main(
+        ["report", str(empty), "--project", str(project_dir), "--html", "--out", str(tmp_path)]
+    )
+    assert exit_code == 1
+    assert "no trace events" in capsys.readouterr().err
+
+
+def test_cli_report_reports_missing_project(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    exit_code = main(["report", str(traces_dir), "--project", str(tmp_path / "nope"), "--html"])
+    assert exit_code == 1
+    assert "no Alfred project found" in capsys.readouterr().err
+
+
 def test_cli_schedule_prints_cron_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -71,6 +71,24 @@ def _baseline_history(store: TraceStore, day: date) -> list[list[TraceEvent]]:
     return [by_day[prior] for prior in sorted(by_day)]
 
 
+def build_digests(
+    mandate: Mandate, events: Iterable[TraceEvent], store: TraceStore
+) -> list[Digest]:
+    """Build one `Digest` per calendar day present in `events`, ordered by date.
+
+    `events` must already be in `store` (the caller ingests them first) so each
+    day's rolling baseline (F3) can read the prior days. This is the shared core
+    of the digest pipeline — day-grouping plus baseline — reused by `watch_once`
+    and by `alfred report`, without the seen-file bookkeeping that is specific to
+    `watch`.
+    """
+    by_day = _group_by_day(events)
+    return [
+        build_digest(mandate, by_day[day], day, history=_baseline_history(store, day))
+        for day in sorted(by_day)
+    ]
+
+
 def watch_once(
     project_dir: Path, traces_dir: Path, mandate: Mandate, store: TraceStore
 ) -> list[Digest]:
@@ -97,11 +115,7 @@ def watch_once(
         seen.add(file_path.name)
 
     _save_seen(project_dir, seen)
-    by_day = _group_by_day(new_events)
-    return [
-        build_digest(mandate, by_day[day], day, history=_baseline_history(store, day))
-        for day in sorted(by_day)
-    ]
+    return build_digests(mandate, new_events, store)
 
 
 def watch_loop(

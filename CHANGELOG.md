@@ -11,6 +11,15 @@ entries below are the work done so far towards the v0.1 roadmap
 
 ### Added
 
+- Shareable HTML report — `alfred report traces/ --html` writes a self-contained
+  HTML file per calendar day (inline CSS, zero JavaScript, no external resource)
+  where each report line and deviation links to an Evidence list of its source
+  event IDs, so a manager can forward a navigable proof. It reuses the digest's
+  labels, values and baselines (identical across sinks) and the `watch`
+  day-grouping + baseline pipeline (`build_digests`); unlike `watch` it tracks no
+  seen files and re-renders on demand. Deliberately lighter than the paid
+  evidence-dossier export (v0.4). Fourth of the five post-launch product features
+  (PLAN.md §13 F4). See `docs/adr/0020-shareable-html-report.md`.
 - Baseline-contextualized digest — every digest number now reads against its
   own rolling 7-day average (`Cost 3.42 € — +185% vs 7-day avg ⚠️`), turning a
   raw figure into a judgment ("is this normal?"). The mean is computed over the

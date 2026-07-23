@@ -8,6 +8,7 @@ docs/adr/0007-brique5-delivery-cli-design.md); `demo` lands in Brique 6
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -21,12 +22,13 @@ from alfred.mandate.lint import Severity, lint_mandate
 from alfred.mandate.model import MandateError
 from alfred.mandate.yaml_io import dump_mandate, load_mandate
 from alfred.report.build import build_digest
+from alfred.report.html import render_html
 from alfred.report.model import Digest
 from alfred.schedule import ScheduleError, build_cron_line
 from alfred.trace.ingest import ingest_otlp_file, ingest_otlp_json
 from alfred.trace.model import TraceEvent
 from alfred.trace.store import TraceStore
-from alfred.watch import watch_loop, watch_once
+from alfred.watch import build_digests, watch_loop, watch_once
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
@@ -97,6 +99,72 @@ def _cmd_watch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _read_trace_events(traces_dir: Path) -> list[TraceEvent]:
+    """Ingest every OTLP JSON file in `traces_dir`, in filename order.
+
+    Raises `OSError` if a file cannot be read — each caller frames its own
+    message. Shared by `report` and `mandate init`.
+    """
+    events: list[TraceEvent] = []
+    for file_path in sorted(traces_dir.glob("*.json")):
+        events.extend(ingest_otlp_file(file_path))
+    return events
+
+
+def _slug(text: str) -> str:
+    """A filesystem-safe slug for a report filename (keeps alnum, '-' and '_')."""
+    return re.sub(r"[^A-Za-z0-9_-]+", "-", text).strip("-") or "agent"
+
+
+def _cmd_report(args: argparse.Namespace) -> int:
+    if not args.html:
+        print(
+            "alfred report: choose an output format — only --html is available.",
+            file=sys.stderr,
+        )
+        return 1
+
+    project_dir = Path(args.project)
+    try:
+        config = load_config(project_dir)
+        mandate = load_mandate(config.mandate_path)
+    except (ConfigError, MandateError) as exc:
+        print(f"alfred report: {exc}", file=sys.stderr)
+        return 1
+
+    traces_dir = Path(args.traces_dir)
+    try:
+        events = _read_trace_events(traces_dir)
+    except OSError as exc:
+        print(f"alfred report: cannot read traces: {exc}", file=sys.stderr)
+        return 1
+    if not events:
+        print(
+            f"alfred report: no trace events found in {traces_dir} (expected *.json)",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Ingest into the store (idempotent) so each day's digest carries its rolling
+    # baseline (F3); unlike `watch`, `report` tracks no seen files, so it always
+    # re-renders — a shareable report is meant to be regenerated on demand.
+    config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
+    store = TraceStore(config.trace_db_path)
+    try:
+        store.put_many(events)
+        digests = build_digests(mandate, events, store)
+    finally:
+        store.close()
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for digest in digests:
+        path = out_dir / f"alfred-{_slug(digest.agent)}-{digest.date.isoformat()}.html"
+        path.write_text(render_html(digest), encoding="utf-8")
+        print(f"alfred report: wrote {path}")
+    return 0
+
+
 def _cmd_schedule(args: argparse.Namespace) -> int:
     try:
         hour_str, minute_str = args.at.split(":", 1)
@@ -137,10 +205,8 @@ _SUGGESTED_HEADER = (
 
 def _cmd_mandate_init(args: argparse.Namespace) -> int:
     traces_dir = Path(args.from_traces)
-    events: list[TraceEvent] = []
     try:
-        for file_path in sorted(traces_dir.glob("*.json")):
-            events.extend(ingest_otlp_file(file_path))
+        events = _read_trace_events(traces_dir)
     except OSError as exc:
         print(f"alfred mandate init: cannot read traces: {exc}", file=sys.stderr)
         return 1
@@ -208,6 +274,24 @@ def main(argv: list[str] | None = None) -> int:
         "(needs a configured webhook; pair with --loop for near real-time)",
     )
     watch_parser.set_defaults(func=_cmd_watch)
+
+    report_parser = subparsers.add_parser(
+        "report", help="Render a shareable, self-contained HTML report from OTLP trace files"
+    )
+    report_parser.add_argument("traces_dir")
+    report_parser.add_argument("--project", default=".")
+    report_parser.add_argument(
+        "--html",
+        action="store_true",
+        help="write a self-contained HTML report, one file per day (currently required)",
+    )
+    report_parser.add_argument(
+        "--out",
+        default=".",
+        metavar="DIR",
+        help="output directory for alfred-<agent>-<date>.html files (default: current dir)",
+    )
+    report_parser.set_defaults(func=_cmd_report)
 
     schedule_parser = subparsers.add_parser(
         "schedule", help="Print a crontab line that runs `alfred watch` daily"

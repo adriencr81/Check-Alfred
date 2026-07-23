@@ -43,7 +43,9 @@ just *what* happened but whether it's *normal* (⚠️ marks a doubling or more)
 The comparison is itself computed from the prior days' trace events — never a
 self-declared summary. See `docs/adr/0019-baseline-contextualized-digest.md`.
 
-Delivered to Slack (v0.1), Teams (v0.2), or stdout / markdown (always).
+Delivered to Slack (v0.1), Teams (v0.2), or stdout / markdown (always) — or
+exported as a self-contained, shareable HTML file (`alfred report --html`) whose
+every line links to its source events.
 
 ## What counts as a deviation
 
@@ -114,6 +116,7 @@ alfred mandate init --from-traces traces/ > mandate.yaml  # seed a mandate from 
 alfred mandate lint mandate.yaml                       # validate the mandate before you rely on it
 alfred schedule traces/ --at 09:00 >> mycrontab        # one daily crontab line
 alfred watch traces/                                   # one pass now (or --loop to keep running)
+alfred report traces/ --html --out reports/            # shareable HTML report, one file per day
 alfred demo                                            # fake agent → real digest, no setup
 ```
 
@@ -129,6 +132,15 @@ prints the line for you). For environments without cron, `alfred watch --loop`
 re-scans on an interval until you stop it. Add `--alerts` (with a Slack webhook)
 to also push a deviation the moment it's caught, instead of only in the daily
 digest — pair it with `--loop` for near real-time.
+
+The Slack digest is ephemeral, so `alfred report traces/ --html` writes a
+self-contained HTML file per day into `--out` (default the current directory) —
+inline styles, zero JavaScript, no network — that a manager can forward. Each
+report line and deviation links to an Evidence list of its source event IDs, so
+the proof travels with the report. Unlike `watch`, it tracks no seen files and
+re-renders on every run. It's a deliberately lighter cousin of the paid
+evidence-dossier export (v0.4). See
+`docs/adr/0020-shareable-html-report.md`.
 
 ## Plug in your own agent
 
@@ -162,7 +174,7 @@ Layout:
 src/alfred/trace/      # Brique 1 — OTLP ingest, TraceEvent, SQLite store
                        #   + B9 shared token→€ cost, B10 NDJSON / GenAI semconv adaptation
 src/alfred/mandate/    # Brique 2 — YAML mandate → typed Deviations (+ B9 structured rules)
-src/alfred/report/     # Brique 3 — computed Digest, sources per line
+src/alfred/report/     # Brique 3 — computed Digest, sources per line (+ F4 shareable HTML render)
 src/alfred/narrate/    # Brique 4 — verified LLM rewrite (the anchoring test lives here)
 src/alfred/deliver/    # Brique 5 — Slack / stdout
 src/alfred/demo/       # Brique 6 — instrumented fake agent
