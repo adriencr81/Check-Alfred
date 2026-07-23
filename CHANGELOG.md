@@ -11,6 +11,24 @@ entries below are the work done so far towards the v0.1 roadmap
 
 ### Added
 
+- F5 (first half) — native OpenAI Agents SDK connector
+  (`alfred.integrations.openai_agents`): register `AlfredTracingProcessor` once
+  (`set_trace_processors([...])`) and every `Runner.run(...)` becomes an
+  Alfred-ingestible span, no manual instrumentation
+  (`pip install alfred-ai[openai-agents]`). The processor drives the proven
+  `AgentTracer` context managers from the SDK's tracing events (the root run
+  trace → one `invoke_agent` session; each generation/response span → an
+  `llm_call` with the response's real token usage; each function span → a
+  `tool_call` whose JSON arguments are flattened to `tool.arguments.<key>`), so
+  it re-emits no attribute keys and inherits the "computed from a real trace
+  event, never self-reported" guarantee (D5). A failing tool is non-fatal in
+  this SDK and is recorded as `tool.result.status: error`. Optional extra; the
+  core keeps its single `pyyaml` dependency. Falsifiable e2e test (real run,
+  fake OpenAI client over a mock transport, zero network) in
+  `tests/test_integration_openai_agents.py`; runnable example in
+  `examples/agents/openai_agents_bot/`. Applies the LangGraph recipe (Brique 12)
+  to the second dominant framework of PLAN.md §13 F5; CrewAI remains. See
+  `docs/adr/0021-openai-agents-native-connector.md`.
 - Shareable HTML report — `alfred report traces/ --html` writes a self-contained
   HTML file per calendar day (inline CSS, zero JavaScript, no external resource)
   where each report line and deviation links to an Evidence list of its source

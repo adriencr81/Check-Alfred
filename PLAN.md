@@ -659,6 +659,49 @@ LangGraph + fake chat model, zéro réseau) :
 verts) + `examples/agents/langgraph_bot/` (agent jouet zéro clé) et section
 « LangGraph connector » dans `docs/integrate.md`.
 
+### Brique 13 — Connecteur natif OpenAI Agents SDK (F5 première moitié, ADR 0021)
+
+**Objectif** : un dev qui utilise l'OpenAI Agents SDK (`openai-agents`)
+n'instrumente plus à la main. Il enregistre un `TracingProcessor` et Alfred
+enregistre ce que le run a réellement fait. Première moitié de F5 (§13),
+démarrée sur demande produit du 2026-07-23 — cloisonnée derrière l'extra
+optionnel `[openai-agents]`, le cœur garde `pyyaml` comme seule dépendance.
+CrewAI (l'autre moitié de F5) reste une brique à venir.
+
+**Forme cible** (les ~3 lignes, patron identique à la Brique 12) :
+
+```python
+from agents import Agent, Runner, set_trace_processors
+from alfred.instrument import AgentTracer
+from alfred.integrations.openai_agents import AlfredTracingProcessor
+
+tracer = AgentTracer(agent="support-bot", traces_dir="traces")
+set_trace_processors([AlfredTracingProcessor(tracer)])
+Runner.run_sync(agent, "handle the ticket")
+tracer.flush()
+```
+
+Le processor ne réémet aucune clé : il pilote les context managers prouvés
+d'`AgentTracer` depuis les événements de tracing du SDK (trace racine →
+`session()`, span de génération/réponse → `llm_call()`, span de fonction →
+`tool_call()`), indexés par `trace_id`. La garantie D5 est héritée, pas
+réimplémentée. `tracer.py` est inchangé.
+
+**Tests falsifiables** (`tests/test_integration_openai_agents.py`, vrai
+`Runner.run_sync` + client OpenAI factice sur `httpx.MockTransport`, zéro
+réseau, zéro clé) : `test_run_ingests` (kinds corrects, event IDs uniques,
+enfants rattachés à la tâche), `test_tool_arguments_flattened`,
+`test_tool_error_recorded_as_status` (outil en échec → statut `error`, run non
+interrompu — l'erreur d'outil est non fatale dans ce SDK),
+`test_llm_usage_propagated`, `test_digest_from_trace_anchored` (chaque ligne du
+digest a `sources` non-vide ⊆ event IDs), `test_overlimit_yields_forbidden_action`
+(approbation 250 € sous cap 100 € → exactement une `FORBIDDEN_ACTION` ancrée sur
+l'event ID du tool call) et son miroir `test_conform_run_yields_no_deviations`.
+
+**Definition of done** : idem §5 (`pytest -q`, `ruff`, `mypy --strict src/`
+verts) + `examples/agents/openai_agents_bot/` (agent jouet zéro clé) et section
+« OpenAI Agents SDK connector » dans `docs/integrate.md`.
+
 ---
 
 ## 13. Features produit post-launch (backlog priorisé, 2026-07-22)
@@ -674,7 +717,7 @@ avant code, mêmes DoD que §5 (`pytest -q`, `ruff`, `mypy --strict src/` verts)
 | F2 | **Bootstrap du mandat depuis les traces + `alfred mandate lint`** — `mandate init --from-traces` propose outils autorisés et budget observés ; `lint` valide le YAML. | Tue la falaise d'onboarding (écrire le `mandate.yaml` juste). Raccourcit le time-to-value du « test 5 minutes BYOA » (Brique 11). | Prolonge la Brique 11. Non listé au backlog. |
 | F3 | **Digest contextualisé par baseline glissante** — chaque chiffre gagne sa comparaison (« Coût 3.42 € — +180 % vs moy. 7 j ⚠️ »). | Transforme un nombre brut en jugement (« est-ce normal ? »). Cœur du créneau « rapport manager ». | Version *légère* de la dérive de comportement (v0.3), baseline seulement — pas le bench rejoué. **ADR 0019.** |
 | F4 | **Rapport HTML statique partageable** (`alfred report --html`) — fichier autonome, chaque ligne cliquable vers ses events source. | Le digest Slack est éphémère ; un manager veut *forwarder* la preuve navigable. | À cadrer en lecture seule, **délibérément plus pauvre** que l'export « dossier de preuve » payant (v0.4) pour ne pas le cannibaliser. Zéro infra (fichier généré, pas de dashboard web §10). **ADR 0020.** |
-| F5 | **Connecteurs natifs CrewAI + OpenAI Agents SDK** — la recette du connecteur LangGraph (Brique 12) pour les deux autres frameworks dominants. | Le *portail* avant toute expérience : un client ne peut pas brancher son stack sinon. | Roadmapé v0.2 (§6.4, « priorisés par les issues » — à confirmer par la demande réelle). |
+| F5 | **Connecteurs natifs CrewAI + OpenAI Agents SDK** — la recette du connecteur LangGraph (Brique 12) pour les deux autres frameworks dominants. | Le *portail* avant toute expérience : un client ne peut pas brancher son stack sinon. | Roadmapé v0.2 (§6.4). **OpenAI Agents SDK livré (Brique 13, ADR 0021)** ; CrewAI restant. |
 
 **Mention honorable** : redaction PII/secrets avant stockage/envoi (feature de
 confiance pour les secteurs régulés cibles YC — assurance/finance/santé). À
@@ -710,8 +753,9 @@ vraie brique (module `integrations/smolagents.py` + exemple + tests + ADR daté)
 
 **Séquencement retenu** : F1 puis F2 d'abord — plus fort levier d'expérience
 *sans* toucher au périmètre payant, et les plus rapides à shipper post-launch.
-**F1–F4 sont livrées** (ADR 0017, 0018, 0019, 0020) ; reste F5 (v0.2, priorisé
-par la demande réelle).
+**F1–F4 sont livrées** (ADR 0017, 0018, 0019, 0020) ; **F5 est démarrée** — le
+connecteur OpenAI Agents SDK est livré (Brique 13, ADR 0021), le connecteur
+CrewAI reste (v0.2, priorisé par la demande réelle).
 
 ---
 
