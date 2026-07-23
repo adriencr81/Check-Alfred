@@ -6,13 +6,15 @@ docs/adr/0007-brique5-delivery-cli-design.md.
 
 from __future__ import annotations
 
+import json
 import shutil
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
 
 from alfred.mandate.model import Mandate
-from alfred.report.model import Digest
+from alfred.report.model import Digest, LineKind
 from alfred.trace.store import TraceStore
 from alfred.watch import watch_loop, watch_once
 
@@ -129,6 +131,57 @@ def test_watch_loop_delivers_a_file_that_arrives_between_passes(
 
     assert len(collected[0]) == 1  # day1
     assert len(collected[1]) == 1  # day2, picked up on the second pass
+
+
+def _write_cost_trace(directory: Path, day: date, span_id: str, cost_eur: float) -> None:
+    """Write a one-span OTLP file: an `chat` LLM call with a known cost on `day`."""
+    nanos = str(int(datetime(day.year, day.month, day.day, 12, tzinfo=UTC).timestamp()) * 10**9)
+    payload = {
+        "resourceSpans": [{"scopeSpans": [{"spans": [{
+            "spanId": span_id,
+            "traceId": f"trace-{span_id}",
+            "name": "chat",
+            "startTimeUnixNano": nanos,
+            "endTimeUnixNano": nanos,
+            "attributes": [
+                {"key": "gen_ai.operation.name", "value": {"stringValue": "chat"}},
+                {"key": "gen_ai.usage.cost_eur", "value": {"doubleValue": cost_eur}},
+            ],
+        }]}]}]
+    }
+    (directory / f"{day.isoformat()}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_watch_attaches_rolling_baseline_from_store_history(
+    project_dir: Path, tmp_path: Path
+) -> None:
+    """E2E: four consecutive days ingested → the last digest's cost line reads
+    against a baseline anchored to the three prior days' events (F3)."""
+    directory = tmp_path / "traces"
+    directory.mkdir()
+    _write_cost_trace(directory, date(2026, 8, 26), "d26", 1.0)
+    _write_cost_trace(directory, date(2026, 8, 27), "d27", 2.0)
+    _write_cost_trace(directory, date(2026, 8, 28), "d28", 3.0)
+    _write_cost_trace(directory, date(2026, 8, 29), "d29", 8.0)
+
+    store = TraceStore(project_dir / "trace.db")
+    digests = watch_once(project_dir, directory, _mandate(), store)
+    store.close()
+
+    assert [d.date for d in digests] == [
+        date(2026, 8, 26),
+        date(2026, 8, 27),
+        date(2026, 8, 28),
+        date(2026, 8, 29),
+    ]
+    first_cost = next(line for line in digests[0].lines if line.kind is LineKind.COST_EUR)
+    assert first_cost.baseline is None  # no prior history for the first day
+
+    last_cost = next(line for line in digests[-1].lines if line.kind is LineKind.COST_EUR)
+    assert last_cost.baseline is not None
+    assert last_cost.baseline.mean == pytest.approx(2.0)  # (1+2+3)/3
+    assert last_cost.baseline.sample_days == 3
+    assert set(last_cost.baseline.sources) == {"d26", "d27", "d28"}
 
 
 def test_watch_persists_seen_state_across_processes(project_dir: Path, traces_dir: Path) -> None:
