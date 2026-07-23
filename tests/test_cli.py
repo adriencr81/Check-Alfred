@@ -166,6 +166,84 @@ def test_cli_watch_alerts_without_webhook_warns(
     assert "webhook" in err
 
 
+class _EchoStubLLM:
+    """Well-behaved narration stub: cites exactly the event IDs the prompt allows.
+
+    Mirrors the stub in tests/test_narrate_llm.py so `watch --narrate` /
+    `report --narrate` can be exercised without a network or API key.
+    """
+
+    def complete(self, prompt: str) -> str:
+        allowed = prompt.rsplit(":", 1)[1].strip()
+        return f"Narrated line. [evt:{allowed}]"
+
+
+def _stub_narration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make `build_llm_client` return the echo stub, so the CLI narrates without
+    reaching for a real endpoint or the ALFRED_LLM_API_KEY env var."""
+    import alfred.cli as cli
+
+    monkeypatch.setattr(cli, "build_llm_client", lambda _config: _EchoStubLLM())
+
+
+def test_cli_watch_narrate_renders_prose(
+    tmp_path: Path,
+    otlp_sample_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+    _stub_narration(monkeypatch)
+
+    exit_code = main(["watch", str(traces_dir), "--project", str(project_dir), "--narrate"])
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "Narrated line." in out  # prose, not the raw metric row
+    assert "Tasks completed" not in out  # raw digest labels are replaced
+    assert "tool_not_allowed" in out  # deviations still reported
+
+
+def test_cli_watch_narrate_without_endpoint_errors(
+    tmp_path: Path, otlp_sample_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])  # no LLM endpoint
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+
+    exit_code = main(["watch", str(traces_dir), "--project", str(project_dir), "--narrate"])
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "--narrate" in err
+    assert "ALFRED_LLM_API_KEY" in err
+
+
+def test_cli_init_writes_llm_endpoint(tmp_path: Path) -> None:
+    from alfred.config import load_config
+
+    exit_code = main(
+        [
+            "init",
+            str(tmp_path),
+            "--agent",
+            "refund-bot-v3",
+            "--llm-base-url",
+            "https://api.example.com/v1",
+            "--llm-model",
+            "gpt-4o-mini",
+        ]
+    )
+    assert exit_code == 0
+    config = load_config(tmp_path)
+    assert config.llm_base_url == "https://api.example.com/v1"
+    assert config.llm_model == "gpt-4o-mini"
+
+
 def test_cli_watch_reports_no_new_files(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -77,7 +77,7 @@ def _render_line(line: Line) -> str:
     return f"{row}   ({baseline})" if baseline is not None else row
 
 
-def _render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
+def render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
     if not deviations:
         return []
     if len(deviations) == 1:
@@ -98,5 +98,5 @@ def _render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
 def render(digest: Digest) -> str:
     rows = [f"Alfred · {digest.agent} · {digest.date.isoformat()}", ""]
     rows.extend(_render_line(line) for line in digest.lines)
-    rows.extend(_render_deviations(digest.deviations))
+    rows.extend(render_deviations(digest.deviations))
     return "\n".join(rows)
