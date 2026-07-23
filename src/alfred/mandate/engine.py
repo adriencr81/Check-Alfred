@@ -9,6 +9,7 @@ forbidden rules and token-based budgets (Brique 9) in ADR 0013.
 
 from __future__ import annotations
 
+import itertools
 import re
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any
@@ -72,7 +73,7 @@ def _rule_matches(
     rule: ForbiddenRule, tool_calls: Sequence[TraceEvent]
 ) -> Iterator[tuple[TraceEvent, float]]:
     """Yield (event, argument value) for each tool call breaching `rule`."""
-    arg_attr = f"tool.arguments.{rule.arg}"
+    arg_attr = f"{_TOOL_ARGS_PREFIX}{rule.arg}"
     for event in tool_calls:
         if _tool_name(event) != rule.tool:
             continue
@@ -235,12 +236,15 @@ def _check_required_actions(
     but `require_tool` never was, raise one deviation anchored to every
     `when_tool` event — the events that created (and prove) the obligation.
     """
-    called = {name for event in tool_calls if (name := _tool_name(event)) is not None}
+    by_tool: dict[str, list[TraceEvent]] = {}
+    for event in tool_calls:
+        if (name := _tool_name(event)) is not None:
+            by_tool.setdefault(name, []).append(event)
     deviations: list[Deviation] = []
     for rule in mandate.required_actions:
-        if rule.require_tool in called:
+        if rule.require_tool in by_tool:
             continue
-        anchors = [event for event in tool_calls if _tool_name(event) == rule.when_tool]
+        anchors = by_tool.get(rule.when_tool)
         if not anchors:
             continue
         deviations.append(
@@ -298,18 +302,10 @@ def _check_repeated_action(tool_calls: Sequence[TraceEvent]) -> list[Deviation]:
     run. Consecutive is judged over the tool-call subsequence ordered by
     `start_time`, so interleaved LLM/agent spans don't break a loop apart.
     """
+    ordered = sorted(tool_calls, key=lambda event: event.start_time)
     deviations: list[Deviation] = []
-    run: list[TraceEvent] = []
-    run_signature: _CallSignature | None = None
-    for event in sorted(tool_calls, key=lambda event: event.start_time):
-        signature = _call_signature(event)
-        if signature is not None and signature == run_signature:
-            run.append(event)
-            continue
-        deviations.extend(_loop_deviation(run, run_signature))
-        run = [event] if signature is not None else []
-        run_signature = signature
-    deviations.extend(_loop_deviation(run, run_signature))
+    for signature, group in itertools.groupby(ordered, key=_call_signature):
+        deviations.extend(_loop_deviation(list(group), signature))
     return deviations
 
 
