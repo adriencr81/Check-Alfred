@@ -153,8 +153,9 @@ over-cap approval. Three honest paths get your real agent's runs to Alfred:
 |---|---|---|
 | **`alfred.instrument` SDK** | you can add ~10 lines to (wrap the loop, model call, tool call) | **works today** — [`docs/integrate.md`](docs/integrate.md) |
 | **LangGraph connector** | run on LangGraph — attach one callback handler, no manual instrumentation | **works today** — `pip install alfred-ai[langgraph]` ([connector](docs/integrate.md#langgraph-connector)) |
+| **OpenAI Agents SDK connector** | run on the OpenAI Agents SDK — register one tracing processor, no manual instrumentation | **works today** — `pip install alfred-ai[openai-agents]` ([connector](docs/integrate.md#openai-agents-sdk-connector)) |
 | **OTel Collector bridge** | already emit OpenTelemetry GenAI spans | **works today** — point the Collector's file exporter at the watched folder ([bridge config](docs/integrate.md#otel-collector-bridge)) |
-| **Other native connectors** | run on CrewAI, OpenAI Agents, or a managed platform | **v0.2** — not built yet |
+| **Other native connectors** | run on CrewAI or a managed platform | **v0.2** — not built yet |
 
 Whatever the path, the guarantee is the same: every digest line is computed
 from an identifiable trace event, never self-reported. What Alfred can't see in
@@ -179,8 +180,8 @@ src/alfred/narrate/    # Brique 4 — verified LLM rewrite (the anchoring test l
 src/alfred/deliver/    # Brique 5 — Slack / stdout
 src/alfred/demo/       # Brique 6 — instrumented fake agent
 src/alfred/instrument/ # Brique 8 — public instrumentation SDK (AgentTracer)
-src/alfred/integrations/ # Brique 12 — native connectors (LangGraph callback handler)
-examples/agents/       # B7 refund_bot (real LLM), B11 minimal (no LLM), B12 langgraph_bot
+src/alfred/integrations/ # Brique 12 — native connectors (LangGraph handler, OpenAI Agents processor)
+examples/agents/       # B7 refund_bot (real LLM), B11 minimal (no LLM), B12 langgraph_bot, F5 openai_agents_bot
 ```
 
 The [`CLAUDE.md`](CLAUDE.md) file encodes the workflow rules for anyone (human or
@@ -212,11 +213,12 @@ downloads it for *their* agents
 - **Brique 10** — real-world ingestion: OTel Collector NDJSON + standard GenAI semconv adaptation
 - **Brique 11** — onboarding + the 5-minute BYOA example (no LLM, no API key)
 
-**Native connectors (v1.3, [ADR 0014](docs/adr/0014-langgraph-native-connector.md)):**
+**Native connectors:**
 
-- **Brique 12** — LangGraph connector: attach one callback handler, get an anchored trace (`pip install alfred-ai[langgraph]`)
+- **Brique 12** ([ADR 0014](docs/adr/0014-langgraph-native-connector.md)) — LangGraph connector: attach one callback handler, get an anchored trace (`pip install alfred-ai[langgraph]`)
+- **F5** ([ADR 0021](docs/adr/0021-openai-agents-native-connector.md)) — OpenAI Agents SDK connector: register one tracing processor, get an anchored trace (`pip install alfred-ai[openai-agents]`)
 
-Post-v0.1: native connectors (v0.2), performance review — behavioral drift & cost-per-task (v0.3), evidence file export (v0.4 — the bridge to the closed-source engine).
+Post-v0.1: native connectors (v0.2 — CrewAI remaining), performance review — behavioral drift & cost-per-task (v0.3), evidence file export (v0.4 — the bridge to the closed-source engine).
 
 ## License
 

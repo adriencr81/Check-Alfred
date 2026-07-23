@@ -164,6 +164,47 @@ example (real graph, fake model, no API key):
 [`examples/agents/langgraph_bot/`](../examples/agents/langgraph_bot/). Design
 rationale: [ADR 0014](adr/0014-langgraph-native-connector.md).
 
+## OpenAI Agents SDK connector
+
+If your agent runs on the **OpenAI Agents SDK** (`openai-agents`), you don't wrap
+anything by hand either. Register `AlfredTracingProcessor` once and every
+`Runner.run(...)` becomes a trace — same OTLP shape as section 1, same anchoring
+guarantee.
+
+```bash
+pip install alfred-ai[openai-agents]
+```
+
+```python
+from agents import Agent, Runner, set_trace_processors
+from alfred.instrument import AgentTracer
+from alfred.integrations.openai_agents import AlfredTracingProcessor
+
+tracer = AgentTracer(agent="support-bot", traces_dir="traces/")
+set_trace_processors([AlfredTracingProcessor(tracer)])   # Alfred only, fully offline
+Runner.run_sync(agent, "handle the ticket")
+tracer.flush()  # → traces/support-bot-<timestamp>.json
+```
+
+- One **session** spans the root run trace (`invoke_agent`); each model-call span
+  (`GenerationSpanData`/`ResponseSpanData`, the Chat Completions and Responses API
+  paths) becomes an `llm_call` with the response's real token usage, and each
+  function span becomes a `tool_call` whose JSON arguments are flattened to
+  `tool.arguments.<key>` — exactly what mandate rules read.
+- The processor drives the same `AgentTracer` context managers the SDK uses, so
+  it never re-emits attribute keys: the "computed from a real trace event, never
+  self-reported" guarantee is inherited, not re-implemented.
+- `set_trace_processors([...])` makes Alfred the only processor (nothing is sent
+  to OpenAI's trace backend); use `add_trace_processor(...)` to keep the SDK's own
+  export alongside Alfred's. In this SDK a failing tool is non-fatal — the run
+  continues and the tool span carries the error, which Alfred records as
+  `tool.result.status: error`.
+
+Declare the mandate and watch the traces exactly as in sections 2–3. Runnable
+example (real run, fake client, no API key):
+[`examples/agents/openai_agents_bot/`](../examples/agents/openai_agents_bot/).
+Design rationale: [ADR 0021](adr/0021-openai-agents-native-connector.md).
+
 ## OTel Collector bridge
 
 If your agent is already instrumented with the OpenTelemetry SDK, you don't
@@ -211,7 +252,7 @@ emit Alfred-specific keys:
 
 ## Other native connectors (v0.2)
 
-Beyond LangGraph (above), connectors for CrewAI, the OpenAI Agents SDK, and
-managed platforms are on the roadmap for v0.2 — not built yet. Until then, one
+Beyond LangGraph and the OpenAI Agents SDK (both above), a connector for CrewAI
+and managed platforms is on the roadmap for v0.2 — not built yet. Until then, one
 of the paths above is required: for Alfred to verify a run, that run has to
 leave a trace it can read.
