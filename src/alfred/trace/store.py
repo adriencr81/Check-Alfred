@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from alfred.trace.model import EventId, SpanKind, TraceEvent
@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS trace_events (
     attributes TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_trace_events_trace_id ON trace_events (trace_id);
+CREATE INDEX IF NOT EXISTS idx_trace_events_start_time ON trace_events (start_time);
 """
 
 
@@ -99,6 +100,22 @@ class TraceStore:
         rows = self._conn.execute(
             "SELECT * FROM trace_events WHERE trace_id = ? ORDER BY start_time, event_id",
             (trace_id,),
+        ).fetchall()
+        return [_row_to_event(row) for row in rows]
+
+    def find_by_date_range(self, start: date, end: date) -> list[TraceEvent]:
+        """Events whose local `start_time` date falls in `[start, end]` inclusive.
+
+        Compares the `YYYY-MM-DD` prefix of the stored ISO timestamp, so the
+        result is robust to the timezone suffix and matches how `watch_once`
+        groups events by `start_time.date()`. Used to load the rolling baseline
+        window (F3, docs/adr/0019).
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM trace_events "
+            "WHERE substr(start_time, 1, 10) BETWEEN ? AND ? "
+            "ORDER BY start_time, event_id",
+            (start.isoformat(), end.isoformat()),
         ).fetchall()
         return [_row_to_event(row) for row in rows]
 

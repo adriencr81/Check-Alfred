@@ -5,7 +5,7 @@ Uses in-memory SQLite (`:memory:`) to keep tests hermetic and fast.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -76,6 +76,30 @@ def test_find_by_trace_orders_by_start_time(store: TraceStore) -> None:
     ])
     got = store.find_by_trace("trace-A")
     assert [e.event_id for e in got] == ["a", "b", "c"]
+
+
+def _at(day: date) -> datetime:
+    return datetime(day.year, day.month, day.day, 9, 0, 0, tzinfo=UTC)
+
+
+def test_find_by_date_range_is_inclusive_on_both_bounds(store: TraceStore) -> None:
+    store.put_many([
+        _event("d23", start_time=_at(date(2026, 8, 23))),
+        _event("d26", start_time=_at(date(2026, 8, 26))),
+        _event("d29", start_time=_at(date(2026, 8, 29))),
+    ])
+    got = store.find_by_date_range(date(2026, 8, 23), date(2026, 8, 29))
+    assert {e.event_id for e in got} == {"d23", "d26", "d29"}
+
+
+def test_find_by_date_range_excludes_days_outside_the_window(store: TraceStore) -> None:
+    store.put_many([
+        _event("before", start_time=_at(date(2026, 8, 22))),
+        _event("inside", start_time=_at(date(2026, 8, 25))),
+        _event("after", start_time=_at(date(2026, 8, 30))),
+    ])
+    got = store.find_by_date_range(date(2026, 8, 23), date(2026, 8, 29))
+    assert {e.event_id for e in got} == {"inside"}
 
 
 def test_attributes_survive_roundtrip(store: TraceStore) -> None:
