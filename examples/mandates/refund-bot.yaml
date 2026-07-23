@@ -40,3 +40,12 @@ forbidden_actions:
 escalate_when:
   - tool_error_rate > 0.10
   - budget_used > 0.80
+
+# Conditional obligations. If `when_tool` is called in a trace but
+# `require_tool` never is, a `required_action_missing` deviation is raised,
+# anchored to the `when_tool` event(s). Catches the silent failure of an
+# action taken without its mandatory follow-up — here, a refund issued
+# without ever notifying the customer.
+required_actions:
+  - when_tool: issue_refund
+    require_tool: notify_customer

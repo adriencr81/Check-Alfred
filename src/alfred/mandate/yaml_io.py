@@ -12,7 +12,13 @@ from typing import Any, cast
 
 import yaml
 
-from alfred.mandate.model import EscalationRule, ForbiddenRule, Mandate, MandateError
+from alfred.mandate.model import (
+    EscalationRule,
+    ForbiddenRule,
+    Mandate,
+    MandateError,
+    RequiredAction,
+)
 
 # Shared `<op> <number>` tail of every condition string (escalate_when
 # metrics and structured-rule `when:` conditions use the same grammar).
@@ -59,6 +65,16 @@ def _dump_forbidden_action(action: str | ForbiddenRule) -> str | dict[str, str]:
     return action
 
 
+def _parse_required_action(raw: object) -> RequiredAction:
+    """One `required_actions` entry: a `when_tool:`/`require_tool:` mapping."""
+    if not isinstance(raw, dict) or set(raw) != {"when_tool", "require_tool"}:
+        raise MandateError(
+            "required_actions entry must have exactly 'when_tool' and "
+            f"'require_tool' keys: {raw!r}"
+        )
+    return RequiredAction(when_tool=str(raw["when_tool"]), require_tool=str(raw["require_tool"]))
+
+
 def _parse_escalation_rule(raw: str) -> EscalationRule:
     match = _ESCALATION_PATTERN.match(raw)
     if match is None:
@@ -84,6 +100,9 @@ def _mandate_from_dict(raw: dict[str, Any]) -> Mandate:
             ),
             escalate_when=tuple(
                 _parse_escalation_rule(str(rule)) for rule in raw["escalate_when"]
+            ),
+            required_actions=tuple(
+                _parse_required_action(entry) for entry in raw.get("required_actions", [])
             ),
         )
     except (TypeError, ValueError) as exc:
@@ -118,4 +137,9 @@ def dump_mandate(mandate: Mandate) -> str:
             f"{rule.metric} {rule.operator} {rule.threshold}" for rule in mandate.escalate_when
         ],
     }
+    if mandate.required_actions:
+        raw["required_actions"] = [
+            {"when_tool": rule.when_tool, "require_tool": rule.require_tool}
+            for rule in mandate.required_actions
+        ]
     return yaml.safe_dump(raw, sort_keys=False)

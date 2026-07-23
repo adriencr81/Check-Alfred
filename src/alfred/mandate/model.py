@@ -24,6 +24,7 @@ class DeviationType(StrEnum):
     FORBIDDEN_ACTION = "forbidden_action"
     ESCALATION_MISSED = "escalation_missed"
     LOOP_DETECTED = "loop_detected"
+    REQUIRED_ACTION_MISSING = "required_action_missing"
 
 
 def _compare(value: float, operator: str, threshold: float) -> bool:
@@ -76,12 +77,27 @@ class ForbiddenRule:
 
 
 @dataclass(frozen=True, slots=True)
+class RequiredAction:
+    """A conditional obligation: if `when_tool` runs, `require_tool` must too.
+
+    Both within the same trace. The deviation anchors to the `when_tool`
+    event(s) that create the obligation — mirroring `escalation_missed`, which
+    anchors to the events that breach the threshold, so a *missing* action
+    still carries a real event ID (the product's absolute rule).
+    """
+
+    when_tool: str
+    require_tool: str
+
+
+@dataclass(frozen=True, slots=True)
 class Mandate:
     agent: str
     allowed_tools: frozenset[str]
     daily_budget_eur: float
     forbidden_actions: tuple[str | ForbiddenRule, ...]
     escalate_when: tuple[EscalationRule, ...]
+    required_actions: tuple[RequiredAction, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,7 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from alfred.mandate.model import EscalationRule, ForbiddenRule, Mandate, MandateError
+from alfred.mandate.model import (
+    EscalationRule,
+    ForbiddenRule,
+    Mandate,
+    MandateError,
+    RequiredAction,
+)
 from alfred.mandate.yaml_io import dump_mandate, load_mandate
 
 EXAMPLES_DIR = Path(__file__).parent.parent / "examples" / "mandates"
@@ -24,6 +30,7 @@ def _mandate() -> Mandate:
             EscalationRule("tool_error_rate", ">", 0.10),
             EscalationRule("budget_used", ">", 0.80),
         ),
+        required_actions=(RequiredAction("issue_refund", "notify_customer"),),
     )
 
 
@@ -89,6 +96,22 @@ def test_load_mandate_structured_rule_unknown_key_raises(tmp_path: Path) -> None
         "  - tool: execute_sql\n"
         "    unless: never\n"
         "escalate_when: []\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(MandateError):
+        load_mandate(path)
+
+
+def test_load_mandate_malformed_required_action_raises(tmp_path: Path) -> None:
+    path = tmp_path / "mandate.yaml"
+    path.write_text(
+        "agent: refund-bot-v3\n"
+        "allowed_tools: [issue_refund, notify_customer]\n"
+        "daily_budget_eur: 5.0\n"
+        "forbidden_actions: []\n"
+        "escalate_when: []\n"
+        "required_actions:\n"
+        "  - when_tool: issue_refund\n",
         encoding="utf-8",
     )
     with pytest.raises(MandateError):

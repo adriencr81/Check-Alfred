@@ -226,6 +226,37 @@ def _check_escalation_missed(
     return deviations
 
 
+def _check_required_actions(
+    mandate: Mandate, tool_calls: Sequence[TraceEvent]
+) -> list[Deviation]:
+    """Flag a conditional obligation that was triggered but left unsatisfied.
+
+    For each `required_actions` rule, if `when_tool` was called in the trace
+    but `require_tool` never was, raise one deviation anchored to every
+    `when_tool` event — the events that created (and prove) the obligation.
+    """
+    called = {name for event in tool_calls if (name := _tool_name(event)) is not None}
+    deviations: list[Deviation] = []
+    for rule in mandate.required_actions:
+        if rule.require_tool in called:
+            continue
+        anchors = [event for event in tool_calls if _tool_name(event) == rule.when_tool]
+        if not anchors:
+            continue
+        deviations.append(
+            Deviation(
+                type=DeviationType.REQUIRED_ACTION_MISSING,
+                event_ids=tuple(event.event_id for event in anchors),
+                message=(
+                    f"required action missing: '{rule.when_tool}' was called but "
+                    f"'{rule.require_tool}' never was"
+                ),
+                details={"when_tool": rule.when_tool, "require_tool": rule.require_tool},
+            )
+        )
+    return deviations
+
+
 def _call_signature(event: TraceEvent) -> _CallSignature | None:
     """`(tool, sorted arguments)` — identical signatures mean an identical call.
 
@@ -295,5 +326,6 @@ def evaluate(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
         *_check_forbidden_actions(mandate, tool_calls),
         *_check_budget_exceeded(mandate, events),
         *_check_escalation_missed(mandate, events, tool_calls),
+        *_check_required_actions(mandate, tool_calls),
         *_check_repeated_action(tool_calls),
     ]
