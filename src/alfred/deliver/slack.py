@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from alfred.mandate.model import Deviation
-from alfred.report.model import Digest, LineKind
-from alfred.report.render import LABELS, format_sources, format_value
+from alfred.report.model import Digest, Line, LineKind
+from alfred.report.render import LABELS, format_baseline, format_sources, format_value
 
 _EVIDENCE_LABELS: dict[LineKind, str] = {
     LineKind.TASKS_COMPLETED: "tasks",
@@ -33,13 +33,16 @@ class DeliverError(Exception):
     """Raised when a Slack webhook delivery fails."""
 
 
+def _field_text(line: Line) -> str:
+    text = f"*{LABELS[line.kind]}*\n{format_value(line)}"
+    baseline = format_baseline(line)
+    return f"{text}\n{baseline}" if baseline is not None else text
+
+
 def _fields_section(digest: Digest) -> dict[str, Any]:
     return {
         "type": "section",
-        "fields": [
-            {"type": "mrkdwn", "text": f"*{LABELS[line.kind]}*\n{format_value(line)}"}
-            for line in digest.lines
-        ],
+        "fields": [{"type": "mrkdwn", "text": _field_text(line)} for line in digest.lines],
     }
 
 

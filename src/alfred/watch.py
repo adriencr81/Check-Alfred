@@ -19,12 +19,12 @@ from __future__ import annotations
 import json
 import time
 from collections import defaultdict
-from collections.abc import Callable
-from datetime import date
+from collections.abc import Callable, Iterable
+from datetime import date, timedelta
 from pathlib import Path
 
 from alfred.mandate.model import Mandate
-from alfred.report.build import build_digest
+from alfred.report.build import BASELINE_WINDOW_DAYS, build_digest
 from alfred.report.model import Digest
 from alfred.trace.ingest import ingest_otlp_file
 from alfred.trace.model import TraceEvent
@@ -50,6 +50,27 @@ def _save_seen(project_dir: Path, seen: set[str]) -> None:
     path.write_text(json.dumps(sorted(seen)), encoding="utf-8")
 
 
+def _group_by_day(events: Iterable[TraceEvent]) -> dict[date, list[TraceEvent]]:
+    by_day: dict[date, list[TraceEvent]] = defaultdict(list)
+    for event in events:
+        by_day[event.start_time.date()].append(event)
+    return by_day
+
+
+def _baseline_history(store: TraceStore, day: date) -> list[list[TraceEvent]]:
+    """The rolling baseline window for `day`: the active days in `[day-7, day-1]`.
+
+    Reads from the store (which already holds the just-ingested events),
+    grouped by `start_time.date()` and excluding `day` itself. Only active days
+    appear — an empty list means no baseline will be attached (F3, docs/adr/0019).
+    """
+    window = store.find_by_date_range(
+        day - timedelta(days=BASELINE_WINDOW_DAYS), day - timedelta(days=1)
+    )
+    by_day = _group_by_day(window)
+    return [by_day[prior] for prior in sorted(by_day)]
+
+
 def watch_once(
     project_dir: Path, traces_dir: Path, mandate: Mandate, store: TraceStore
 ) -> list[Digest]:
@@ -59,22 +80,28 @@ def watch_once(
     ordered by date. Returns an empty list if every file was already seen
     (or `traces_dir` has no `*.json` files) — this is what makes a second
     call over the same directory a no-op.
+
+    Each digest carries a rolling baseline computed from the prior days already
+    in the store (F3), so a number reads against its own recent history.
     """
     seen = _load_seen(project_dir)
     new_files = sorted(p for p in Path(traces_dir).glob("*.json") if p.name not in seen)
     if not new_files:
         return []
 
-    by_day: dict[date, list[TraceEvent]] = defaultdict(list)
+    new_events: list[TraceEvent] = []
     for file_path in new_files:
         events = ingest_otlp_file(file_path)
         store.put_many(events)
-        for event in events:
-            by_day[event.start_time.date()].append(event)
+        new_events.extend(events)
         seen.add(file_path.name)
 
     _save_seen(project_dir, seen)
-    return [build_digest(mandate, by_day[day], day) for day in sorted(by_day)]
+    by_day = _group_by_day(new_events)
+    return [
+        build_digest(mandate, by_day[day], day, history=_baseline_history(store, day))
+        for day in sorted(by_day)
+    ]
 
 
 def watch_loop(
