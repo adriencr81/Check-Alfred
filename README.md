@@ -95,9 +95,14 @@ trace and a real digest, no mandate file, no Slack webhook, no network call:
 
 ```bash
 git clone https://github.com/adriencr81/check-alfred.git && cd check-alfred
+python -m venv .venv && source .venv/bin/activate   # recommended: isolates from system Python
 pip install -e ".[dev]"
 alfred demo
 ```
+
+Use a virtualenv — installing into a distro-managed Python (e.g. Debian/Ubuntu
+system `pip`) can fail with `Cannot uninstall … RECORD file not found`. On
+Windows the activate step is `.venv\Scripts\activate`.
 
 ### Verify a real agent
 

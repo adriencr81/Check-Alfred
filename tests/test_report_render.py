@@ -62,6 +62,15 @@ def test_render_matches_fixed_format_single_deviation() -> None:
     assert len(lines) == 6
 
 
+def test_render_aligns_value_columns_across_rows() -> None:
+    # Every value (and its evidence) must start at the same column across the
+    # metric lines and the deviations header, despite differing label lengths —
+    # the aligned digest the README advertises. Falsifies label-less padding.
+    lines = render(_digest_with_one_deviation()).splitlines()
+    evidence_columns = {line.index("[evt:") for line in lines if "[evt:" in line}
+    assert len(evidence_columns) == 1
+
+
 def test_render_omits_deviations_section_when_none() -> None:
     digest = Digest(
         agent="refund-bot-v3",

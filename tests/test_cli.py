@@ -95,6 +95,31 @@ def test_cli_watch_loop_stops_on_keyboard_interrupt(
     assert "stopped" in out
 
 
+def test_cli_watch_loop_floors_tiny_interval(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `--interval 0` would spin re-globbing the directory; it must be clamped to
+    # the floor (and the user told), not honored verbatim.
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+
+    slept: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        slept.append(seconds)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(time, "sleep", fake_sleep)
+    exit_code = main(
+        ["watch", str(traces_dir), "--project", str(project_dir), "--loop", "--interval", "0"]
+    )
+    assert exit_code == 0
+    assert slept == [1.0]  # clamped to the floor, not 0
+    assert "too low" in capsys.readouterr().err
+
+
 def _watch_with_recorded_slack(
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[list[object], list[object]]:
