@@ -51,6 +51,37 @@ def test_put_many_and_count(store: TraceStore) -> None:
     assert store.count() == 3
 
 
+class _CountingConnection:
+    """Delegates to a real connection but tallies `commit()` calls."""
+
+    def __init__(self, conn: object) -> None:
+        self._conn = conn
+        self.commits = 0
+
+    def commit(self) -> None:
+        self.commits += 1
+        self._conn.commit()  # type: ignore[attr-defined]
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._conn, name)
+
+
+def test_put_many_commits_once_regardless_of_event_count(store: TraceStore) -> None:
+    """A whole trace file is one transaction — not one fsync per span."""
+    spy = _CountingConnection(store._conn)
+    store._conn = spy  # type: ignore[assignment]
+    store.put_many([_event("a"), _event("b"), _event("c"), _event("d")])
+    assert spy.commits == 1
+    assert store.count() == 4
+
+
+def test_put_many_is_idempotent_on_repeated_id(store: TraceStore) -> None:
+    """Re-ingesting a file (watch replay) must not double-count in the batch path."""
+    store.put_many([_event("a"), _event("b")])
+    store.put_many([_event("a"), _event("b")])
+    assert store.count() == 2
+
+
 def test_put_is_idempotent_on_same_id(store: TraceStore) -> None:
     """Re-ingesting the same span (e.g., watch replay) must not double-count."""
     store.put(_event("evt-1"))

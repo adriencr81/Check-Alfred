@@ -10,7 +10,7 @@ docs/adr/0013-byoa-bring-your-own-agent-plan.md.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
@@ -60,6 +60,23 @@ def test_instrumented_loop_trace_ingests(tmp_path: Path) -> None:
         assert event.end_time <= task.end_time
         if event is not task:
             assert event.parent_span_id == task.event_id
+
+
+def test_flush_twice_in_same_second_writes_distinct_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two flushes within one second must not clobber each other's trace file."""
+    frozen = datetime(2026, 8, 30, 12, 0, 0, tzinfo=UTC)
+    monkeypatch.setattr("alfred.instrument.tracer._now", lambda: frozen)
+
+    tracer = AgentTracer(agent=AGENT, traces_dir=tmp_path)
+    _toy_run(tracer)
+    first = tracer.flush()
+    second = tracer.flush()
+
+    assert first != second
+    assert first.exists() and second.exists()
+    assert len(list(tmp_path.glob("*.json"))) == 2
 
 
 def test_tool_arguments_flattened() -> None:
