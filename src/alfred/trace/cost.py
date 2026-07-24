@@ -9,6 +9,8 @@ cost line always agree to the cent.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from alfred.trace.model import TraceEvent
 
 _COST_ATTR = "gen_ai.usage.cost_eur"
@@ -46,6 +48,16 @@ _PRICING_EUR_PER_1K_TOKENS: dict[str, tuple[float, float]] = {
     "gemini-3-flash-preview": (0.0005, 0.003),
     "gemini-3.1-flash-lite": (0.00025, 0.0015),
 }
+
+
+def contributing_costs(events: Iterable[TraceEvent]) -> list[tuple[TraceEvent, float]]:
+    """Each event with a positive EUR cost, paired with that cost.
+
+    The single definition of "what contributes to spend", shared by the report
+    cost line and the engine's budget checks so the displayed cost and the
+    budget deviation can never disagree on which events count.
+    """
+    return [(event, cost) for event in events if (cost := event_cost_eur(event)) > 0.0]
 
 
 def event_cost_eur(event: TraceEvent) -> float:

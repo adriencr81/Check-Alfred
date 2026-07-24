@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
 from alfred.mandate.model import Deviation, DeviationType, ForbiddenRule, Mandate, MandateError
-from alfred.trace.cost import event_cost_eur
+from alfred.trace.cost import contributing_costs
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
 _FORBIDDEN_PATTERN = re.compile(r"^(?P<tool>.+?)_above_(?P<amount>\d+(?:\.\d+)?)_eur$")
@@ -129,8 +129,7 @@ def _check_forbidden_actions(
 
 
 def _check_budget_exceeded(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
-    costs = [(event, event_cost_eur(event)) for event in events]
-    contributing = [(event, cost) for event, cost in costs if cost > 0.0]
+    contributing = contributing_costs(events)
     total = sum(cost for _, cost in contributing)
     if total > mandate.daily_budget_eur:
         return [
@@ -166,9 +165,9 @@ def _budget_used(
 ) -> tuple[float, tuple[EventId, ...]]:
     if not mandate.daily_budget_eur:
         return 0.0, ()
-    costs = [(event, event_cost_eur(event)) for event in events]
-    used = sum(cost for _, cost in costs) / mandate.daily_budget_eur
-    return used, tuple(event.event_id for event, cost in costs if cost > 0.0)
+    contributing = contributing_costs(events)
+    used = sum(cost for _, cost in contributing) / mandate.daily_budget_eur
+    return used, tuple(event.event_id for event, _ in contributing)
 
 
 # Dispatch table for `escalate_when` metrics. It is the single source of truth:

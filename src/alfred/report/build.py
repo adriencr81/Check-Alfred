@@ -16,7 +16,7 @@ from datetime import date
 from alfred.mandate.engine import evaluate
 from alfred.mandate.model import Deviation, Mandate
 from alfred.report.model import Baseline, Digest, Line, LineKind
-from alfred.trace.cost import event_cost_eur
+from alfred.trace.cost import contributing_costs
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
 _ESCALATED_ATTR = "alfred.escalated"
@@ -44,8 +44,7 @@ def _tasks_completed_line(events: Sequence[TraceEvent]) -> Line | None:
 
 
 def _cost_line(events: Sequence[TraceEvent]) -> Line | None:
-    contributing = [(event, event_cost_eur(event)) for event in events]
-    contributing = [(event, cost) for event, cost in contributing if cost > 0.0]
+    contributing = contributing_costs(events)
     if not contributing:
         return None
     total = sum(cost for _, cost in contributing)
