@@ -9,16 +9,23 @@ of a new dependency, mandate scaffold reuse via `dump_mandate`).
 from __future__ import annotations
 
 import json
+import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 from alfred.mandate.model import Mandate
 from alfred.mandate.yaml_io import dump_mandate
+from alfred.narrate.llm import LLMClient, OpenAICompatibleClient
 
 _MANDATE_FILENAME = "mandate.yaml"
 _CONFIG_RELATIVE_PATH = Path(".alfred") / "config.toml"
 _DEFAULT_TRACE_DB_RELATIVE_PATH = ".alfred/trace.db"
+
+# The narration API key is read from the environment, never written to disk or
+# passed as a CLI flag — only the non-secret endpoint (base URL + model) lives
+# in config.toml. See `build_llm_client` and docs/adr/0007.
+LLM_API_KEY_ENV = "ALFRED_LLM_API_KEY"
 
 
 class ConfigError(Exception):
@@ -30,6 +37,8 @@ class AlfredConfig:
     mandate_path: Path
     trace_db_path: Path
     slack_webhook_url: str | None = None
+    llm_base_url: str | None = None
+    llm_model: str | None = None
 
 
 def _scaffold_mandate(agent: str) -> Mandate:
@@ -65,14 +74,22 @@ def _dump_toml(data: dict[str, str]) -> str:
     return "".join(f"{key} = {json.dumps(value)}\n" for key, value in data.items())
 
 
-def init_project(directory: Path | str, agent: str, slack_webhook: str | None = None) -> None:
+def init_project(
+    directory: Path | str,
+    agent: str,
+    slack_webhook: str | None = None,
+    llm_base_url: str | None = None,
+    llm_model: str | None = None,
+) -> None:
     """Scaffold a new Alfred project: `mandate.yaml` + `.alfred/config.toml`.
 
     When `slack_webhook` is given it is validated and written as
     `slack_webhook_url` so `alfred watch` posts the digest to Slack with no
-    hand-editing of the config. Raises `ConfigError` if either file already
-    exists — `init` never silently overwrites an existing project — or if the
-    webhook is not an https:// URL.
+    hand-editing of the config. `llm_base_url` / `llm_model`, when given, are
+    written as the narration endpoint read back by `alfred watch --narrate`
+    (the API key stays in env `ALFRED_LLM_API_KEY`, never on disk). Raises
+    `ConfigError` if either file already exists — `init` never silently
+    overwrites an existing project — or if the webhook is not an https:// URL.
     """
     root = Path(directory)
     mandate_path = root / _MANDATE_FILENAME
@@ -88,6 +105,10 @@ def init_project(directory: Path | str, agent: str, slack_webhook: str | None = 
     }
     if slack_webhook is not None:
         config_values["slack_webhook_url"] = _validate_webhook(slack_webhook)
+    if llm_base_url is not None:
+        config_values["llm_base_url"] = llm_base_url
+    if llm_model is not None:
+        config_values["llm_model"] = llm_model
 
     root.mkdir(parents=True, exist_ok=True)
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -119,8 +140,28 @@ def load_config(directory: Path | str) -> AlfredConfig:
         raise ConfigError(f"config at {config_path} is missing required key {exc}") from exc
 
     webhook = raw.get("slack_webhook_url")
+    llm_base_url = raw.get("llm_base_url")
+    llm_model = raw.get("llm_model")
     return AlfredConfig(
         mandate_path=mandate_path,
         trace_db_path=trace_db_path,
         slack_webhook_url=str(webhook) if webhook else None,
+        llm_base_url=str(llm_base_url) if llm_base_url else None,
+        llm_model=str(llm_model) if llm_model else None,
+    )
+
+
+def build_llm_client(config: AlfredConfig) -> LLMClient | None:
+    """Build the narration LLM client from config + env, or None if unconfigured.
+
+    Returns a client only when the endpoint (`llm_base_url` + `llm_model`, from
+    `.alfred/config.toml`) and the API key (env `ALFRED_LLM_API_KEY`, never
+    written to disk) are all present. A missing piece yields None so the caller
+    can fail loudly with a precise message rather than half-configure narration.
+    """
+    api_key = os.environ.get(LLM_API_KEY_ENV)
+    if not (config.llm_base_url and config.llm_model and api_key):
+        return None
+    return OpenAICompatibleClient(
+        base_url=config.llm_base_url, api_key=api_key, model=config.llm_model
     )

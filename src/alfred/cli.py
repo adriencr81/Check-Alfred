@@ -14,13 +14,15 @@ from collections.abc import Callable
 from pathlib import Path
 
 from alfred import __version__
-from alfred.config import AlfredConfig, ConfigError, init_project, load_config
+from alfred.config import AlfredConfig, ConfigError, build_llm_client, init_project, load_config
 from alfred.deliver import slack, stdout
 from alfred.demo import build_demo_payload, demo_mandate
 from alfred.mandate.bootstrap import suggest_mandate
 from alfred.mandate.lint import Severity, lint_mandate
 from alfred.mandate.model import MandateError
 from alfred.mandate.yaml_io import dump_mandate, load_mandate
+from alfred.narrate.llm import LLMClient, narrate
+from alfred.narrate.render import render_text
 from alfred.report.build import build_digest
 from alfred.report.html import render_html
 from alfred.report.model import Digest
@@ -30,10 +32,25 @@ from alfred.trace.model import TraceEvent
 from alfred.trace.store import TraceStore
 from alfred.watch import build_digests, watch_loop, watch_once
 
+# Shown when `--narrate` is requested but no LLM endpoint resolves (missing
+# config keys or the API-key env var). Fail loudly rather than fall back to the
+# raw digest — the user asked for narration.
+_NARRATE_UNCONFIGURED = (
+    "alfred: --narrate needs an LLM endpoint — set llm_base_url and llm_model in "
+    ".alfred/config.toml (or via `alfred init --llm-base-url URL --llm-model NAME`) "
+    "and export ALFRED_LLM_API_KEY."
+)
+
 
 def _cmd_init(args: argparse.Namespace) -> int:
     try:
-        init_project(args.directory, agent=args.agent, slack_webhook=args.slack_webhook)
+        init_project(
+            args.directory,
+            agent=args.agent,
+            slack_webhook=args.slack_webhook,
+            llm_base_url=args.llm_base_url,
+            llm_model=args.llm_model,
+        )
     except ConfigError as exc:
         print(f"alfred init: {exc}", file=sys.stderr)
         return 1
@@ -41,19 +58,51 @@ def _cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
-def _deliver(digests: list[Digest], config: AlfredConfig, *, alerts: bool = False) -> None:
+def _resolve_narrate_client(
+    config: AlfredConfig, *, enabled: bool
+) -> tuple[LLMClient | None, bool]:
+    """Resolve the narration client for a command that accepts `--narrate`.
+
+    Returns `(client, ok)`: `(None, True)` when `--narrate` is off; `(None,
+    False)` — after printing the shared guidance — when it is on but no endpoint
+    resolves, so the caller just `return 1`. The single source of the fail-loud
+    behavior shared by `watch` and `report`.
+    """
+    if not enabled:
+        return None, True
+    client = build_llm_client(config)
+    if client is None:
+        print(_NARRATE_UNCONFIGURED, file=sys.stderr)
+        return None, False
+    return client, True
+
+
+def _deliver(
+    digests: list[Digest],
+    config: AlfredConfig,
+    *,
+    alerts: bool = False,
+    narrate_client: LLMClient | None = None,
+) -> None:
     """Deliver each digest to stdout and, if configured, to Slack.
 
     Shared by the single-pass and `--loop` paths. When empty (no new trace
     files) it prints one notice; in loop mode that keeps each idle pass quiet
     but visible. With `alerts` set, a digest that carries deviations also
-    triggers an immediate Slack alert (ADR 0017) alongside the digest.
+    triggers an immediate Slack alert (ADR 0017) alongside the digest. With
+    `narrate_client` set, stdout gets the verified LLM prose (`narrate` →
+    `render_text`) instead of the raw digest; a `NarrateError` — endpoint down
+    or a hallucinated citation — propagates and fails the run rather than
+    silently degrading (PLAN D5). Slack keeps the raw Block Kit digest.
     """
     if not digests:
         print("alfred watch: no new trace files.")
         return
     for digest in digests:
-        stdout.deliver(digest)
+        if narrate_client is not None:
+            print(render_text(narrate(digest, narrate_client)))
+        else:
+            stdout.deliver(digest)
         if config.slack_webhook_url:
             slack.send(digest, config.slack_webhook_url)
             if alerts and digest.deviations:
@@ -76,6 +125,10 @@ def _cmd_watch(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
+    narrate_client, ok = _resolve_narrate_client(config, enabled=args.narrate)
+    if not ok:
+        return 1
+
     traces_dir = Path(args.traces_dir)
     config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
     store = TraceStore(config.trace_db_path)
@@ -86,12 +139,14 @@ def _cmd_watch(args: argparse.Namespace) -> int:
                 traces_dir,
                 mandate,
                 store,
-                lambda digests: _deliver(digests, config, alerts=args.alerts),
+                lambda digests: _deliver(
+                    digests, config, alerts=args.alerts, narrate_client=narrate_client
+                ),
                 interval_s=args.interval,
             )
         else:
             digests = watch_once(project_dir, traces_dir, mandate, store)
-            _deliver(digests, config, alerts=args.alerts)
+            _deliver(digests, config, alerts=args.alerts, narrate_client=narrate_client)
     except KeyboardInterrupt:
         print("\nalfred watch: stopped.")
     finally:
@@ -132,6 +187,10 @@ def _cmd_report(args: argparse.Namespace) -> int:
         print(f"alfred report: {exc}", file=sys.stderr)
         return 1
 
+    narrate_client, ok = _resolve_narrate_client(config, enabled=args.narrate)
+    if not ok:
+        return 1
+
     traces_dir = Path(args.traces_dir)
     try:
         events = _read_trace_events(traces_dir)
@@ -159,8 +218,13 @@ def _cmd_report(args: argparse.Namespace) -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     for digest in digests:
+        narrative = (
+            tuple(sentence.text for sentence in narrate(digest, narrate_client).sentences)
+            if narrate_client is not None
+            else ()
+        )
         path = out_dir / f"alfred-{_slug(digest.agent)}-{digest.date.isoformat()}.html"
-        path.write_text(render_html(digest), encoding="utf-8")
+        path.write_text(render_html(digest, narrative=narrative), encoding="utf-8")
         print(f"alfred report: wrote {path}")
     return 0
 
@@ -248,6 +312,19 @@ def main(argv: list[str] | None = None) -> int:
         metavar="URL",
         help="Slack incoming webhook (https://…); written to config so `watch` posts the digest",
     )
+    init_parser.add_argument(
+        "--llm-base-url",
+        default=None,
+        metavar="URL",
+        help="OpenAI-compatible base URL for `--narrate` (e.g. https://api.openai.com/v1); "
+        "written to config. The API key is read from env ALFRED_LLM_API_KEY, never stored.",
+    )
+    init_parser.add_argument(
+        "--llm-model",
+        default=None,
+        metavar="NAME",
+        help="model name for `--narrate` (e.g. gpt-4o-mini); written to config",
+    )
     init_parser.set_defaults(func=_cmd_init)
 
     watch_parser = subparsers.add_parser(
@@ -273,6 +350,13 @@ def main(argv: list[str] | None = None) -> int:
         help="also push an immediate Slack alert whenever a pass finds a deviation "
         "(needs a configured webhook; pair with --loop for near real-time)",
     )
+    watch_parser.add_argument(
+        "--narrate",
+        action="store_true",
+        help="rewrite the stdout digest as verified LLM prose (needs an LLM endpoint in "
+        "config + ALFRED_LLM_API_KEY; every sentence's citations are checked against the "
+        "computed sources)",
+    )
     watch_parser.set_defaults(func=_cmd_watch)
 
     report_parser = subparsers.add_parser(
@@ -290,6 +374,12 @@ def main(argv: list[str] | None = None) -> int:
         default=".",
         metavar="DIR",
         help="output directory for alfred-<agent>-<date>.html files (default: current dir)",
+    )
+    report_parser.add_argument(
+        "--narrate",
+        action="store_true",
+        help="prepend a verified LLM prose summary to each report (needs an LLM endpoint in "
+        "config + ALFRED_LLM_API_KEY; citations are checked against the computed sources)",
     )
     report_parser.set_defaults(func=_cmd_report)
 

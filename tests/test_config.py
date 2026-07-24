@@ -10,8 +10,15 @@ from pathlib import Path
 
 import pytest
 
-from alfred.config import ConfigError, init_project, load_config
+from alfred.config import (
+    LLM_API_KEY_ENV,
+    ConfigError,
+    build_llm_client,
+    init_project,
+    load_config,
+)
 from alfred.mandate.yaml_io import load_mandate
+from alfred.narrate.llm import OpenAICompatibleClient
 
 
 def test_init_creates_config(tmp_path: Path) -> None:
@@ -80,3 +87,57 @@ def test_load_config_raises_on_invalid_toml(tmp_path: Path) -> None:
     (config_dir / "config.toml").write_text("not = valid = toml\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="invalid config TOML"):
         load_config(tmp_path)
+
+
+def test_init_writes_and_load_reads_llm_endpoint(tmp_path: Path) -> None:
+    init_project(
+        tmp_path,
+        agent="refund-bot-v3",
+        llm_base_url="https://api.example.com/v1",
+        llm_model="gpt-4o-mini",
+    )
+    config = load_config(tmp_path)
+    assert config.llm_base_url == "https://api.example.com/v1"
+    assert config.llm_model == "gpt-4o-mini"
+
+
+def test_load_config_llm_endpoint_absent_is_none(tmp_path: Path) -> None:
+    init_project(tmp_path, agent="refund-bot-v3")
+    config = load_config(tmp_path)
+    assert config.llm_base_url is None
+    assert config.llm_model is None
+
+
+def test_build_llm_client_none_when_endpoint_unconfigured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(LLM_API_KEY_ENV, "secret")  # key present, endpoint absent
+    init_project(tmp_path, agent="refund-bot-v3")
+    assert build_llm_client(load_config(tmp_path)) is None
+
+
+def test_build_llm_client_none_without_api_key_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(LLM_API_KEY_ENV, raising=False)  # endpoint present, key absent
+    init_project(
+        tmp_path, agent="refund-bot-v3", llm_base_url="https://api.example.com/v1", llm_model="m"
+    )
+    assert build_llm_client(load_config(tmp_path)) is None
+
+
+def test_build_llm_client_builds_client_when_fully_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(LLM_API_KEY_ENV, "secret")
+    init_project(
+        tmp_path,
+        agent="refund-bot-v3",
+        llm_base_url="https://api.example.com/v1",
+        llm_model="gpt-4o-mini",
+    )
+    client = build_llm_client(load_config(tmp_path))
+    assert isinstance(client, OpenAICompatibleClient)
+    assert client.base_url == "https://api.example.com/v1"
+    assert client.model == "gpt-4o-mini"
+    assert client.api_key == "secret"

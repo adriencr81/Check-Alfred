@@ -36,6 +36,16 @@ def _digest() -> Digest:
     )
 
 
+def test_render_html_includes_narrative_when_given() -> None:
+    html = render_html(_digest(), narrative=("Completed 47 tasks today. [evt:a1c, a1d]",))
+    assert 'class="narrative"' in html
+    assert "Completed 47 tasks today. [evt:a1c, a1d]" in html
+
+
+def test_render_html_has_no_narrative_section_by_default() -> None:
+    assert 'class="narrative"' not in render_html(_digest())
+
+
 def test_render_html_is_a_self_contained_document() -> None:
     html = render_html(_digest())
     assert "<!doctype html>" in html.lower()

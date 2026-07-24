@@ -50,6 +50,8 @@ ul.evidence { list-style: none; padding: 0; margin: 0; }
 ul.evidence li { padding: 0.25rem 0; border-top: 1px solid #eaeef2; }
 ul.evidence li:first-child { border-top: 0; }
 ul.evidence code { font-size: 0.85em; word-break: break-all; }
+section.narrative { margin: 0 0 1.25rem; }
+section.narrative p { margin: 0 0 0.5rem; }
 footer { color: #57606a; font-size: 0.8em; margin-top: 1.5rem;
          border-top: 1px solid #eaeef2; padding-top: 0.75rem; }
 """
@@ -98,12 +100,22 @@ def _deviation_item(deviation: Deviation, anchors: dict[EventId, str]) -> str:
     )
 
 
-def render_html(digest: Digest) -> str:
-    """Render `digest` as one self-contained HTML document (see module docstring)."""
+def render_html(digest: Digest, narrative: tuple[str, ...] = ()) -> str:
+    """Render `digest` as one self-contained HTML document (see module docstring).
+
+    When `narrative` is given (the verified prose sentences from
+    `alfred.narrate`, plain text each carrying its own `[evt:…]` citation), it
+    is rendered as an intro paragraph block above the metric table. Empty (the
+    default) keeps the plain computed report — the layer stays decoupled from
+    `narrate`, receiving strings, not `Sentence`s.
+    """
     anchors = _anchor_map(digest)
     title = f"Alfred · {escape(digest.agent)} · {digest.date.isoformat()}"
 
     sections: list[str] = [f"<h1>{title}</h1>"]
+    if narrative:
+        paragraphs = "\n".join(f"<p>{escape(text)}</p>" for text in narrative)
+        sections.append(f'<section class="narrative">{paragraphs}</section>')
     if digest.lines:
         rows = "\n".join(_line_row(line, anchors) for line in digest.lines)
         sections.append(f"<table>{rows}</table>")
