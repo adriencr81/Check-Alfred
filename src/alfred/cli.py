@@ -28,7 +28,7 @@ from alfred.report.html import render_html
 from alfred.report.model import Digest
 from alfred.schedule import ScheduleError, build_cron_line
 from alfred.trace.ingest import ingest_otlp_file, ingest_otlp_json
-from alfred.trace.model import TraceEvent
+from alfred.trace.model import TraceEvent, TraceIngestionError
 from alfred.trace.store import TraceStore
 from alfred.watch import build_digests, watch_loop, watch_once
 
@@ -130,6 +130,14 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         return 1
 
     traces_dir = Path(args.traces_dir)
+    if not traces_dir.is_dir():
+        print(
+            f"alfred watch: traces directory not found: {traces_dir} — "
+            "check the path (this is where your agent writes its *.json trace files).",
+            file=sys.stderr,
+        )
+        return 1
+
     config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
     store = TraceStore(config.trace_db_path)
     try:
@@ -149,6 +157,9 @@ def _cmd_watch(args: argparse.Namespace) -> int:
             _deliver(digests, config, alerts=args.alerts, narrate_client=narrate_client)
     except KeyboardInterrupt:
         print("\nalfred watch: stopped.")
+    except (TraceIngestionError, OSError) as exc:
+        print(f"alfred watch: cannot read traces: {exc}", file=sys.stderr)
+        return 1
     finally:
         store.close()
     return 0
@@ -194,7 +205,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
     traces_dir = Path(args.traces_dir)
     try:
         events = _read_trace_events(traces_dir)
-    except OSError as exc:
+    except (TraceIngestionError, OSError) as exc:
         print(f"alfred report: cannot read traces: {exc}", file=sys.stderr)
         return 1
     if not events:
@@ -271,7 +282,7 @@ def _cmd_mandate_init(args: argparse.Namespace) -> int:
     traces_dir = Path(args.from_traces)
     try:
         events = _read_trace_events(traces_dir)
-    except OSError as exc:
+    except (TraceIngestionError, OSError) as exc:
         print(f"alfred mandate init: cannot read traces: {exc}", file=sys.stderr)
         return 1
     if not events:

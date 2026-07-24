@@ -150,7 +150,8 @@ def ingest_otlp_file(path: Path) -> list[TraceEvent]:
     `agent → Collector → alfred watch` bridge works), or several concatenated.
     A malformed value raises `TraceIngestionError` naming the line it starts on.
     """
-    text = Path(path).read_text(encoding="utf-8")
+    path = Path(path)
+    text = path.read_text(encoding="utf-8")
     decoder = json.JSONDecoder()
     events: list[TraceEvent] = []
     index, length = 0, len(text)
@@ -158,8 +159,13 @@ def ingest_otlp_file(path: Path) -> list[TraceEvent]:
         try:
             payload, index = decoder.raw_decode(text, index)
         except json.JSONDecodeError as exc:
-            raise TraceIngestionError(f"Malformed OTLP JSON at line {exc.lineno}: {exc}") from exc
-        events.extend(ingest_otlp_json(payload))
+            raise TraceIngestionError(
+                f"Malformed OTLP JSON in {path} at line {exc.lineno}: {exc}"
+            ) from exc
+        try:
+            events.extend(ingest_otlp_json(payload))
+        except TraceIngestionError as exc:
+            raise TraceIngestionError(f"{path}: {exc}") from exc
     return events
 
 

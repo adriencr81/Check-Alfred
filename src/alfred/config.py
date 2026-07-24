@@ -41,6 +41,22 @@ class AlfredConfig:
     llm_model: str | None = None
 
 
+# Prepended to the scaffolded mandate.yaml so a first-time user isn't left with
+# a bare file of empty lists. `allowed_tools: []` means "no tool is allowed", so
+# every tool the agent calls is flagged as a deviation until it's filled in —
+# the header says so, and points at the zero-effort way to seed it from traces.
+_SCAFFOLD_HEADER = (
+    "# Alfred mandate — what your agent MAY do. Edit before you rely on it.\n"
+    "#\n"
+    "# allowed_tools is empty, which means EVERY tool call is flagged as a\n"
+    "# deviation. List the tools the agent is allowed to use, or seed the whole\n"
+    "# file from real traces:  alfred mandate init --from-traces traces/ > mandate.yaml\n"
+    "#\n"
+    "# daily_budget_eur, forbidden_actions and escalate_when are policy YOU\n"
+    "# declare — see the examples in examples/mandates/ and docs/integrate.md.\n"
+)
+
+
 def _scaffold_mandate(agent: str) -> Mandate:
     return Mandate(
         agent=agent,
@@ -112,7 +128,9 @@ def init_project(
 
     root.mkdir(parents=True, exist_ok=True)
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    mandate_path.write_text(dump_mandate(_scaffold_mandate(agent)), encoding="utf-8")
+    mandate_path.write_text(
+        _SCAFFOLD_HEADER + dump_mandate(_scaffold_mandate(agent)), encoding="utf-8"
+    )
     config_path.write_text(_dump_toml(config_values), encoding="utf-8")
 
 

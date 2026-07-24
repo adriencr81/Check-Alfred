@@ -204,9 +204,20 @@ def test_tool_call_arguments_json_does_not_overwrite_native() -> None:
 
 
 def test_malformed_ndjson_raises(tmp_path: Path) -> None:
-    """An invalid NDJSON line fails loudly, naming the line number."""
+    """An invalid NDJSON line fails loudly, naming the line number and file."""
     good = json.dumps(_payload(_span("s", "invoke_agent")))
     path = tmp_path / "bad.ndjson"
     path.write_text(good + "\n{ not json\n", encoding="utf-8")
     with pytest.raises(TraceIngestionError, match="line 2"):
+        ingest_otlp_file(path)
+    with pytest.raises(TraceIngestionError, match=r"bad\.ndjson"):
+        ingest_otlp_file(path)
+
+
+def test_wrong_schema_file_error_names_the_file(tmp_path: Path) -> None:
+    """Valid JSON that isn't an OTLP payload fails with the file in the message,
+    so a user pointing at a folder of non-OTLP JSON knows which file is wrong."""
+    path = tmp_path / "not-otlp.json"
+    path.write_text('{"foo": "bar"}', encoding="utf-8")
+    with pytest.raises(TraceIngestionError, match=r"not-otlp\.json"):
         ingest_otlp_file(path)

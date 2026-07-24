@@ -267,6 +267,36 @@ def test_cli_watch_reports_missing_project(
     assert "no Alfred project found" in capsys.readouterr().err
 
 
+def test_cli_watch_reports_missing_traces_dir(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A typo'd traces path must fail loudly, not silently look like "nothing new".
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    exit_code = main(["watch", str(tmp_path / "typo"), "--project", str(project_dir)])
+    assert exit_code == 1
+    assert "not found" in capsys.readouterr().err
+
+
+def test_cli_watch_reports_malformed_trace_without_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A non-OTLP or half-written JSON file must yield a clean one-line error
+    # naming the file, not a Python traceback.
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    (traces_dir / "broken.json").write_text("{ not valid json", encoding="utf-8")
+
+    exit_code = main(["watch", str(traces_dir), "--project", str(project_dir)])
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "cannot read traces" in err
+    assert "broken.json" in err  # the offending file is named
+    assert "Traceback" not in err
+
+
 def test_cli_report_writes_html_file(tmp_path: Path, otlp_sample_path: Path) -> None:
     project_dir = tmp_path / "project"
     main(["init", str(project_dir), "--agent", "refund-bot-v3"])
@@ -372,6 +402,25 @@ def test_cli_report_reports_empty_dir(
     assert "no trace events" in capsys.readouterr().err
 
 
+def test_cli_report_reports_malformed_trace_without_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    (traces_dir / "broken.json").write_text('{"foo": "bar"}', encoding="utf-8")
+
+    exit_code = main(
+        ["report", str(traces_dir), "--project", str(project_dir), "--html", "--out", str(tmp_path)]
+    )
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "cannot read traces" in err
+    assert "broken.json" in err
+    assert "Traceback" not in err
+
+
 def test_cli_report_reports_missing_project(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -470,6 +519,33 @@ def test_cli_mandate_init_from_traces_reports_empty_dir(
     exit_code = main(["mandate", "init", "--from-traces", str(empty)])
     assert exit_code == 1
     assert "no trace events" in capsys.readouterr().err
+
+
+def test_cli_mandate_init_reports_malformed_trace_without_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    (traces_dir / "broken.json").write_text("{ not valid json", encoding="utf-8")
+
+    exit_code = main(["mandate", "init", "--from-traces", str(traces_dir)])
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "cannot read traces" in err
+    assert "broken.json" in err
+    assert "Traceback" not in err
+
+
+def test_cli_init_scaffold_mandate_carries_guidance(tmp_path: Path) -> None:
+    # The scaffolded mandate must warn that empty allowed_tools flags every tool
+    # and point at the seed-from-traces path, and stay a loadable mandate.
+    from alfred.mandate.yaml_io import load_mandate
+
+    main(["init", str(tmp_path), "--agent", "refund-bot-v3"])
+    text = (tmp_path / "mandate.yaml").read_text(encoding="utf-8")
+    assert "allowed_tools is empty" in text
+    assert "--from-traces" in text
+    assert load_mandate(tmp_path / "mandate.yaml").agent == "refund-bot-v3"
 
 
 def test_cli_mandate_without_subcommand_prints_help(
