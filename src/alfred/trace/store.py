@@ -43,6 +43,26 @@ def _row_to_event(row: sqlite3.Row) -> TraceEvent:
     )
 
 
+_INSERT_SQL = """
+    INSERT OR REPLACE INTO trace_events
+        (event_id, trace_id, parent_span_id, kind, name, start_time, end_time, attributes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+
+def _event_to_row(event: TraceEvent) -> tuple[str, str, str | None, str, str, str, str, str]:
+    return (
+        event.event_id,
+        event.trace_id,
+        event.parent_span_id,
+        event.kind.value,
+        event.name,
+        event.start_time.isoformat(),
+        event.end_time.isoformat(),
+        json.dumps(event.attributes),
+    )
+
+
 class TraceStore:
     """SQLite-backed store, indexed by event_id and trace_id.
 
@@ -67,28 +87,18 @@ class TraceStore:
         overwrites the prior anchor (accepted for v0.1 — see
         docs/adr/0002-brique1-skeleton-fixes.md).
         """
-        self._conn.execute(
-            """
-            INSERT OR REPLACE INTO trace_events
-                (event_id, trace_id, parent_span_id, kind, name, start_time, end_time, attributes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                event.event_id,
-                event.trace_id,
-                event.parent_span_id,
-                event.kind.value,
-                event.name,
-                event.start_time.isoformat(),
-                event.end_time.isoformat(),
-                json.dumps(event.attributes),
-            ),
-        )
+        self._conn.execute(_INSERT_SQL, _event_to_row(event))
         self._conn.commit()
 
     def put_many(self, events: Iterable[TraceEvent]) -> None:
-        for event in events:
-            self.put(event)
+        """Insert every event in one `executemany` and a single commit.
+
+        A whole trace file is one transaction — no per-event `fsync` — and the
+        batch is atomic: a failure rolls back the pass rather than leaving a
+        partial ingest. Same `INSERT OR REPLACE` idempotence as `put`.
+        """
+        self._conn.executemany(_INSERT_SQL, [_event_to_row(event) for event in events])
+        self._conn.commit()
 
     def get(self, event_id: EventId) -> TraceEvent | None:
         row = self._conn.execute(
