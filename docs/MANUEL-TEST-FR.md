@@ -5,6 +5,8 @@
 > où **chaque ligne est ancrée à un événement de trace réel** (`[evt:…]`).
 > Aucune ligne n'est auto-déclarée par l'agent ni inventée par un LLM.
 
+**Dépôt GitHub :** https://github.com/adriencr81/check-alfred
+
 ---
 
 ## 0. Ce que fait Alfred (en une phrase)
