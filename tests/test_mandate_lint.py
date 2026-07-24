@@ -51,6 +51,38 @@ def test_lint_nonpositive_budget_is_warning(tmp_path: Path) -> None:
     assert "daily_budget_eur" in findings[0].message
 
 
+def test_lint_redact_shadowing_forbidden_arg_warns(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        "agent: sql-analyst\n"
+        "allowed_tools: [execute_sql]\n"
+        "daily_budget_eur: 5.0\n"
+        "forbidden_actions:\n"
+        "  - tool: execute_sql\n"
+        "    when: args.rows_affected > 1000\n"
+        "escalate_when: []\n"
+        "redact: [rows_affected]\n",
+    )
+    findings = lint_mandate(path)
+    assert [f.severity for f in findings] == [Severity.WARNING]
+    assert "rows_affected" in findings[0].message
+
+
+def test_lint_redact_without_shadow_is_clean(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        "agent: sql-analyst\n"
+        "allowed_tools: [execute_sql]\n"
+        "daily_budget_eur: 5.0\n"
+        "forbidden_actions:\n"
+        "  - tool: execute_sql\n"
+        "    when: args.rows_affected > 1000\n"
+        "escalate_when: []\n"
+        "redact: [customer_email]\n",
+    )
+    assert lint_mandate(path) == []
+
+
 def test_lint_malformed_mandate_is_error(tmp_path: Path) -> None:
     path = _write(tmp_path, "agent: [unterminated\n")
     findings = lint_mandate(path)

@@ -13,7 +13,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from alfred.mandate.engine import KNOWN_ESCALATION_METRICS
-from alfred.mandate.model import Mandate, MandateError
+from alfred.mandate.model import ForbiddenRule, Mandate, MandateError
 from alfred.mandate.yaml_io import load_mandate
 
 
@@ -65,13 +65,35 @@ def _check_budget(mandate: Mandate) -> list[LintFinding]:
     return []
 
 
+def _check_redact_shadows_policy(mandate: Mandate) -> list[LintFinding]:
+    """Warn when a redacted field is also a structured forbidden rule's argument.
+
+    Masking a value replaces it with a string hash, so a numeric threshold rule
+    on that argument (`_rule_matches` only fires on int/float) silently stops
+    firing. Redacting a policy signal is a footgun, not an error — the deployer
+    may intend it — so this is a warning, surfaced rather than left silent.
+    """
+    findings: list[LintFinding] = []
+    for action in mandate.forbidden_actions:
+        if isinstance(action, ForbiddenRule) and action.arg in mandate.redact:
+            findings.append(
+                LintFinding(
+                    Severity.WARNING,
+                    f"redact lists {action.arg!r}, which forbidden_actions rule "
+                    f"'{action.tool}' checks ({action.when}) — masking it disables that check",
+                )
+            )
+    return findings
+
+
 def lint_mandate(path: Path | str) -> list[LintFinding]:
     """Validate a mandate file, returning every finding (empty when clean).
 
     A parse/load failure (malformed YAML, missing key, missing file) is a
     single `error` finding — the mandate cannot be inspected further. A valid
     mandate is then checked semantically: unknown escalation metric (error),
-    empty allowed_tools (warning), non-positive budget (warning).
+    empty allowed_tools (warning), non-positive budget (warning), a redacted
+    field that shadows a forbidden rule's argument (warning).
     """
     try:
         mandate = load_mandate(path)
@@ -84,4 +106,5 @@ def lint_mandate(path: Path | str) -> list[LintFinding]:
         *_check_escalation_metrics(mandate),
         *_check_allowed_tools(mandate),
         *_check_budget(mandate),
+        *_check_redact_shadows_policy(mandate),
     ]

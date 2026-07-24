@@ -46,6 +46,17 @@ escalate_when:
 # progress. Optional; defaults to 3 when omitted.
 loop_threshold: 3
 
+# Attribute values to mask at ingestion, before they ever reach the trace
+# store (ADR 0022). Each name matches a bare tool-argument name
+# (`customer_email` → `tool.arguments.customer_email`) or a full attribute key
+# (e.g. `gen_ai.prompt`). Masked values become a stable `redacted:sha256:…`
+# token, so they never land in SQLite, Slack, the HTML report, or the LLM
+# narration — while `loop_detected` still works on the masked field. Do NOT
+# redact a numeric field a forbidden rule checks (e.g. `amount_eur`); `lint`
+# warns if you do. Uncomment and list your PII fields:
+# redact:
+#   - customer_email
+
 # Conditional obligations. If `when_tool` is called in a trace but
 # `require_tool` never is, a `required_action_missing` deviation is raised,
 # anchored to the `when_tool` event(s). Catches the silent failure of an

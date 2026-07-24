@@ -105,6 +105,7 @@ def _mandate_from_dict(raw: dict[str, Any]) -> Mandate:
                 _parse_required_action(entry) for entry in raw.get("required_actions", [])
             ),
             loop_threshold=int(raw.get("loop_threshold", 3)),
+            redact=frozenset(str(name) for name in raw.get("redact", [])),
         )
     except (TypeError, ValueError) as exc:
         raise MandateError(f"Malformed mandate: {exc}") from exc
@@ -144,4 +145,6 @@ def dump_mandate(mandate: Mandate) -> str:
             {"when_tool": rule.when_tool, "require_tool": rule.require_tool}
             for rule in mandate.required_actions
         ]
+    if mandate.redact:
+        raw["redact"] = sorted(mandate.redact)
     return yaml.safe_dump(raw, sort_keys=False)

@@ -101,6 +101,10 @@ class Mandate:
     # A run of this many identical consecutive tool calls (same tool + same
     # arguments) is read as an agent spinning without progress.
     loop_threshold: int = 3
+    # Attribute values to mask at ingestion, before they reach the trace store
+    # (ADR 0022). Each name matches a bare tool-argument name (`customer_email`
+    # → `tool.arguments.customer_email`) or a full attribute key (`gen_ai.prompt`).
+    redact: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
