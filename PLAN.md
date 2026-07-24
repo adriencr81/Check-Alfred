@@ -719,10 +719,12 @@ avant code, mêmes DoD que §5 (`pytest -q`, `ruff`, `mypy --strict src/` verts)
 | F4 | **Rapport HTML statique partageable** (`alfred report --html`) — fichier autonome, chaque ligne cliquable vers ses events source. | Le digest Slack est éphémère ; un manager veut *forwarder* la preuve navigable. | À cadrer en lecture seule, **délibérément plus pauvre** que l'export « dossier de preuve » payant (v0.4) pour ne pas le cannibaliser. Zéro infra (fichier généré, pas de dashboard web §10). **ADR 0020.** |
 | F5 | **Connecteurs natifs CrewAI + OpenAI Agents SDK** — la recette du connecteur LangGraph (Brique 12) pour les deux autres frameworks dominants. | Le *portail* avant toute expérience : un client ne peut pas brancher son stack sinon. | Roadmapé v0.2 (§6.4). **OpenAI Agents SDK livré (Brique 13, ADR 0021)** ; CrewAI restant. |
 
-**Mention honorable** : redaction PII/secrets avant stockage/envoi (feature de
-confiance pour les secteurs régulés cibles YC — assurance/finance/santé). À
-monter dans le top 5 si la priorité passe de l'adoption communautaire aux
-secteurs régulés.
+**Mention honorable — LIVRÉE (ADR 0022, 2026-07-24)** : redaction PII/secrets
+avant stockage/envoi (feature de confiance pour les secteurs régulés cibles YC
+— assurance/finance/santé). Promue de mention honorable au périmètre livré à la
+préparation d'un usage client réel : champ `redact:` déclaratif dans le mandat,
+redaction à l'ingestion (la valeur brute n'entre jamais dans SQLite), hash
+stable. Voir `docs/adr/0022-pii-redaction.md`.
 
 **Idée en réserve — sortie d'enforcement optionnelle** : sur détection d'une
 déviation, appeler un hook externe (kill switch, révocation de credentials,
