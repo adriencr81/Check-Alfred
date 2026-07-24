@@ -15,8 +15,10 @@ import pytest
 
 from alfred.mandate.model import Mandate
 from alfred.report.model import Digest, LineKind
+from alfred.trace.ingest import ingest_otlp_file
+from alfred.trace.model import TraceEvent
 from alfred.trace.store import TraceStore
-from alfred.watch import watch_loop, watch_once
+from alfred.watch import build_digests, watch_loop, watch_once
 
 
 def _mandate() -> Mandate:
@@ -181,6 +183,42 @@ def test_watch_attaches_rolling_baseline_from_store_history(
     assert last_cost.baseline is not None
     assert last_cost.baseline.mean == pytest.approx(2.0)  # (1+2+3)/3
     assert last_cost.baseline.sample_days == 3
+    assert set(last_cost.baseline.sources) == {"d26", "d27", "d28"}
+
+
+def test_build_digests_reads_baseline_window_in_a_single_query(
+    project_dir: Path, tmp_path: Path
+) -> None:
+    """Every digest day's baseline comes from one store query, not one per day."""
+    directory = tmp_path / "traces"
+    directory.mkdir()
+    _write_cost_trace(directory, date(2026, 8, 26), "d26", 1.0)
+    _write_cost_trace(directory, date(2026, 8, 27), "d27", 2.0)
+    _write_cost_trace(directory, date(2026, 8, 28), "d28", 3.0)
+    _write_cost_trace(directory, date(2026, 8, 29), "d29", 8.0)
+
+    store = TraceStore(project_dir / "trace.db")
+    events = [
+        event for path in sorted(directory.glob("*.json")) for event in ingest_otlp_file(path)
+    ]
+    store.put_many(events)
+
+    calls = 0
+    real_find = store.find_by_date_range
+
+    def counting_find(start: date, end: date) -> list[TraceEvent]:
+        nonlocal calls
+        calls += 1
+        return real_find(start, end)
+
+    store.find_by_date_range = counting_find  # type: ignore[method-assign]
+    digests = build_digests(_mandate(), events, store)
+    store.close()
+
+    assert calls == 1  # four digest days, one baseline-window query
+    last_cost = next(line for line in digests[-1].lines if line.kind is LineKind.COST_EUR)
+    assert last_cost.baseline is not None
+    assert last_cost.baseline.mean == pytest.approx(2.0)  # (1+2+3)/3, unchanged
     assert set(last_cost.baseline.sources) == {"d26", "d27", "d28"}
 
 

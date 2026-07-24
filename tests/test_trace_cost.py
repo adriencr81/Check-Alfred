@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from alfred.trace.cost import event_cost_eur
+from alfred.trace.cost import contributing_costs, event_cost_eur
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
 # (model, rate_in, rate_out) in the table's unit: currency per 1K tokens.
@@ -82,3 +82,29 @@ def test_explicit_cost_still_wins_over_claude_table() -> None:
     event = _llm_event("claude-opus-4-8", input_tokens=1000, output_tokens=500)
     event.attributes["gen_ai.usage.cost_eur"] = 0.99
     assert event_cost_eur(event) == pytest.approx(0.99)
+
+
+def _free_event(event_id: str) -> TraceEvent:
+    """A span with no priced tokens and no explicit cost — contributes 0.0."""
+    return TraceEvent(
+        event_id=EventId(event_id),
+        trace_id="trace-1",
+        parent_span_id=None,
+        kind=SpanKind.TOOL_CALL,
+        name="execute_tool",
+        start_time=datetime(2026, 7, 21, 12, 0, 0, tzinfo=UTC),
+        end_time=datetime(2026, 7, 21, 12, 0, 1, tzinfo=UTC),
+        attributes={"gen_ai.tool.name": "read_order"},
+    )
+
+
+def test_contributing_costs_keeps_only_positive_cost_events() -> None:
+    priced = _llm_event("claude-opus-4-8", input_tokens=1000, output_tokens=500)
+    free = _free_event("t1")
+    contributing = contributing_costs([priced, free])
+    assert [event.event_id for event, _ in contributing] == ["e1"]
+    assert contributing[0][1] == pytest.approx(event_cost_eur(priced))
+
+
+def test_contributing_costs_empty_when_nothing_priced() -> None:
+    assert contributing_costs([_free_event("t1"), _free_event("t2")]) == []

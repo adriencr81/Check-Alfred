@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import time
 from collections import defaultdict
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -57,18 +57,34 @@ def _group_by_day(events: Iterable[TraceEvent]) -> dict[date, list[TraceEvent]]:
     return by_day
 
 
-def _baseline_history(store: TraceStore, day: date) -> list[list[TraceEvent]]:
-    """The rolling baseline window for `day`: the active days in `[day-7, day-1]`.
+def _baseline_windows(
+    store: TraceStore, days: Sequence[date]
+) -> dict[date, list[list[TraceEvent]]]:
+    """The rolling baseline window (F3) for each day in `days`, in one query.
 
-    Reads from the store (which already holds the just-ingested events),
-    grouped by `start_time.date()` and excluding `day` itself. Only active days
-    appear — an empty list means no baseline will be attached (F3, docs/adr/0019).
+    A day's window is its active prior days in `[day-7, day-1]`, grouped by
+    `start_time.date()` — exactly what the per-day query returned before, but
+    the union of every window is `[min-7, max-1]`, so one `find_by_date_range`
+    over that span feeds them all instead of one query per day (whose windows
+    largely overlap). Each day then slices the shared grouping to its own
+    window; only active days appear, so an empty list means no baseline
+    (docs/adr/0019).
     """
-    window = store.find_by_date_range(
-        day - timedelta(days=BASELINE_WINDOW_DAYS), day - timedelta(days=1)
+    if not days:
+        return {}
+    prior = store.find_by_date_range(
+        min(days) - timedelta(days=BASELINE_WINDOW_DAYS), max(days) - timedelta(days=1)
     )
-    by_day = _group_by_day(window)
-    return [by_day[prior] for prior in sorted(by_day)]
+    by_day = _group_by_day(prior)
+    active_days = sorted(by_day)
+    return {
+        day: [
+            by_day[prior_day]
+            for prior_day in active_days
+            if day - timedelta(days=BASELINE_WINDOW_DAYS) <= prior_day <= day - timedelta(days=1)
+        ]
+        for day in days
+    }
 
 
 def build_digests(
@@ -83,10 +99,9 @@ def build_digests(
     `watch`.
     """
     by_day = _group_by_day(events)
-    return [
-        build_digest(mandate, by_day[day], day, history=_baseline_history(store, day))
-        for day in sorted(by_day)
-    ]
+    days = sorted(by_day)
+    windows = _baseline_windows(store, days)
+    return [build_digest(mandate, by_day[day], day, history=windows[day]) for day in days]
 
 
 def watch_once(
