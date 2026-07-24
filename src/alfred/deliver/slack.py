@@ -13,11 +13,10 @@ network calls in the test suite.
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
-from dataclasses import dataclass
 from typing import Any, Protocol
 
+from alfred._http import HttpError, HTTPRequest
+from alfred._http import post as http_post
 from alfred.mandate.model import Deviation
 from alfred.report.model import Digest, Line, LineKind
 from alfred.report.render import LABELS, format_baseline, format_sources, format_value
@@ -130,30 +129,15 @@ def build_alert_payload(digest: Digest) -> dict[str, Any]:
     }
 
 
-@dataclass(frozen=True, slots=True)
-class HTTPRequest:
-    url: str
-    headers: dict[str, str]
-    body: bytes
-    timeout_s: float
-
-
 class Transport(Protocol):
     def __call__(self, request: HTTPRequest) -> None: ...
 
 
 def _urllib_transport(request: HTTPRequest) -> None:
-    if not request.url.startswith(("http://", "https://")):
-        raise DeliverError(f"refusing to post to non-HTTP(S) URL: {request.url!r}")
-    urlreq = urllib.request.Request(  # noqa: S310
-        request.url, data=request.body, headers=request.headers, method="POST"
-    )
     try:
-        urllib.request.urlopen(urlreq, timeout=request.timeout_s)  # noqa: S310
-    except urllib.error.HTTPError as exc:
-        raise DeliverError(f"Slack webhook returned HTTP {exc.code}: {exc.reason}") from exc
-    except urllib.error.URLError as exc:
-        raise DeliverError(f"Slack webhook unreachable: {exc.reason}") from exc
+        http_post(request, label="Slack webhook")
+    except HttpError as exc:
+        raise DeliverError(str(exc)) from exc
 
 
 def _post(
