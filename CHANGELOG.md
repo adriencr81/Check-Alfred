@@ -117,6 +117,26 @@ entries below are the work done so far towards the v0.1 roadmap
 
 ### Added
 
+- `alfred schedule … --github-actions` — a committable GitHub Actions workflow
+  instead of a crontab line, so the daily digest runs where nothing sleeps. The
+  north-star metric counts installs that produce a digest two weeks running,
+  but the crontab line and `watch --loop` both assume a machine that stays up;
+  close the laptop and the habit never forms. Paths stay relative to the
+  repository root (a runner checks out at a path unknown when the file is
+  written) and an absolute one is refused rather than silently rewritten; the
+  Slack webhook comes from the `ALFRED_SLACK_WEBHOOK_URL` repository secret,
+  never the committed file; `.alfred/` is cached between runs so `seen.json`
+  and the baseline window survive, with the eviction trade-off (a cache miss
+  re-posts that day's digest) stated in the generated file rather than hidden.
+  `traces_dir` crosses a YAML scalar and then a shell word and is quoted for
+  both. Falsifiable spec in `tests/test_schedule.py`. See
+  `docs/adr/0027-unattended-daily-digest.md`.
+- `alfred demo` closes by inviting you to share the digest you got, backed by a
+  `show-your-digest` issue template. The package sends nothing home — by
+  design, and it's an argument we make publicly — which leaves self-reporting
+  as the only way to tell an install that ran Alfred from one that only starred
+  it. The template leads with a redaction warning: a digest quotes an agent's
+  real tool names and argument values.
 - PII/secret redaction — a `redact:` list in the mandate masks named attribute
   values (a bare tool-argument name like `customer_email`, or a full attribute
   key like `gen_ai.prompt`) **at ingestion, before the event reaches the trace
