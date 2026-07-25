@@ -604,3 +604,46 @@ def test_cli_no_command_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main([])
     assert exit_code == 0
     assert "usage" in capsys.readouterr().out
+
+
+def test_cli_watch_loop_survives_a_delivery_failure(
+    tmp_path: Path,
+    otlp_sample_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR 0024 decision 7: an outage at Slack must not end the supervision.
+
+    The first pass fails to deliver; the loop must reach a second pass rather
+    than let DeliverError escape and stop `alfred watch`.
+    """
+    from alfred.deliver import slack
+
+    project_dir = tmp_path / "project"
+    url = "https://hooks.slack.com/services/T000/B000/XXX"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3", "--slack-webhook", url])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+
+    def exploding_send(digest: object, webhook_url: str) -> None:
+        raise slack.DeliverError("Slack webhook unreachable: connection refused")
+
+    monkeypatch.setattr(slack, "send", exploding_send)
+
+    passes = 0
+
+    def fake_sleep(_seconds: float) -> None:
+        nonlocal passes
+        passes += 1
+        if passes == 2:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(time, "sleep", fake_sleep)
+    exit_code = main(
+        ["watch", str(traces_dir), "--project", str(project_dir), "--loop", "--interval", "1"]
+    )
+
+    assert exit_code == 0
+    assert passes == 2  # the loop kept going after the failed delivery
+    assert "connection refused" in capsys.readouterr().err

@@ -21,7 +21,7 @@ from alfred.mandate.bootstrap import suggest_mandate
 from alfred.mandate.lint import Severity, lint_mandate
 from alfred.mandate.model import MandateError
 from alfred.mandate.yaml_io import dump_mandate, load_mandate
-from alfred.narrate.llm import LLMClient, narrate
+from alfred.narrate.llm import LLMClient, NarrateError, narrate
 from alfred.narrate.render import render_text
 from alfred.report.build import build_digest
 from alfred.report.html import render_html
@@ -176,9 +176,24 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         _deliver(result.digests, config, alerts=args.alerts, narrate_client=narrate_client)
         _report_quarantine(result.quarantined, project_dir)
 
+    def _handle_in_loop(result: WatchPass) -> None:
+        """Same handling, but a delivery outage must not end the supervision.
+
+        In `--loop` Alfred *is* the running process: letting a Slack or LLM
+        failure propagate stopped the watch until someone noticed (ADR 0024
+        decision 7). A single pass keeps failing loudly — there, cron decides
+        whether to retry.
+        """
+        try:
+            _handle(result)
+        except (slack.DeliverError, NarrateError) as exc:
+            print(f"alfred watch: delivery failed, continuing: {exc}", file=sys.stderr)
+
     try:
         if args.loop:
-            watch_loop(project_dir, traces_dir, mandate, store, _handle, interval_s=interval)
+            watch_loop(
+                project_dir, traces_dir, mandate, store, _handle_in_loop, interval_s=interval
+            )
         else:
             result = watch_once(project_dir, traces_dir, mandate, store)
             quarantined = result.quarantined
