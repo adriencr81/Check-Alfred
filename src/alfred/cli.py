@@ -374,12 +374,26 @@ def _cmd_mandate_init(args: argparse.Namespace) -> int:
     return 0
 
 
+# The package sends nothing home — deliberately, and it is an argument we make
+# publicly. That leaves self-reporting as the only way to learn whether anyone
+# actually ran Alfred, so the demo asks, once, at the end. See ADR 0027
+# decision 9.
+_SHOW_YOUR_DIGEST_URL = (
+    "https://github.com/adriencr81/Check-Alfred/issues/new?template=show_your_digest.md"
+)
+
+
 def _cmd_demo(args: argparse.Namespace) -> int:
     payload = build_demo_payload(args.agent)
     events = ingest_otlp_json(payload)
     mandate = demo_mandate(args.agent)
     digest = build_digest(mandate, events, events[0].start_time.date())
     stdout.deliver(digest)
+    print(
+        f"\nThat digest came from a scripted agent. Point Alfred at a real one —\n"
+        f"every line stays anchored to an event ID, so the proof travels with it.\n"
+        f"Show us what it caught: {_SHOW_YOUR_DIGEST_URL}"
+    )
     return 0
 
 

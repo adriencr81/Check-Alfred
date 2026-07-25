@@ -539,6 +539,24 @@ def test_cli_demo_runs_fake_agent_and_prints_digest(
     assert "read_pii" in out
 
 
+def test_cli_demo_invites_the_first_digest_to_be_shared(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The package carries no telemetry, so an install that produced a digest is
+    invisible unless its owner says so. ADR 0027 decision 9."""
+    assert main(["demo"]) == 0
+    out = capsys.readouterr().out
+    assert "show_your_digest.md" in out
+    # The invitation follows the digest; it must never be mistaken for a line of it.
+    assert out.index("Tasks completed") < out.index("Show us what it caught")
+
+
+def test_cli_demo_invitation_points_at_a_template_that_exists() -> None:
+    """A dead link in the one line asking for feedback is worse than no line."""
+    template = Path(__file__).resolve().parent.parent / ".github/ISSUE_TEMPLATE/show_your_digest.md"
+    assert template.is_file()
+
+
 EXAMPLE_MANDATE = Path(__file__).parent.parent / "examples" / "mandates" / "refund-bot.yaml"
 
 
