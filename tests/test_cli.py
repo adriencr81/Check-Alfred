@@ -6,6 +6,7 @@ docs/adr/0008-brique6-demo-launch-polish-design.md.
 
 from __future__ import annotations
 
+import re
 import shutil
 import time
 from pathlib import Path
@@ -200,7 +201,9 @@ class _EchoStubLLM:
 
     def complete(self, prompt: str) -> str:
         allowed = prompt.rsplit(":", 1)[1].strip()
-        return f"Narrated line. [evt:{allowed}]"
+        value = re.search(r"with value (.+?)\. The sentence", prompt)
+        assert value is not None
+        return f"Narrated line, {value.group(1)}. [evt:{allowed}]"
 
 
 def _stub_narration(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -227,7 +230,7 @@ def test_cli_watch_narrate_renders_prose(
     exit_code = main(["watch", str(traces_dir), "--project", str(project_dir), "--narrate"])
     assert exit_code == 0
     out = capsys.readouterr().out
-    assert "Narrated line." in out  # prose, not the raw metric row
+    assert "Narrated line," in out  # prose, not the raw metric row
     assert "Tasks completed" not in out  # raw digest labels are replaced
     assert "tool_not_allowed" in out  # deviations still reported
 
@@ -380,7 +383,7 @@ def test_cli_report_narrate_embeds_prose(
     assert exit_code == 0
     html = next(out_dir.glob("*.html")).read_text(encoding="utf-8")
     assert 'class="narrative"' in html
-    assert "Narrated line." in html
+    assert "Narrated line," in html
 
 
 def test_cli_report_narrate_without_endpoint_errors(

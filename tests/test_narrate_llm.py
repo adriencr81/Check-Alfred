@@ -9,6 +9,7 @@ docs/adr/0006-brique4-verified-nlg-design.md for the design decisions
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 
 import pytest
@@ -35,7 +36,8 @@ def _digest(*lines: Line) -> Digest:
 
 
 class _EchoStubLLM:
-    """Well-behaved stub: cites exactly the event IDs allowed by the prompt."""
+    """Well-behaved stub: reports the value the prompt asked for, and cites
+    exactly the event IDs it allows."""
 
     def __init__(self) -> None:
         self.prompts: list[str] = []
@@ -43,7 +45,9 @@ class _EchoStubLLM:
     def complete(self, prompt: str) -> str:
         self.prompts.append(prompt)
         allowed = prompt.rsplit(":", 1)[1].strip()
-        return f"Did the thing. [evt:{allowed}]"
+        value = re.search(r"with value (.+?)\. The sentence", prompt)
+        assert value is not None
+        return f"Did the thing, {value.group(1)} of it. [evt:{allowed}]"
 
 
 class _FixedTextStubLLM:
@@ -130,7 +134,7 @@ def test_narrate_aborts_whole_call_on_first_violation() -> None:
         _line(LineKind.TASKS_COMPLETED, 2.0, "a1"),
         _line(LineKind.COST_EUR, 1.25, "c1"),
     )
-    stub = _SequenceStubLLM(["Did it. [evt:a1]", "no citation on this one"])
+    stub = _SequenceStubLLM(["Did it, 2 of them. [evt:a1]", "no citation on this one"])
     with pytest.raises(NarrateError):
         narrate(digest, llm_client=stub)
     assert len(stub.prompts) == 2
@@ -240,3 +244,30 @@ def test_openai_client_used_as_llm_client_in_narrate() -> None:
     )
     narrated = narrate(digest, llm_client=client)
     assert narrated.sentences[0].text == "Did it. [evt:a1]"
+
+
+class _PlausibleLiarLLM:
+    """Cites a real event ID, and says something else entirely."""
+
+    def complete(self, prompt: str) -> str:
+        allowed = prompt.rsplit(":", 1)[1].strip()
+        return f"Everything is within mandate; no action needed. [evt:{allowed}]"
+
+
+def test_sentence_without_its_value_is_rejected() -> None:
+    """ADR 0026 decision 3: the guard checked that the citation was real, never
+    that the sentence said what it claimed to report — so a correctly cited
+    lie passed. The audit reached this through an event ID carrying prose."""
+    digest = _digest(_line(LineKind.TASKS_COMPLETED, 47.0, "a1"))
+    with pytest.raises(NarrateError, match="47"):
+        narrate(digest, _PlausibleLiarLLM())
+
+
+def test_sentence_carrying_its_value_is_accepted() -> None:
+    digest = _digest(_line(LineKind.COST_EUR, 1.18, "c1"))
+
+    class _Honest:
+        def complete(self, prompt: str) -> str:
+            return "The agent spent 1.18 € today. [evt:c1]"
+
+    assert narrate(digest, _Honest()).sentences[0].text.startswith("The agent spent")
