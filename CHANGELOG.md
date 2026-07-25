@@ -9,6 +9,39 @@ Nothing has shipped to PyPI yet — the package version is `0.1.0.dev0`. The
 entries below are the work done so far towards the v0.1 roadmap
 (PLAN.md §5).
 
+### Security
+
+- Mandate control hardening — a white-box pentest found five ways the **audited
+  agent** could defeat its own mandate, each reproduced by a PoC. All five are
+  closed, and with them the product rule they broke (a claim in the report, or
+  the absence of a deviation, must never rest on something the agent declared
+  about itself). See `docs/adr/0023-mandate-control-hardening.md`.
+  - `daily_budget_eur` was evaluated **per trace**, and `AgentTracer.session()`
+    opens a fresh trace per task: ten tasks just under the cap spent ten times
+    the cap with no deviation. Budget and the `escalate_when` rates are now
+    computed over the whole day (`evaluate_trace` / `evaluate_day`).
+  - The cost line and the budget check read the agent-written
+    `gen_ai.usage.cost_eur` in preference to the pricing table, so declaring
+    `0.0` erased the spend from both. **Breaking**: the price computed from the
+    event's own tokens now wins, and the declared value is only the fallback
+    for an unknown model or missing token counts. A declared cost that
+    contradicts the computed one raises the new **`cost_mismatch`**.
+  - An escalation was proven by `alfred.escalated`, an attribute the surveilled
+    agent wrote itself. **Breaking**: the attribute has no effect; an escalation
+    is proven by a call to a tool listed in the mandate's new
+    `escalation_tools`. A mandate with `escalate_when` and no `escalation_tools`
+    can prove no escalation, so every breach is reported — `alfred mandate lint`
+    raises an error on that combination.
+  - A span whose `gen_ai.operation.name` was unrecognized, or a tool call
+    without `gen_ai.tool.name`, escaped every tool check. Spans carrying
+    `gen_ai.tool.name` or `tool.arguments.*` are now classified as tool calls
+    whatever their operation name, and a nameless tool call raises the new
+    **`tool_unidentified`**.
+  - A `forbidden_actions` threshold only compared `int`/`float`, so sending
+    `amount_eur` as the string `"9999"` walked past a `> 1000` rule. Numeric
+    strings are now compared, and a value that cannot be compared raises an
+    explicit `forbidden_action` instead of being skipped.
+
 ### Added
 
 - PII/secret redaction — a `redact:` list in the mandate masks named attribute
