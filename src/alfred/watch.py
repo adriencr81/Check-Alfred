@@ -35,6 +35,7 @@ from alfred.report.build import BASELINE_WINDOW_DAYS, build_digest
 from alfred.report.model import Digest
 from alfred.trace.ingest import ingest_otlp_file
 from alfred.trace.model import TraceEvent, TraceIngestionError
+from alfred.trace.redact import redactor_for
 from alfred.trace.store import TraceStore
 
 _SEEN_FILENAME = "seen.json"
@@ -209,6 +210,7 @@ def watch_once(
     in the store (F3), so a number reads against its own recent history.
     """
     state = _load_state(project_dir)
+    redactor = redactor_for(project_dir, mandate.redact)
     new_events: list[TraceEvent] = []
     for file_path in sorted(Path(traces_dir).glob("*.json")):
         try:
@@ -226,7 +228,7 @@ def watch_once(
             _save_state(project_dir, state)
             continue
         try:
-            events = ingest_otlp_file(file_path, mandate.redact)
+            events = ingest_otlp_file(file_path, redactor)
         except (TraceIngestionError, OSError) as exc:
             state[file_path.name] = _SeenFile(
                 sha256=content, status=_QUARANTINED, reason=str(exc)
