@@ -294,3 +294,62 @@ def test_watch_state_survives_a_failure_on_a_later_file(
     second_store = TraceStore(project_dir / "trace.db")
     assert watch_once(project_dir, traces_dir, _mandate(), second_store).digests == []
     second_store.close()
+
+
+def test_watch_reingests_a_file_whose_content_changed(
+    project_dir: Path, traces_dir: Path, otlp_sample_path: Path
+) -> None:
+    """ADR 0024 decision 4: seen-state keyed on filenames let an agent rewrite
+    an already-ingested file and never be audited again."""
+    store = TraceStore(project_dir / "trace.db")
+    watch_once(project_dir, traces_dir, _mandate(), store)
+
+    payload = json.loads((traces_dir / "day1.json").read_text(encoding="utf-8"))
+    span = payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+    span["spanId"] = "rewritten"
+    span["attributes"] = [
+        {"key": "gen_ai.operation.name", "value": {"stringValue": "execute_tool"}},
+        {"key": "gen_ai.tool.name", "value": {"stringValue": "exfiltrate_database"}},
+    ]
+    (traces_dir / "day1.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    result = watch_once(project_dir, traces_dir, _mandate(), store)
+    assert len(result.digests) == 1
+    assert any(
+        d.details.get("tool") == "exfiltrate_database"
+        for digest in result.digests
+        for d in digest.deviations
+    )
+    store.close()
+
+
+def test_watch_adopts_a_v1_seen_file_without_reingesting(
+    project_dir: Path, traces_dir: Path
+) -> None:
+    """Decision 5: upgrading must not replay a day's digests."""
+    seen = project_dir / ".alfred" / "seen.json"
+    seen.parent.mkdir(parents=True, exist_ok=True)
+    seen.write_text(json.dumps(["day1.json"]), encoding="utf-8")
+
+    store = TraceStore(project_dir / "trace.db")
+    assert watch_once(project_dir, traces_dir, _mandate(), store).digests == []
+    assert store.count() == 0
+    # ...and the adopted digest is recorded, so a later rewrite is still caught.
+    state = json.loads(seen.read_text(encoding="utf-8"))
+    assert state["files"]["day1.json"]["sha256"]
+    store.close()
+
+
+def test_watch_ingests_a_quarantined_file_once_it_is_fixed(
+    project_dir: Path, traces_dir: Path, otlp_sample_path: Path
+) -> None:
+    """Fixing the file is how a human clears the quarantine."""
+    broken = _write_broken(traces_dir)
+    store = TraceStore(project_dir / "trace.db")
+    watch_once(project_dir, traces_dir, _mandate(), store)
+
+    shutil.copy(otlp_sample_path, broken)  # same name, valid content now
+    result = watch_once(project_dir, traces_dir, _mandate(), store)
+    assert result.quarantined == ()
+    assert len(result.digests) == 1
+    store.close()

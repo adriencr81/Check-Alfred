@@ -1,11 +1,16 @@
 """`alfred watch` — single-pass ingestion of new OTLP JSON files.
 
 See PLAN.md §5 Brique 5 and docs/adr/0007-brique5-delivery-cli-design.md.
-`watch_once` scans a directory for `*.json` files not already recorded in
-`.alfred/seen.json`, ingests each into the trace store, and returns one
-`Digest` per calendar day found among the newly-ingested events — grouped
-by each event's own `start_time`, not "today", since an ingested file may
-carry a historical trace.
+`watch_once` scans a directory for `*.json` files whose content is not
+already recorded in `.alfred/seen.json`, ingests each into the trace store,
+and returns one `Digest` per calendar day found among the newly-ingested
+events — grouped by each event's own `start_time`, not "today", since an
+ingested file may carry a historical trace.
+
+A file is recognized by the SHA-256 of its bytes, not by its name: rewriting
+an already-ingested file used to hide the new activity for good (ADR 0024
+decision 4). A file that cannot be read is quarantined rather than fatal, and
+reported on every pass until a human fixes or removes it (decisions 2 and 3).
 
 The single pass is the default and the recommended path (re-run via cron,
 see `alfred schedule`). `watch_loop` adds an opt-in continuous mode for
@@ -16,6 +21,7 @@ passes. See docs/adr/0007 §1 and docs/adr/0015 for why.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from collections import defaultdict
@@ -35,6 +41,7 @@ _SEEN_FILENAME = "seen.json"
 _STATE_VERSION = 2
 _INGESTED = "ingested"
 _QUARANTINED = "quarantined"
+_HASH_CHUNK_BYTES = 1 << 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,8 +67,24 @@ class WatchPass:
 
 @dataclass(frozen=True, slots=True)
 class _SeenFile:
+    """What a past pass did with a file, and the content it did it to.
+
+    `sha256` is None only for a v1 entry whose file is absent from the traces
+    directory: an unknown digest never matches, so a file later appearing under
+    that name is ingested rather than assumed handled (ADR 0024 decision 5).
+    """
+
+    sha256: str | None
     status: str
     reason: str | None = None
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(_HASH_CHUNK_BYTES), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _seen_path(project_dir: Path) -> Path:
@@ -69,15 +92,24 @@ def _seen_path(project_dir: Path) -> Path:
 
 
 def _load_state(project_dir: Path) -> dict[str, _SeenFile]:
-    """Read `.alfred/seen.json`, accepting the v1 format (a list of names)."""
+    """Read `.alfred/seen.json`, accepting the v1 format (a list of names).
+
+    A v1 entry carries no digest; `watch_once` adopts the file's current one on
+    the next pass without re-ingesting it, so upgrading never replays a day's
+    digests (ADR 0024 decision 5).
+    """
     path = _seen_path(project_dir)
     if not path.exists():
         return {}
     raw = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(raw, list):  # v1: names only, all of them ingested
-        return {str(name): _SeenFile(status=_INGESTED) for name in raw}
+        return {str(name): _SeenFile(sha256=None, status=_INGESTED) for name in raw}
     return {
-        str(name): _SeenFile(status=str(entry["status"]), reason=entry.get("reason"))
+        str(name): _SeenFile(
+            sha256=entry.get("sha256"),
+            status=str(entry["status"]),
+            reason=entry.get("reason"),
+        )
         for name, entry in raw["files"].items()
     }
 
@@ -86,7 +118,7 @@ def _save_state(project_dir: Path, state: dict[str, _SeenFile]) -> None:
     path = _seen_path(project_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     files = {
-        name: {"status": entry.status, "reason": entry.reason}
+        name: {"sha256": entry.sha256, "status": entry.status, "reason": entry.reason}
         for name, entry in sorted(state.items())
     }
     path.write_text(
@@ -179,17 +211,31 @@ def watch_once(
     state = _load_state(project_dir)
     new_events: list[TraceEvent] = []
     for file_path in sorted(Path(traces_dir).glob("*.json")):
-        if file_path.name in state:
+        try:
+            content = _sha256(file_path)
+        except OSError as exc:
+            state[file_path.name] = _SeenFile(sha256=None, status=_QUARANTINED, reason=str(exc))
+            _save_state(project_dir, state)
+            continue
+        known = state.get(file_path.name)
+        if known is not None and known.sha256 == content:
+            continue  # same file, same bytes — already handled
+        if known is not None and known.sha256 is None and known.status == _INGESTED:
+            # v1 state: adopt the current content rather than re-emit its digest.
+            state[file_path.name] = _SeenFile(sha256=content, status=_INGESTED)
+            _save_state(project_dir, state)
             continue
         try:
             events = ingest_otlp_file(file_path, mandate.redact)
         except (TraceIngestionError, OSError) as exc:
-            state[file_path.name] = _SeenFile(status=_QUARANTINED, reason=str(exc))
+            state[file_path.name] = _SeenFile(
+                sha256=content, status=_QUARANTINED, reason=str(exc)
+            )
             _save_state(project_dir, state)
             continue
         store.put_many(events)
         new_events.extend(events)
-        state[file_path.name] = _SeenFile(status=_INGESTED)
+        state[file_path.name] = _SeenFile(sha256=content, status=_INGESTED)
         _save_state(project_dir, state)
 
     return WatchPass(
