@@ -13,7 +13,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import date
 
-from alfred.mandate.engine import evaluate
+from alfred.mandate.engine import evaluate_day, evaluate_trace
 from alfred.mandate.model import Deviation, Mandate
 from alfred.report.model import Baseline, Digest, Line, LineKind
 from alfred.trace.cost import contributing_costs
@@ -109,12 +109,20 @@ def _with_baseline(
 
 
 def _deviations(mandate: Mandate, events: Sequence[TraceEvent]) -> tuple[Deviation, ...]:
+    """Trace-scoped checks per trace, aggregate checks once over the whole day.
+
+    One day spans several traces (one per task), so the budget and the
+    `escalate_when` rates must be computed over their union — evaluating them
+    per trace turned `daily_budget_eur` into a per-task budget (ADR 0023
+    decision 1).
+    """
     by_trace: dict[str, list[TraceEvent]] = defaultdict(list)
     for event in events:
         by_trace[event.trace_id].append(event)
     deviations: list[Deviation] = []
     for trace_events in by_trace.values():
-        deviations.extend(evaluate(mandate, trace_events))
+        deviations.extend(evaluate_trace(mandate, trace_events))
+    deviations.extend(evaluate_day(mandate, events))
     return tuple(deviations)
 
 
@@ -128,10 +136,10 @@ def build_digest(
     """Build `mandate.agent`'s Digest for calendar day `on`.
 
     Contract: `events` must be non-empty and pre-scoped to one agent / one
-    calendar day (caller's responsibility — mirrors the single-trace
-    precondition already documented on `alfred.mandate.engine.evaluate`).
-    Events are grouped by `trace_id` before being handed to `evaluate`,
-    since one day typically spans multiple traces (multiple tasks).
+    calendar day (caller's responsibility). Events are grouped by `trace_id`
+    for the trace-scoped checks, since one day typically spans multiple traces
+    (multiple tasks), while the budget and the `escalate_when` rates are
+    evaluated once over the whole day (see `_deviations`).
 
     `history` (F3, docs/adr/0019) is one event list per *active* day in the
     trailing `BASELINE_WINDOW_DAYS`-day window, already scoped by the caller.

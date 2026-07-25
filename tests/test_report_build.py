@@ -201,6 +201,54 @@ def test_deviations_span_multiple_traces_in_one_day() -> None:
     assert len(digest.deviations) == 3
 
 
+def test_budget_is_measured_over_the_day_not_per_trace() -> None:
+    """ADR 0023 decision 1: one session per trace must not reset the budget.
+
+    `AgentTracer.session()` opens a fresh trace_id per task, so a per-trace
+    budget is no budget at all — ten tasks just under the cap spend ten times
+    the cap without a single deviation.
+    """
+    events = [
+        _event(
+            f"e{index}",
+            trace_id=f"trace-{index}",
+            kind=SpanKind.LLM_CALL,
+            attributes={"gen_ai.usage.cost_eur": 4.9},
+        )
+        for index in range(10)
+    ]
+    digest = build_digest(_mandate(), events, date(2026, 8, 30))
+    budget = [d for d in digest.deviations if d.type.value == "budget_exceeded"]
+    assert len(budget) == 1
+    assert budget[0].details["cost_eur"] == pytest.approx(49.0)
+    assert len(budget[0].event_ids) == 10
+
+
+def test_tool_error_rate_is_measured_over_the_day_not_per_trace() -> None:
+    """The flip side of the same scope fix: one error in ten calls is 10 %,
+    even when each call sits in its own trace (per-trace it read as 100 %)."""
+    mandate = Mandate(
+        agent="refund-bot-v3",
+        allowed_tools=frozenset({"read_order"}),
+        daily_budget_eur=5.0,
+        forbidden_actions=(),
+        escalate_when=(EscalationRule("tool_error_rate", ">", 0.10),),
+    )
+    events = [
+        _event(
+            f"e{index}",
+            trace_id=f"trace-{index}",
+            attributes={
+                "gen_ai.tool.name": "read_order",
+                "tool.result.status": "error" if index == 0 else "ok",
+            },
+        )
+        for index in range(10)
+    ]
+    digest = build_digest(mandate, events, date(2026, 8, 30))
+    assert [d for d in digest.deviations if d.type.value == "escalation_missed"] == []
+
+
 def test_digest_every_line_has_sources() -> None:
     digest = build_digest(_mandate(), _typical_day_events(), date(2026, 8, 30))
     assert digest.lines

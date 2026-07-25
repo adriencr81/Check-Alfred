@@ -305,19 +305,43 @@ def _check_repeated_action(mandate: Mandate, tool_calls: Sequence[TraceEvent]) -
     return deviations
 
 
-def evaluate(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
-    """Compare a single trace's events against a mandate.
+def evaluate_trace(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
+    """The checks whose meaning is scoped to one trace.
 
     Contract: `events` must belong to one trace (e.g. via
-    `TraceStore.find_by_trace`). Returns every `Deviation` detected, each
-    anchored to at least one `event_id` from `events`.
+    `TraceStore.find_by_trace`) — `required_action_missing` and `loop_detected`
+    are defined within a single trace, and the per-event checks are unaffected
+    by the scope. See ADR 0023 decision 1.
     """
     tool_calls = _tool_calls(events)
     return [
         *_check_tool_not_allowed(mandate, tool_calls),
         *_check_forbidden_actions(mandate, tool_calls),
-        *_check_budget_exceeded(mandate, events),
-        *_check_escalation_missed(mandate, events, tool_calls),
         *_check_required_actions(mandate, tool_calls),
         *_check_repeated_action(mandate, tool_calls),
     ]
+
+
+def evaluate_day(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
+    """The checks computed over an aggregate — every event of one day.
+
+    `daily_budget_eur` is a *daily* budget and `escalate_when`'s metrics are
+    daily rates, so they must see the whole day at once: an agent that opens a
+    fresh trace per task (which `AgentTracer.session` does) would otherwise
+    reset the budget on every task. See ADR 0023 decision 1.
+    """
+    return [
+        *_check_budget_exceeded(mandate, events),
+        *_check_escalation_missed(mandate, events, _tool_calls(events)),
+    ]
+
+
+def evaluate(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
+    """Compare one scope of events against a mandate — every check at once.
+
+    Kept for callers that evaluate a single trace standing alone. The digest
+    pipeline instead calls `evaluate_trace` per trace and `evaluate_day` once
+    over the day (`alfred.report.build`). Returns every `Deviation` detected,
+    each anchored to at least one `event_id` from `events`.
+    """
+    return [*evaluate_trace(mandate, events), *evaluate_day(mandate, events)]
