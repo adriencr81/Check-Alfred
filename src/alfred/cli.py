@@ -132,6 +132,21 @@ def _report_quarantine(quarantined: tuple[QuarantinedTrace, ...], project_dir: P
         )
 
 
+def _report_conflicts(conflicts: tuple[TraceEvent, ...]) -> None:
+    """Name every event that tried to overwrite one already stored.
+
+    The stored anchor wins (ADR 0026 decision 4), so the digest stays true to
+    what was first recorded — but an agent re-emitting a span with different
+    content is trying to rewrite evidence, and that has to be said out loud.
+    """
+    for event in conflicts:
+        print(
+            f"alfred watch: refused to overwrite evidence {event.event_id} "
+            f"(trace {event.trace_id}) — the stored event differs from the re-emitted one",
+            file=sys.stderr,
+        )
+
+
 def _cmd_watch(args: argparse.Namespace) -> int:
     project_dir = Path(args.project)
     try:
@@ -172,10 +187,12 @@ def _cmd_watch(args: argparse.Namespace) -> int:
     config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
     store = TraceStore(config.trace_db_path)
     quarantined: tuple[QuarantinedTrace, ...] = ()
+    conflicts: tuple[TraceEvent, ...] = ()
 
     def _handle(result: WatchPass) -> None:
         _deliver(result.digests, config, alerts=args.alerts, narrate_client=narrate_client)
         _report_quarantine(result.quarantined, project_dir)
+        _report_conflicts(result.conflicts)
 
     def _handle_in_loop(result: WatchPass) -> None:
         """Same handling, but a delivery outage must not end the supervision.
@@ -197,7 +214,7 @@ def _cmd_watch(args: argparse.Namespace) -> int:
             )
         else:
             result = watch_once(project_dir, traces_dir, mandate, store)
-            quarantined = result.quarantined
+            quarantined, conflicts = result.quarantined, result.conflicts
             _handle(result)
     except KeyboardInterrupt:
         print("\nalfred watch: stopped.")
@@ -206,9 +223,10 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         return 1
     finally:
         store.close()
-    # A quarantined file means the digest covers less than the directory does:
-    # exit non-zero so a cron run surfaces the gap, having delivered the rest.
-    return 1 if quarantined else 0
+    # A quarantined file means the digest covers less than the directory does,
+    # and a conflict means something tried to rewrite what it covers: exit
+    # non-zero so a cron run surfaces either, having delivered the rest.
+    return 1 if quarantined or conflicts else 0
 
 
 def _read_trace_events(traces_dir: Path, redactor: Redactor | None = None) -> list[TraceEvent]:

@@ -113,6 +113,7 @@ preuve.
 - Tests falsifiables : `tests/test_deliver_slack.py`, `tests/test_report_render.py`,
   `tests/test_trace_ingest.py`, `tests/test_narrate_llm.py`,
   `tests/test_trace_store.py`, `tests/test_watch.py`, `tests/test_cli.py`.
-- Docs : CHANGELOG, README (note sur les conflits), note de révision dans
-  l'ADR 0002.
+- Docs : CHANGELOG, README (note sur les conflits). L'ADR 0002 ne portait pas
+  la décision `INSERT OR REPLACE` — elle ne vivait que dans le docstring de
+  `TraceStore.put`, corrigé ici — donc rien à réviser de ce côté.
 - DoD inchangée : `pytest -q`, `ruff check .`, `mypy --strict src/` verts.

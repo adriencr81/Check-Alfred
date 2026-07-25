@@ -73,6 +73,11 @@ mandate, anchored to the event(s) that prove it:
 - **`tool_unidentified`** — a tool call that names no tool. It can't be checked
   against `allowed_tools`, so it is reported rather than skipped.
 
+Stored evidence is append-only: an event whose `spanId` is already recorded
+with different content is refused, the first version stands, and `alfred watch`
+names the attempt on stderr and exits non-zero. Rewriting an anchor a past
+digest already quoted is not something the audited agent gets to do.
+
 The last two catch **silent failures** — the run completes with no error
 status and looks successful, so nothing else flags them. Alfred only sees what
 the trace records: a wrong-but-confident answer or a tool that returns garbage

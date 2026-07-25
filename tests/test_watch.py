@@ -17,7 +17,7 @@ import pytest
 from alfred.mandate.model import Mandate
 from alfred.report.model import LineKind
 from alfred.trace.ingest import ingest_otlp_file
-from alfred.trace.model import TraceEvent
+from alfred.trace.model import EventId, TraceEvent
 from alfred.trace.store import TraceStore
 from alfred.watch import WatchPass, build_digests, watch_loop, watch_once
 
@@ -366,3 +366,25 @@ def test_seen_state_and_store_are_owner_only(project_dir: Path, traces_dir: Path
     assert stat.S_IMODE(db_path.stat().st_mode) == 0o600
     seen = project_dir / ".alfred" / "seen.json"
     assert stat.S_IMODE(seen.stat().st_mode) == 0o600
+
+
+def test_watch_reports_an_event_that_tries_to_overwrite_stored_evidence(
+    project_dir: Path, traces_dir: Path
+) -> None:
+    """ADR 0026 decisions 4 and 5: re-emitting a spanId with different content
+    used to rewrite the stored anchor. The first version wins, and the attempt
+    is reported like a quarantine — every pass, exit non-zero."""
+    store = TraceStore(project_dir / "trace.db")
+    watch_once(project_dir, traces_dir, _mandate(), store)
+
+    payload = json.loads((traces_dir / "day1.json").read_text(encoding="utf-8"))
+    span = payload["resourceSpans"][0]["scopeSpans"][0]["spans"][2]
+    span["attributes"] = []  # same spanId, evidence removed
+    (traces_dir / "day2.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    result = watch_once(project_dir, traces_dir, _mandate(), store)
+    assert [event.event_id for event in result.conflicts] == ["b2c3d4e5f6071829"]
+    stored = store.get(EventId("b2c3d4e5f6071829"))
+    assert stored is not None
+    assert stored.attributes  # the original evidence is intact
+    store.close()

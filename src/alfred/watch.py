@@ -65,6 +65,10 @@ class WatchPass:
 
     digests: list[Digest]
     quarantined: tuple[QuarantinedTrace, ...] = ()
+    # Events refused because their `event_id` is already stored with different
+    # content: an attempt to rewrite evidence a past digest may already quote
+    # (ADR 0026 decisions 4 and 5). Reported like a quarantine, per pass.
+    conflicts: tuple[TraceEvent, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,6 +217,7 @@ def watch_once(
     state = _load_state(project_dir)
     redactor = redactor_for(project_dir, mandate.redact)
     new_events: list[TraceEvent] = []
+    conflicts: list[TraceEvent] = []
     for file_path in sorted(Path(traces_dir).glob("*.json")):
         try:
             content = _sha256(file_path)
@@ -236,7 +241,7 @@ def watch_once(
             )
             _save_state(project_dir, state)
             continue
-        store.put_many(events)
+        conflicts.extend(store.put_many(events))
         new_events.extend(events)
         state[file_path.name] = _SeenFile(sha256=content, status=_INGESTED)
         _save_state(project_dir, state)
@@ -244,6 +249,7 @@ def watch_once(
     return WatchPass(
         digests=build_digests(mandate, new_events, store),
         quarantined=_quarantined(state),
+        conflicts=tuple(conflicts),
     )
 
 
