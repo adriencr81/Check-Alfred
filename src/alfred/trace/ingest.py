@@ -48,17 +48,28 @@ def _kind(attributes: dict[str, Any]) -> SpanKind:
     See docs/adr/0003-span-kind-classification.md: unlike a prefix scan over
     `gen_ai.*`/`tool.*`/`agent.*` attribute keys, the semconv already carries
     tool and agent spans under the `gen_ai.*` namespace, so the operation
-    name is the only reliable discriminator.
+    name is the primary discriminator.
+
+    A span that carries tool attributes but no recognized operation name still
+    falls back to `TOOL_CALL` (ADR 0023 decision 5): classifying it `UNKNOWN`
+    dropped it out of every mandate check, so an unrecognized operation name
+    was all it took to hide a tool call. Ordinary spans (HTTP, DB) carry
+    neither attribute and stay `UNKNOWN`.
     """
     operation = attributes.get("gen_ai.operation.name")
     if isinstance(operation, str) and operation in _OPERATION_KIND:
         return _OPERATION_KIND[operation]
+    if _TOOL_NAME_ATTR in attributes or any(
+        key.startswith(_TOOL_ARGS_PREFIX) for key in attributes
+    ):
+        return SpanKind.TOOL_CALL
     return SpanKind.UNKNOWN
 
 
 _TOOL_STATUS_ATTR = "tool.result.status"
 _TOOL_ARGS_JSON_ATTR = "gen_ai.tool.call.arguments"
 _TOOL_ARGS_PREFIX = "tool.arguments."
+_TOOL_NAME_ATTR = "gen_ai.tool.name"
 
 
 def _is_status_error(span: dict[str, Any]) -> bool:

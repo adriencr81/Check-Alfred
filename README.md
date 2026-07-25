@@ -70,6 +70,8 @@ mandate, anchored to the event(s) that prove it:
 - **`cost_mismatch`** — the cost the agent reported for the day contradicts the
   one priced from its own token counts. The digest always shows the priced
   figure; this says the trace tried to claim otherwise.
+- **`tool_unidentified`** — a tool call that names no tool. It can't be checked
+  against `allowed_tools`, so it is reported rather than skipped.
 
 The last two catch **silent failures** — the run completes with no error
 status and looks successful, so nothing else flags them. Alfred only sees what

@@ -55,10 +55,28 @@ def _is_escalated(mandate: Mandate, tool_calls: Sequence[TraceEvent]) -> bool:
 def _check_tool_not_allowed(
     mandate: Mandate, tool_calls: Sequence[TraceEvent]
 ) -> list[Deviation]:
+    """Flag a tool outside `allowed_tools`, and a tool call that names no tool.
+
+    A nameless tool call used to be skipped in silence, so dropping
+    `gen_ai.tool.name` waved any call past the allowlist (ADR 0023 decision 5).
+    A tool that cannot be named cannot be allowed.
+    """
     deviations: list[Deviation] = []
     for event in tool_calls:
         tool = _tool_name(event)
-        if tool is not None and tool not in mandate.allowed_tools:
+        if tool is None:
+            deviations.append(
+                Deviation(
+                    type=DeviationType.TOOL_UNIDENTIFIED,
+                    event_ids=(event.event_id,),
+                    message=(
+                        f"tool call '{event.name}' carries no {_TOOL_NAME_ATTR} — "
+                        "it cannot be checked against allowed_tools"
+                    ),
+                    details={"span_name": event.name},
+                )
+            )
+        elif tool not in mandate.allowed_tools:
             deviations.append(
                 Deviation(
                     type=DeviationType.TOOL_NOT_ALLOWED,

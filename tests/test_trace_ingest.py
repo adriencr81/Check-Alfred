@@ -152,6 +152,29 @@ def test_ingest_ndjson_lines(tmp_path: Path) -> None:
     }
 
 
+def test_ingest_kind_falls_back_to_tool_call_on_tool_attributes() -> None:
+    """ADR 0023 decision 5: an unrecognized operation name used to drop a span
+    to UNKNOWN, and with it every tool check the mandate would have run."""
+    span = _span(
+        "s1", "tool.execute", extra=[_attr("gen_ai.tool.name", {"stringValue": "issue_refund"})]
+    )
+    assert ingest_otlp_json(_payload(span))[0].kind is SpanKind.TOOL_CALL
+
+
+def test_ingest_kind_falls_back_to_tool_call_on_tool_arguments() -> None:
+    span = _span(
+        "s1", "unlabelled", extra=[_attr("tool.arguments.amount_eur", {"doubleValue": 9999.0})]
+    )
+    assert ingest_otlp_json(_payload(span))[0].kind is SpanKind.TOOL_CALL
+
+
+def test_ingest_kind_stays_unknown_for_an_ordinary_span() -> None:
+    """A plain HTTP/DB span carries neither attribute and must not be dragged
+    into the tool checks."""
+    span = _span("s1", "unlabelled", extra=[_attr("http.request.method", {"stringValue": "GET"})])
+    assert ingest_otlp_json(_payload(span))[0].kind is SpanKind.UNKNOWN
+
+
 def test_status_code_error_maps_to_tool_error() -> None:
     """A standard OTLP error status becomes the tool.result.status the engine reads."""
     span = _span("s", "execute_tool", extra=[_attr("gen_ai.tool.name", {"stringValue": "run_sql"})])

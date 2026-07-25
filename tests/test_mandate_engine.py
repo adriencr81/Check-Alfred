@@ -74,6 +74,17 @@ def test_tool_not_allowed_detected() -> None:
     assert matches[0].event_ids == (EventId("e1"),)
 
 
+def test_tool_call_without_a_name_is_reported() -> None:
+    """ADR 0023 decision 5: a nameless tool call used to be skipped outright,
+    so omitting `gen_ai.tool.name` waved any call past allowed_tools. A tool
+    that cannot be named cannot be allowed."""
+    events = [_event("e1", attributes={"tool.arguments.amount_eur": 9999.0})]
+    deviations = evaluate(_mandate(), events)
+    matches = [d for d in deviations if d.type.value == "tool_unidentified"]
+    assert len(matches) == 1
+    assert matches[0].event_ids == (EventId("e1"),)
+
+
 def test_tool_not_allowed_absent_for_allowed_tool() -> None:
     events = [_event("e1", attributes={"gen_ai.tool.name": "read_order"})]
     deviations = evaluate(_mandate(), events)

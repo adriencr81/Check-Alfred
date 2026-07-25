@@ -26,6 +26,7 @@ class DeviationType(StrEnum):
     LOOP_DETECTED = "loop_detected"
     REQUIRED_ACTION_MISSING = "required_action_missing"
     COST_MISMATCH = "cost_mismatch"
+    TOOL_UNIDENTIFIED = "tool_unidentified"
 
 
 def _compare(value: float, operator: str, threshold: float) -> bool:
