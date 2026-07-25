@@ -12,6 +12,7 @@ from collections.abc import Iterable
 from datetime import date, datetime
 from pathlib import Path
 
+from alfred._fs import restrict
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
 _SCHEMA = """
@@ -79,6 +80,10 @@ class TraceStore:
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
+        # The rows hold tool arguments — whatever the agent handled. sqlite3
+        # creates the file with the process umask, typically world-readable
+        # (ADR 0025 decision 7).
+        restrict(Path(path))
 
     def put(self, event: TraceEvent) -> None:
         """Insert or, on a matching `event_id`, blindly replace.

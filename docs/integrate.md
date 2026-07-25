@@ -105,15 +105,21 @@ redact:
   - gen_ai.prompt    # or a full attribute key
 ```
 
-Each masked value becomes a stable `redacted:sha256:<hash>` token — the content
+Each masked value becomes a stable `redacted:hmac:<hash>` token — the content
 is hidden, but identical values still compare equal, so `loop_detected` keeps
 working on a masked field. The masking is deterministic and declarative: only
 the fields you list are touched (nothing is guessed), and `alfred mandate lint`
 warns if you redact a numeric field that a `forbidden_actions` rule checks (the
 masked token can no longer be compared, so every call to that tool gets
-reported as unverifiable). It is a per-field data-
-minimization control, not a defense against a targeted dictionary attack on a
-low-entropy value — see the ADR's limits.
+reported as unverifiable). Fields packed into the standard
+`gen_ai.tool.call.arguments` blob are masked inside it too, at any depth.
+
+The token is an HMAC under a per-project key, generated on first use in
+`.alfred/redaction-key` (mode 0600) — keep it with the project and out of
+version control. Without a key the token was a plain digest, and an email
+address or an order id was recoverable from it by dictionary
+([ADR 0025](adr/0025-leak-containment.md)). Tokens are therefore comparable
+within a project, not across projects.
 
 ## 3. Watch the traces
 
@@ -123,6 +129,14 @@ alfred init my-project --agent support-bot \
 cp mandate.yaml my-project/mandate.yaml
 alfred watch traces/ --project my-project
 ```
+
+The webhook URL is a credential — anyone holding it can post into your channel,
+so `.alfred/config.toml` is written owner-only (as are `trace.db` and
+`seen.json`, which carry tool arguments). To keep it off disk entirely, export
+`ALFRED_SLACK_WEBHOOK_URL` instead; it wins over the config file. Both endpoint
+URLs must be `https://` (cleartext is accepted only for `localhost`, so a
+self-hosted model still works), and a webhook pointing somewhere other than
+`hooks.slack.com` is reported as a warning.
 
 Pass `--slack-webhook` to have `init` write the webhook into
 `.alfred/config.toml` for you (validated as an `https://` URL); omit it and

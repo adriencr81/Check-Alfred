@@ -11,6 +11,33 @@ entries below are the work done so far towards the v0.1 roadmap
 
 ### Security
 
+- Leak containment — the pentest's third lot: what Alfred let escape rather than
+  what it got wrong. See `docs/adr/0025-leak-containment.md`.
+  - **Declared PII reached SQLite in clear text.** Standard semconv packs tool
+    arguments into one `gen_ai.tool.call.arguments` JSON string; ingestion
+    flattened its scalars but kept the blob, and redaction only masked the
+    flattened copies. A mandate declaring `redact: [customer_email]` therefore
+    stored the address anyway. Redaction now descends into the blob at any
+    depth, and a blob it cannot parse is masked whole.
+  - **The mask is now keyed.** `redacted:sha256:<hash>` became
+    `redacted:hmac:<hash>` under a per-project key
+    (`.alfred/redaction-key`, mode 0600, created on first use). An unsalted
+    digest of a low-entropy value — an email, an order id — gave the value back
+    by dictionary. Equality within a project is preserved, so `loop_detected`
+    still works on a masked field; tokens are no longer comparable across
+    projects.
+  - **The LLM API key survived a cross-host redirect.** urllib keeps custom
+    headers across a `302`, so a configured endpoint could hand
+    `Authorization: Bearer <key>` to any host. Redirects that change host are
+    refused, `https://` is required (cleartext only to loopback, for
+    self-hosted models), both endpoint URLs are validated at `init` **and** at
+    config load, and error messages name `scheme://host` only — a webhook URL's
+    path is its credential.
+  - **The Slack webhook was stored world-readable.** `config.toml`, `trace.db`
+    and `seen.json` are now written owner-only, and `ALFRED_SLACK_WEBHOOK_URL`
+    keeps the webhook off disk entirely. A webhook pointing somewhere other
+    than `hooks.slack.com` is warned about (not refused — compatible endpoints
+    are a legitimate setup).
 - Auditor availability — the same pentest found two ways to **stop** Alfred
   rather than fool it, both reproduced by a PoC. See
   `docs/adr/0024-auditor-availability.md`.

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import stat
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -353,3 +354,15 @@ def test_watch_ingests_a_quarantined_file_once_it_is_fixed(
     assert result.quarantined == ()
     assert len(result.digests) == 1
     store.close()
+
+
+def test_seen_state_and_store_are_owner_only(project_dir: Path, traces_dir: Path) -> None:
+    """ADR 0025 decision 7: both files carry what the agent handled."""
+    db_path = project_dir / "trace.db"
+    store = TraceStore(db_path)
+    watch_once(project_dir, traces_dir, _mandate(), store)
+    store.close()
+
+    assert stat.S_IMODE(db_path.stat().st_mode) == 0o600
+    seen = project_dir / ".alfred" / "seen.json"
+    assert stat.S_IMODE(seen.stat().st_mode) == 0o600

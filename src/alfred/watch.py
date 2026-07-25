@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
+from alfred._fs import write_private
 from alfred.mandate.model import Mandate
 from alfred.report.build import BASELINE_WINDOW_DAYS, build_digest
 from alfred.report.model import Digest
@@ -116,14 +117,14 @@ def _load_state(project_dir: Path) -> dict[str, _SeenFile]:
 
 
 def _save_state(project_dir: Path, state: dict[str, _SeenFile]) -> None:
-    path = _seen_path(project_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
     files = {
         name: {"sha256": entry.sha256, "status": entry.status, "reason": entry.reason}
         for name, entry in sorted(state.items())
     }
-    path.write_text(
-        json.dumps({"version": _STATE_VERSION, "files": files}, indent=2), encoding="utf-8"
+    # Owner-only: quarantine reasons quote the trace, so this file can carry
+    # fragments of what the agent handled (ADR 0025 decision 7).
+    write_private(
+        _seen_path(project_dir), json.dumps({"version": _STATE_VERSION, "files": files}, indent=2)
     )
 
 
