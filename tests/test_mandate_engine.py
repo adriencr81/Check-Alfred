@@ -115,6 +115,43 @@ def test_forbidden_action_absent_under_threshold() -> None:
     assert not any(d.type.value == "forbidden_action" for d in deviations)
 
 
+def test_forbidden_action_threshold_detected_on_a_numeric_string() -> None:
+    """ADR 0023 decision 6: OTLP lets the agent send the amount as a string,
+    and the rule used to only look at int/float — so `"150"` walked through."""
+    events = [
+        _event(
+            "e1",
+            attributes={"gen_ai.tool.name": "issue_refund", "tool.arguments.amount_eur": "150"},
+        )
+    ]
+    matches = [d for d in evaluate(_mandate(), events) if d.type.value == "forbidden_action"]
+    assert len(matches) == 1
+    assert matches[0].event_ids == (EventId("e1"),)
+
+
+def test_forbidden_action_reports_an_argument_it_cannot_compare() -> None:
+    """A rule that cannot be evaluated must be loud, never silently skipped."""
+    events = [
+        _event(
+            "e1",
+            attributes={
+                "gen_ai.tool.name": "issue_refund",
+                "tool.arguments.amount_eur": "a lot",
+            },
+        )
+    ]
+    matches = [d for d in evaluate(_mandate(), events) if d.type.value == "forbidden_action"]
+    assert len(matches) == 1
+    assert matches[0].event_ids == (EventId("e1"),)
+    assert "a lot" in matches[0].message
+
+
+def test_forbidden_action_absent_when_the_argument_is_missing() -> None:
+    """No argument at all is not a failed check — the rule simply does not apply."""
+    events = [_event("e1", attributes={"gen_ai.tool.name": "issue_refund"})]
+    assert not any(d.type.value == "forbidden_action" for d in evaluate(_mandate(), events))
+
+
 def test_forbidden_action_exact_name_detected() -> None:
     events = [_event("e1", attributes={"gen_ai.tool.name": "send_marketing"})]
     deviations = evaluate(_mandate(), events)

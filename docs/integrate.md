@@ -109,8 +109,9 @@ Each masked value becomes a stable `redacted:sha256:<hash>` token — the conten
 is hidden, but identical values still compare equal, so `loop_detected` keeps
 working on a masked field. The masking is deterministic and declarative: only
 the fields you list are touched (nothing is guessed), and `alfred mandate lint`
-warns if you redact a numeric field that a `forbidden_actions` rule checks
-(masking it would silently disable that check). It is a per-field data-
+warns if you redact a numeric field that a `forbidden_actions` rule checks (the
+masked token can no longer be compared, so every call to that tool gets
+reported as unverifiable). It is a per-field data-
 minimization control, not a defense against a targeted dictionary attack on a
 low-entropy value — see the ADR's limits.
 

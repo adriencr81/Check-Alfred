@@ -88,17 +88,60 @@ def _check_tool_not_allowed(
     return deviations
 
 
+def _as_number(value: Any) -> float | None:
+    """`value` as a float, or None when it cannot be compared to a threshold.
+
+    OTLP carries whatever the agent put in the span, so a numeric argument may
+    arrive as a `stringValue` — `"9999"` must be compared, not skipped (ADR
+    0023 decision 6).
+    """
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
 def _rule_matches(
     rule: ForbiddenRule, tool_calls: Sequence[TraceEvent]
-) -> Iterator[tuple[TraceEvent, float]]:
-    """Yield (event, argument value) for each tool call breaching `rule`."""
+) -> Iterator[tuple[TraceEvent, float | None]]:
+    """Yield (event, value) for each tool call breaching `rule`.
+
+    A `None` value means the rule's argument was present but could not be
+    compared to its threshold: the rule is unverifiable on that call, which the
+    caller reports rather than swallows. An absent argument yields nothing — the
+    rule simply does not apply to that call.
+    """
     arg_attr = f"{_TOOL_ARGS_PREFIX}{rule.arg}"
     for event in tool_calls:
-        if _tool_name(event) != rule.tool:
+        if _tool_name(event) != rule.tool or arg_attr not in event.attributes:
             continue
-        value = event.attributes.get(arg_attr)
-        if isinstance(value, int | float) and rule.triggered_by(float(value)):
-            yield event, float(value)
+        number = _as_number(event.attributes[arg_attr])
+        if number is None:
+            yield event, None
+        elif rule.triggered_by(number):
+            yield event, number
+
+
+def _unverifiable_rule(event: TraceEvent, rule: ForbiddenRule) -> Deviation:
+    """A rule whose argument resists comparison — reported, never skipped.
+
+    Silently ignoring it is what let `amount_eur: "9999"` through; a policy
+    rule that cannot be evaluated is a finding in its own right.
+    """
+    raw = event.attributes.get(f"{_TOOL_ARGS_PREFIX}{rule.arg}")
+    return Deviation(
+        type=DeviationType.FORBIDDEN_ACTION,
+        event_ids=(event.event_id,),
+        message=(
+            f"forbidden action rule '{rule.when}' could not be verified: {rule.tool} "
+            f"called with {rule.arg}={raw!r}, which is not comparable to a number"
+        ),
+        details={"tool": rule.tool, "when": rule.when, "value": raw},
+    )
 
 
 def _check_forbidden_actions(
@@ -108,6 +151,9 @@ def _check_forbidden_actions(
     for action in mandate.forbidden_actions:
         if isinstance(action, ForbiddenRule):
             for event, value in _rule_matches(action, tool_calls):
+                if value is None:
+                    deviations.append(_unverifiable_rule(event, action))
+                    continue
                 deviations.append(
                     Deviation(
                         type=DeviationType.FORBIDDEN_ACTION,
@@ -127,6 +173,9 @@ def _check_forbidden_actions(
             tool, threshold = match["tool"], float(match["amount"])
             rule = ForbiddenRule(tool=tool, arg="amount_eur", operator=">", threshold=threshold)
             for event, amount in _rule_matches(rule, tool_calls):
+                if amount is None:
+                    deviations.append(_unverifiable_rule(event, rule))
+                    continue
                 deviations.append(
                     Deviation(
                         type=DeviationType.FORBIDDEN_ACTION,

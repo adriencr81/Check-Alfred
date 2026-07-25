@@ -104,10 +104,11 @@ def _check_budget(mandate: Mandate) -> list[LintFinding]:
 def _check_redact_shadows_policy(mandate: Mandate) -> list[LintFinding]:
     """Warn when a redacted field is also a structured forbidden rule's argument.
 
-    Masking a value replaces it with a string hash, so a numeric threshold rule
-    on that argument (`_rule_matches` only fires on int/float) silently stops
-    firing. Redacting a policy signal is a footgun, not an error — the deployer
-    may intend it — so this is a warning, surfaced rather than left silent.
+    Masking a value replaces it with a `redacted:sha256:…` token, which no
+    longer compares to a numeric threshold: since ADR 0023 decision 6 the rule
+    does not stop firing silently — every call to that tool is reported as
+    unverifiable instead. Redacting a policy signal is a footgun, not an error
+    — the deployer may intend it — so this stays a warning.
     """
     findings: list[LintFinding] = []
     for action in mandate.forbidden_actions:
@@ -116,7 +117,8 @@ def _check_redact_shadows_policy(mandate: Mandate) -> list[LintFinding]:
                 LintFinding(
                     Severity.WARNING,
                     f"redact lists {action.arg!r}, which forbidden_actions rule "
-                    f"'{action.tool}' checks ({action.when}) — masking it disables that check",
+                    f"'{action.tool}' checks ({action.when}) — the masked value cannot be "
+                    "compared, so every call to that tool is reported as unverifiable",
                 )
             )
     return findings
