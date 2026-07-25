@@ -23,7 +23,6 @@ _FORBIDDEN_PATTERN = re.compile(r"^(?P<tool>.+?)_above_(?P<amount>\d+(?:\.\d+)?)
 _TOOL_NAME_ATTR = "gen_ai.tool.name"
 _TOOL_STATUS_ATTR = "tool.result.status"
 _TOOL_ARGS_PREFIX = "tool.arguments."
-_ESCALATED_ATTR = "alfred.escalated"
 
 _CallSignature = tuple[str, tuple[tuple[str, Any], ...]]
 
@@ -42,8 +41,15 @@ def _is_error(event: TraceEvent) -> bool:
     return isinstance(status, str) and status.lower() != "ok"
 
 
-def _is_escalated(events: Sequence[TraceEvent]) -> bool:
-    return any(event.attributes.get(_ESCALATED_ATTR) is True for event in events)
+def _is_escalated(mandate: Mandate, tool_calls: Sequence[TraceEvent]) -> bool:
+    """True when the trace contains a call to one of the mandate's escalation tools.
+
+    Escalation is proven by an action, never by a self-declared attribute: the
+    agent used to be able to write `alfred.escalated` itself and switch off the
+    very check watching it (ADR 0023 decision 4). A mandate that declares no
+    `escalation_tools` can prove no escalation — fail-closed by design.
+    """
+    return any(_tool_name(event) in mandate.escalation_tools for event in tool_calls)
 
 
 def _check_tool_not_allowed(
@@ -245,7 +251,7 @@ def _check_escalation_missed(
     events: Sequence[TraceEvent],
     tool_calls: Sequence[TraceEvent],
 ) -> list[Deviation]:
-    if _is_escalated(events):
+    if _is_escalated(mandate, tool_calls):
         return []
     deviations: list[Deviation] = []
     for rule in mandate.escalate_when:

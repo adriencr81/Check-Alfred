@@ -23,7 +23,9 @@ EXAMPLE_STRUCTURED_MANDATE = EXAMPLES_DIR / "sql-analyst.yaml"
 def _mandate() -> Mandate:
     return Mandate(
         agent="refund-bot-v3",
-        allowed_tools=frozenset({"read_order", "issue_refund", "notify_customer"}),
+        allowed_tools=frozenset(
+            {"read_order", "issue_refund", "notify_customer", "escalate_to_human"}
+        ),
         daily_budget_eur=5.0,
         forbidden_actions=("issue_refund_above_100_eur", "send_marketing"),
         escalate_when=(
@@ -31,6 +33,7 @@ def _mandate() -> Mandate:
             EscalationRule("budget_used", ">", 0.80),
         ),
         required_actions=(RequiredAction("issue_refund", "notify_customer"),),
+        escalation_tools=frozenset({"escalate_to_human"}),
     )
 
 

@@ -56,8 +56,10 @@ mandate, anchored to the event(s) that prove it:
 - **`forbidden_action`** — a call matching a `forbidden_actions` rule (an exact
   tool name, or a structured `tool:` / `when:` threshold on a call argument).
 - **`budget_exceeded`** — the day's token → € cost passed `daily_budget_eur`.
-- **`escalation_missed`** — an `escalate_when` threshold was breached but the
-  agent never raised a hand (no `alfred.escalated` event).
+- **`escalation_missed`** — an `escalate_when` threshold was breached over the
+  day but the agent never raised a hand: no call to any tool listed in the
+  mandate's `escalation_tools`. An escalation is proven by an action, never by
+  a flag the agent sets on itself.
 - **`required_action_missing`** — a triggered obligation left unmet: a
   `required_actions` rule's `when_tool` ran but its mandatory `require_tool`
   never did in the same trace (e.g. a refund issued without ever notifying the

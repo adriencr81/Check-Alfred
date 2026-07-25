@@ -42,6 +42,42 @@ def _check_escalation_metrics(mandate: Mandate) -> list[LintFinding]:
     return findings
 
 
+def _check_escalation_tools(mandate: Mandate) -> list[LintFinding]:
+    """Error when `escalate_when` is declared without any `escalation_tools`.
+
+    An escalation is proven by a call to one of those tools (ADR 0023 decision
+    4), so a mandate that names none can never satisfy its own thresholds:
+    every breach reports `escalation_missed`. That is the intended fail-closed
+    behavior, but it must be a deliberate choice — caught here, before `watch`.
+    """
+    if mandate.escalate_when and not mandate.escalation_tools:
+        return [
+            LintFinding(
+                Severity.ERROR,
+                "escalate_when is declared without escalation_tools — no escalation can "
+                "ever be proven, so every breach will raise escalation_missed. List the "
+                "tool(s) the agent calls to escalate, e.g. `escalation_tools: [notify_human]`",
+            )
+        ]
+    return []
+
+
+def _check_escalation_tools_are_allowed(mandate: Mandate) -> list[LintFinding]:
+    """Warn when an escalation tool is missing from `allowed_tools` — calling it
+    would prove the escalation and raise `tool_not_allowed` in the same breath."""
+    if not mandate.allowed_tools:
+        return []  # already reported by _check_allowed_tools
+    orphans = sorted(mandate.escalation_tools - mandate.allowed_tools)
+    return [
+        LintFinding(
+            Severity.WARNING,
+            f"escalation tool {tool!r} is not in allowed_tools — calling it would "
+            "raise tool_not_allowed",
+        )
+        for tool in orphans
+    ]
+
+
 def _check_allowed_tools(mandate: Mandate) -> list[LintFinding]:
     if not mandate.allowed_tools:
         return [
@@ -92,8 +128,10 @@ def lint_mandate(path: Path | str) -> list[LintFinding]:
     A parse/load failure (malformed YAML, missing key, missing file) is a
     single `error` finding — the mandate cannot be inspected further. A valid
     mandate is then checked semantically: unknown escalation metric (error),
-    empty allowed_tools (warning), non-positive budget (warning), a redacted
-    field that shadows a forbidden rule's argument (warning).
+    `escalate_when` without `escalation_tools` (error), empty allowed_tools
+    (warning), non-positive budget (warning), an escalation tool missing from
+    allowed_tools (warning), a redacted field that shadows a forbidden rule's
+    argument (warning).
     """
     try:
         mandate = load_mandate(path)
@@ -104,7 +142,9 @@ def lint_mandate(path: Path | str) -> list[LintFinding]:
 
     return [
         *_check_escalation_metrics(mandate),
+        *_check_escalation_tools(mandate),
         *_check_allowed_tools(mandate),
         *_check_budget(mandate),
+        *_check_escalation_tools_are_allowed(mandate),
         *_check_redact_shadows_policy(mandate),
     ]

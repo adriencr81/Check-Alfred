@@ -19,6 +19,7 @@ from alfred.mandate.model import Mandate
 _MODEL = "claude-opus-4-8"
 _ALLOWED_TOOL = "send_email"
 _FORBIDDEN_TOOL = "read_pii"
+_ESCALATION_TOOL = "escalate_to_human"
 
 
 def _ns(dt: datetime) -> str:
@@ -42,8 +43,6 @@ def _task_spans(
     start: datetime,
     input_tokens: int,
     output_tokens: int,
-    *,
-    escalated: bool = False,
 ) -> list[dict[str, object]]:
     trace_id = f"demo-trace-{index}"
     task_span_id = f"demo-{index}-task"
@@ -62,8 +61,6 @@ def _task_spans(
         _attr("agent.task", task),
         _attr("agent.task.id", f"task-{index}"),
     ]
-    if escalated:
-        task_attributes.append(_attr("alfred.escalated", True))
 
     return [
         {
@@ -122,8 +119,9 @@ def build_demo_payload(
        mandate's `allowed_tools` — the one deliberate `tool_not_allowed`
        deviation (echoes the `read_pii` example already used in
        PLAN.md/README).
-    3. `escalate_complex_case` is flagged `alfred.escalated` — populates
-       the Escalations line without tripping `escalation_missed`.
+    3. `escalate_complex_case` calls `escalate_to_human`, the demo mandate's
+       declared escalation tool — a real action, which is what populates the
+       Escalations line (ADR 0023 decision 4).
     """
     anchor = now or datetime.now(UTC)
     spans = [
@@ -139,11 +137,10 @@ def build_demo_payload(
         *_task_spans(
             3,
             "escalate_complex_case",
-            _ALLOWED_TOOL,
+            _ESCALATION_TOOL,
             anchor + timedelta(seconds=30),
             52_000,
             10_000,
-            escalated=True,
         ),
     ]
     return {
@@ -159,14 +156,15 @@ def build_demo_payload(
 def demo_mandate(agent: str = "demo-bot") -> Mandate:
     """The mandate the demo trace is evaluated against.
 
-    Only `send_email` is allowed — deliberately narrower than the demo
-    trace's tool calls, so the digest always shows the mandate catching
-    something (see `build_demo_payload`).
+    Only `send_email` and the escalation tool are allowed — deliberately
+    narrower than the demo trace's tool calls, so the digest always shows the
+    mandate catching something (see `build_demo_payload`).
     """
     return Mandate(
         agent=agent,
-        allowed_tools=frozenset({_ALLOWED_TOOL}),
+        allowed_tools=frozenset({_ALLOWED_TOOL, _ESCALATION_TOOL}),
         daily_budget_eur=5.00,
         forbidden_actions=(),
         escalate_when=(),
+        escalation_tools=frozenset({_ESCALATION_TOOL}),
     )

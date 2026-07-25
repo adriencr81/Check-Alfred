@@ -68,10 +68,28 @@ forbidden_actions:
 escalate_when:
   - tool_error_rate > 0.10
   - budget_used > 0.80
+escalation_tools: [escalate_to_human]
 ```
 
 See [`examples/mandates/refund-bot.yaml`](../examples/mandates/refund-bot.yaml)
 for the commented reference.
+
+### Proving an escalation
+
+`escalate_when` thresholds are excused only by a call to one of the tools in
+`escalation_tools` — instrument your escalation path as a real tool call:
+
+```python
+with tracer.tool_call("escalate_to_human", arguments={"ticket": ticket_id}):
+    page_the_on_call_human(ticket_id)
+```
+
+Alfred deliberately does **not** accept a self-declared `alfred.escalated`
+attribute: an agent that can write its own escalation flag can switch off the
+check watching it ([ADR 0023](adr/0023-mandate-control-hardening.md)). A mandate
+that declares `escalate_when` without `escalation_tools` can never prove an
+escalation, so every breach is reported — `alfred mandate lint` flags that
+combination as an error.
 
 ### Redacting PII / secrets
 

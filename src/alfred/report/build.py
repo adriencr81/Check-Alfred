@@ -12,6 +12,7 @@ from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import date
+from functools import partial
 
 from alfred.mandate.engine import evaluate_day, evaluate_trace
 from alfred.mandate.model import Deviation, Mandate
@@ -19,7 +20,7 @@ from alfred.report.model import Baseline, Digest, Line, LineKind
 from alfred.trace.cost import contributing_costs
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
-_ESCALATED_ATTR = "alfred.escalated"
+_TOOL_NAME_ATTR = "gen_ai.tool.name"
 
 # Rolling baseline (F3, docs/adr/0019). The window is the 7 calendar days before
 # the digest's day; a comparison is attached only from ≥3 *active* days (days
@@ -55,8 +56,21 @@ def _cost_line(events: Sequence[TraceEvent]) -> Line | None:
     )
 
 
-def _escalations_line(events: Sequence[TraceEvent]) -> Line | None:
-    escalated = [event for event in events if event.attributes.get(_ESCALATED_ATTR) is True]
+def _escalations_line(
+    escalation_tools: frozenset[str], events: Sequence[TraceEvent]
+) -> Line | None:
+    """Count the calls to the mandate's escalation tools.
+
+    Counted from real tool calls, not from the `alfred.escalated` attribute the
+    agent used to write itself — which handed it a flattering Escalations line
+    for free (ADR 0023 decision 4).
+    """
+    escalated = [
+        event
+        for event in events
+        if event.kind is SpanKind.TOOL_CALL
+        and event.attributes.get(_TOOL_NAME_ATTR) in escalation_tools
+    ]
     if not escalated:
         return None
     return Line(
@@ -68,13 +82,19 @@ def _escalations_line(events: Sequence[TraceEvent]) -> Line | None:
 
 _LineBuilder = Callable[[Sequence[TraceEvent]], Line | None]
 
-# The same builders compute the current day's lines and each history day's value,
-# so a Baseline can never diverge from the line it contextualizes.
-_LINE_BUILDERS: tuple[_LineBuilder, ...] = (
-    _tasks_completed_line,
-    _cost_line,
-    _escalations_line,
-)
+
+def _line_builders(mandate: Mandate) -> tuple[_LineBuilder, ...]:
+    """The same builders compute the current day's lines and each history day's
+    value, so a Baseline can never diverge from the line it contextualizes.
+
+    Built per mandate because the Escalations line needs its `escalation_tools`
+    to know what an escalation is.
+    """
+    return (
+        _tasks_completed_line,
+        _cost_line,
+        partial(_escalations_line, mandate.escalation_tools),
+    )
 
 
 def _with_baseline(
@@ -149,7 +169,7 @@ def build_digest(
     if not events:
         raise ReportError("cannot build a Digest from an empty trace")
     lines: list[Line] = []
-    for builder in _LINE_BUILDERS:
+    for builder in _line_builders(mandate):
         line = builder(events)
         if line is None:
             continue

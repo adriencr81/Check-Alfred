@@ -99,6 +99,12 @@ class Mandate:
     forbidden_actions: tuple[str | ForbiddenRule, ...]
     escalate_when: tuple[EscalationRule, ...]
     required_actions: tuple[RequiredAction, ...] = ()
+    # Tools whose call proves the agent escalated to a human. An `escalate_when`
+    # threshold is only excused by a real call to one of these (ADR 0023
+    # decision 4) — never by a self-declared attribute. Empty means no
+    # escalation can be proven, so every breach is reported; `mandate lint`
+    # raises an error when `escalate_when` is declared without it.
+    escalation_tools: frozenset[str] = frozenset()
     # A run of this many identical consecutive tool calls (same tool + same
     # arguments) is read as an agent spinning without progress.
     loop_threshold: int = 3

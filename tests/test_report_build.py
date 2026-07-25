@@ -23,13 +23,16 @@ from alfred.trace.store import TraceStore
 def _mandate() -> Mandate:
     return Mandate(
         agent="refund-bot-v3",
-        allowed_tools=frozenset({"read_order", "issue_refund", "notify_customer"}),
+        allowed_tools=frozenset(
+            {"read_order", "issue_refund", "notify_customer", "escalate_to_human"}
+        ),
         daily_budget_eur=5.0,
         forbidden_actions=("issue_refund_above_100_eur", "send_marketing"),
         escalate_when=(
             EscalationRule("tool_error_rate", ">", 0.10),
             EscalationRule("budget_used", ">", 0.80),
         ),
+        escalation_tools=frozenset({"escalate_to_human"}),
     )
 
 
@@ -94,12 +97,8 @@ def _typical_day_events() -> list[TraceEvent]:
         ),
         _event("e5", trace_id="trace-2", kind=SpanKind.AGENT_TASK),
         _event("e6", trace_id="trace-2", attributes={"gen_ai.tool.name": "read_pii"}),
-        _event(
-            "e7",
-            trace_id="trace-2",
-            kind=SpanKind.AGENT_TASK,
-            attributes={"alfred.escalated": True},
-        ),
+        _event("e9", trace_id="trace-2", attributes={"gen_ai.tool.name": "escalate_to_human"}),
+        _event("e7", trace_id="trace-3", kind=SpanKind.AGENT_TASK),
     ]
 
 
@@ -168,15 +167,26 @@ def test_cost_line_absent_when_unpriced() -> None:
     assert all(line.kind is not LineKind.COST_EUR for line in digest.lines)
 
 
-def test_escalations_line_counts_alfred_escalated_events() -> None:
+def test_escalations_line_counts_escalation_tool_calls() -> None:
     events = [
-        _event("e1", kind=SpanKind.AGENT_TASK, attributes={"alfred.escalated": True}),
+        _event("e1", attributes={"gen_ai.tool.name": "escalate_to_human"}),
         _event("e2", attributes={"gen_ai.tool.name": "read_order"}),
     ]
     digest = build_digest(_mandate(), events, date(2026, 8, 30))
     line = _line(digest, LineKind.ESCALATIONS)
     assert line.value == 1.0
     assert line.sources == (EventId("e1"),)
+
+
+def test_escalations_line_ignores_the_self_declared_attribute() -> None:
+    """ADR 0023 decision 4: `alfred.escalated` used to buy the agent a
+    flattering Escalations line for the price of one attribute."""
+    events = [
+        _event("e1", kind=SpanKind.AGENT_TASK, attributes={"alfred.escalated": True}),
+        _event("e2", attributes={"gen_ai.tool.name": "read_order"}),
+    ]
+    digest = build_digest(_mandate(), events, date(2026, 8, 30))
+    assert all(line.kind is not LineKind.ESCALATIONS for line in digest.lines)
 
 
 def test_escalations_line_absent_when_none() -> None:
@@ -325,7 +335,7 @@ def test_reference_day_digest_snapshot() -> None:
 
     escalations = _line(digest, LineKind.ESCALATIONS)
     assert escalations.value == 1.0
-    assert escalations.sources == (EventId("e7"),)
+    assert escalations.sources == (EventId("e9"),)
 
     assert len(digest.deviations) == 1
     deviation = digest.deviations[0]

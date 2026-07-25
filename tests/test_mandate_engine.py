@@ -20,13 +20,16 @@ from alfred.trace.model import EventId, SpanKind, TraceEvent
 def _mandate() -> Mandate:
     return Mandate(
         agent="refund-bot-v3",
-        allowed_tools=frozenset({"read_order", "issue_refund", "notify_customer"}),
+        allowed_tools=frozenset(
+            {"read_order", "issue_refund", "notify_customer", "escalate_to_human"}
+        ),
         daily_budget_eur=5.0,
         forbidden_actions=("issue_refund_above_100_eur", "send_marketing"),
         escalate_when=(
             EscalationRule("tool_error_rate", ">", 0.10),
             EscalationRule("budget_used", ">", 0.80),
         ),
+        escalation_tools=frozenset({"escalate_to_human"}),
     )
 
 
@@ -250,7 +253,21 @@ def test_escalation_missed_on_tool_error_rate() -> None:
     assert matches[0].event_ids == (EventId("e1"),)
 
 
-def test_escalation_missed_absent_when_agent_escalates() -> None:
+def test_escalation_missed_absent_when_agent_calls_an_escalation_tool() -> None:
+    events = [
+        _event(
+            "e1", attributes={"gen_ai.tool.name": "read_order", "tool.result.status": "error"}
+        ),
+        _event("e2", attributes={"gen_ai.tool.name": "escalate_to_human"}),
+    ]
+    deviations = evaluate(_mandate(), events)
+    assert not any(d.type.value == "escalation_missed" for d in deviations)
+
+
+def test_self_declared_escalation_attribute_no_longer_suppresses_the_deviation() -> None:
+    """ADR 0023 decision 4: `alfred.escalated` was written by the audited agent,
+    so the surveilled party disarmed its own surveillance. Only a real call to
+    a mandate-declared escalation tool proves an escalation now."""
     events = [
         _event(
             "e1", attributes={"gen_ai.tool.name": "read_order", "tool.result.status": "error"}
@@ -258,7 +275,20 @@ def test_escalation_missed_absent_when_agent_escalates() -> None:
         _event("e2", kind=SpanKind.AGENT_TASK, attributes={"alfred.escalated": True}),
     ]
     deviations = evaluate(_mandate(), events)
-    assert not any(d.type.value == "escalation_missed" for d in deviations)
+    assert any(d.type.value == "escalation_missed" for d in deviations)
+
+
+def test_escalation_can_never_be_proven_without_declared_escalation_tools() -> None:
+    """Fail-closed: a mandate that never says which tool escalates cannot have
+    its `escalate_when` satisfied — `mandate lint` reports this as an error."""
+    mandate = replace(_mandate(), escalation_tools=frozenset())
+    events = [
+        _event(
+            "e1", attributes={"gen_ai.tool.name": "read_order", "tool.result.status": "error"}
+        ),
+        _event("e2", attributes={"gen_ai.tool.name": "escalate_to_human"}),
+    ]
+    assert any(d.type.value == "escalation_missed" for d in evaluate(mandate, events))
 
 
 def test_escalation_missed_absent_below_threshold() -> None:
