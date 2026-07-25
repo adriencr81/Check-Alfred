@@ -244,3 +244,38 @@ def test_wrong_schema_file_error_names_the_file(tmp_path: Path) -> None:
     path.write_text('{"foo": "bar"}', encoding="utf-8")
     with pytest.raises(TraceIngestionError, match=r"not-otlp\.json"):
         ingest_otlp_file(path)
+
+
+def _with(span: dict[str, object], **overrides: object) -> dict[str, object]:
+    return {**span, **overrides}
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "case"),
+    [
+        ("startTimeUnixNano", "not-a-number", "non-numeric timestamp"),
+        ("startTimeUnixNano", "9" * 25, "timestamp beyond the datetime range"),
+        ("endTimeUnixNano", "", "empty timestamp"),
+    ],
+)
+def test_malformed_timestamp_raises_the_typed_error(
+    field: str, value: str, case: str
+) -> None:
+    """ADR 0024 decision 1: these used to escape as a bare ValueError, which
+    `alfred watch` never caught — one span was enough to kill the auditor."""
+    span = _with(_span("badspan", "execute_tool"), **{field: value})
+    with pytest.raises(TraceIngestionError, match="badspan"):
+        ingest_otlp_json(_payload(span))
+
+
+def test_non_dict_span_raises_the_typed_error() -> None:
+    with pytest.raises(TraceIngestionError):
+        ingest_otlp_json(_payload("not-a-span"))  # type: ignore[arg-type]
+
+
+def test_malformed_span_error_names_the_file(tmp_path: Path) -> None:
+    span = _with(_span("badspan", "execute_tool"), startTimeUnixNano="boom")
+    path = tmp_path / "broken-span.json"
+    path.write_text(json.dumps(_payload(span)), encoding="utf-8")
+    with pytest.raises(TraceIngestionError, match=r"broken-span\.json"):
+        ingest_otlp_file(path)

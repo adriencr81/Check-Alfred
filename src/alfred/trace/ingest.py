@@ -116,20 +116,37 @@ def _timestamp(nanos: str) -> datetime:
 
 
 def _span_to_event(span: dict[str, Any]) -> TraceEvent:
-    attributes = _attributes(span.get("attributes", []))
-    kind = _kind(attributes)
-    _adapt_semconv(span, kind, attributes)
-    parent_span_id = span.get("parentSpanId") or None
-    return TraceEvent(
-        event_id=EventId(span["spanId"]),
-        trace_id=span["traceId"],
-        parent_span_id=parent_span_id,
-        kind=kind,
-        name=span["name"],
-        start_time=_timestamp(span["startTimeUnixNano"]),
-        end_time=_timestamp(span["endTimeUnixNano"]),
-        attributes=attributes,
-    )
+    """Normalize one OTLP span, or raise `TraceIngestionError` naming it.
+
+    Every failure mode is funnelled into the one typed error the callers
+    already expect (ADR 0024 decision 1): a `ValueError` escaping from a
+    malformed timestamp used to crash `alfred watch` outright, and since the
+    seen-state was only written at the end of a pass, every re-run crashed
+    again on the same file.
+    """
+    if not isinstance(span, dict):
+        raise TraceIngestionError(f"Span is not an object: {span!r}")
+    try:
+        attributes = _attributes(span.get("attributes", []))
+        kind = _kind(attributes)
+        _adapt_semconv(span, kind, attributes)
+        parent_span_id = span.get("parentSpanId") or None
+        return TraceEvent(
+            event_id=EventId(span["spanId"]),
+            trace_id=span["traceId"],
+            parent_span_id=parent_span_id,
+            kind=kind,
+            name=span["name"],
+            start_time=_timestamp(span["startTimeUnixNano"]),
+            end_time=_timestamp(span["endTimeUnixNano"]),
+            attributes=attributes,
+        )
+    except TraceIngestionError:
+        raise
+    except (AttributeError, KeyError, OverflowError, OSError, TypeError, ValueError) as exc:
+        raise TraceIngestionError(
+            f"Malformed span {span.get('spanId', '<no spanId>')!r}: {exc}"
+        ) from exc
 
 
 def ingest_otlp_json(
