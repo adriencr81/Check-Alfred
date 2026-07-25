@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 
 from alfred.cli import main
 
@@ -497,6 +498,35 @@ def test_cli_schedule_rejects_bad_time(
     assert "HH:MM" in capsys.readouterr().err
 
 
+def test_cli_schedule_prints_github_actions_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = main(["schedule", "traces", "--at", "07:15", "--github-actions"])
+    assert exit_code == 0
+    workflow = yaml.safe_load(capsys.readouterr().out)
+    assert workflow["jobs"]["digest"]["steps"][0]["uses"].startswith("actions/checkout")
+
+
+def test_cli_schedule_refuses_project_with_github_actions(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A workflow runs from the repository root, so --project cannot be honoured
+    there — saying so beats ignoring it (ADR 0027)."""
+    exit_code = main(
+        ["schedule", "traces", "--project", str(tmp_path), "--at", "09:00", "--github-actions"]
+    )
+    assert exit_code == 1
+    assert "--project does not apply" in capsys.readouterr().err
+
+
+def test_cli_schedule_rejects_absolute_traces_dir_for_github_actions(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = main(["schedule", str(tmp_path.resolve()), "--at", "09:00", "--github-actions"])
+    assert exit_code == 1
+    assert "must be relative" in capsys.readouterr().err
+
+
 def test_cli_demo_runs_fake_agent_and_prints_digest(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -507,6 +537,24 @@ def test_cli_demo_runs_fake_agent_and_prints_digest(
     assert "Tasks completed" in out
     assert "Deviations (mandate)" in out
     assert "read_pii" in out
+
+
+def test_cli_demo_invites_the_first_digest_to_be_shared(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The package carries no telemetry, so an install that produced a digest is
+    invisible unless its owner says so. ADR 0027 decision 9."""
+    assert main(["demo"]) == 0
+    out = capsys.readouterr().out
+    assert "show_your_digest.md" in out
+    # The invitation follows the digest; it must never be mistaken for a line of it.
+    assert out.index("Tasks completed") < out.index("Show us what it caught")
+
+
+def test_cli_demo_invitation_points_at_a_template_that_exists() -> None:
+    """A dead link in the one line asking for feedback is worse than no line."""
+    template = Path(__file__).resolve().parent.parent / ".github/ISSUE_TEMPLATE/show_your_digest.md"
+    assert template.is_file()
 
 
 EXAMPLE_MANDATE = Path(__file__).parent.parent / "examples" / "mandates" / "refund-bot.yaml"

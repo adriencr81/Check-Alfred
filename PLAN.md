@@ -301,6 +301,12 @@ Le launch (§6.3) est re-daté seulement après ce run.
 
 ## 6. Plan marketing
 
+> **Révision 2026-07-25** (ADR 0027) : le vivier « ex-collègues » de §6.2
+> n'existe pas — le sourcing devient intégralement froid, d'où 30 noms au lieu
+> de 15. Le créneau du vendredi de §6.3 passe des PRs d'exemples + awesome-lists
+> à la place du post LinkedIn FR, qui supposait un réseau de décideurs. L'angle
+> de launch devient les connecteurs natifs, livrés depuis (Briques 12 et 13).
+
 ### 6.1 Principes
 
 Les stars viennent d'une **thèse racontée avec des preuves**. La thèse d'Alfred : *« on déploie des employés IA sans mandat, sans daily, sans dossier de preuve — voici la couche manquante »*. Chaque contenu la ré-encode. Aucun post ne parle du produit sans une preuve concrète (finding, code, GIF).
@@ -308,9 +314,11 @@ Les stars viennent d'une **thèse racontée avec des preuves**. La thèse d'Alfr
 ### 6.2 Pré-launch (compressé : 21 juillet → 3 août, ADR 0009)
 
 Le build ayant fini à J+3, le pré-launch passe de 6 semaines à 2. Cibles
-recalées : **15 noms** d'early users au 1er août (au lieu de 30 à J+45),
-DM personnalisés vers ~8 d'entre eux dès que le GIF existe, objectif
-inchangé de 5 installations le jour du launch + 2-3 témoignages écrits.
+recalées : **30 noms** d'early users au 1er août, DM personnalisés vers ~15
+d'entre eux dès que le GIF existe, objectif inchangé de 5 installations le
+jour du launch + 2-3 témoignages écrits. Le ratio 15 noms → 8 DM d'origine
+supposait une part de contacts chauds ; sans eux (ADR 0027), il faut élargir
+le haut du sourcing pour tenir la même cible d'installations.
 **2 posts build-in-public** au lieu de 6 : (1) le post B4 « comment on
 empêche notre LLM d'halluciner nos rapports » — il est déjà documenté
 dans `docs/verified_nlg.md`, c'est le plus fort ; (2) un post « pourquoi
@@ -318,13 +326,16 @@ vos agents IA ont besoin d'un mandat, pas d'un dashboard ».
 
 **Cadence** : 1 post/semaine, EN + FR (X + LinkedIn), toujours sur un problème concret rencontré pendant la construction. Pas « j'ai codé la brique 3 » mais « voici pourquoi un agent qui résume sa propre activité hallucine, et comment on l'ancre sur la trace » (post issu de B4 par exemple).
 
-**Constituer une liste d'early users pendant le build** (objectif : 30 noms à J+45) :
+**Constituer une liste d'early users pendant le build** (objectif : 30 noms au 1er août). Le point commun de tous ces viviers : la personne a **déjà exprimé publiquement le problème**, donc le DM s'ouvre sur ses propres mots, pas sur un pitch.
 - Auteurs d'issues récentes sur `langchain-ai/langgraph`, `crewAIInc/crewAI`, `openai/openai-agents-python` qui mentionnent "monitoring", "tracing", "logging", "observability".
 - Membres actifs du Discord de LangGraph et CrewAI (chercher les questions manager-side).
 - r/AI_Agents contributeurs récents sur les threads "how do you monitor/audit agents".
-- Ex-collègues systèmes critiques qui déploient de l'IA aujourd'hui (ton réseau — atout unique).
+- Issues sur les outils adjacents (`langfuse/langfuse`, `Arize-ai/phoenix`, `AgentOps-AI/agentops`) qui réclament de l'audit, de la conformité ou du coût par tâche — ceux-là demandent la couche d'Alfred, pas un dashboard de plus.
+- Commentateurs des threads HN « agent reliability » / « LLM observability » (recherche via hn.algolia.com).
+- Auteurs de billets « monitoring AI agents in production » (dev.to, Medium) — ils ont écrit publiquement sur le sujet.
+- r/LocalLLaMA, pré-qualifié pour l'argument « vos traces restent chez vous » — le même angle que le launch, autant y recruter avant.
 
-**Contact** : DM personnalisé à ~10 d'entre eux à J+35, montrer le GIF, demander « would you try this the day it ships? ». Objectif : 5 installations le jour du launch + 2-3 témoignages écrits (« I tried Alfred, here's what I got »).
+**Contact** : DM personnalisé à ~15 d'entre eux, montrer le GIF, demander « would you try this the day it ships? ». Objectif : 5 installations le jour du launch + 2-3 témoignages écrits (« I tried Alfred, here's what I got »). Le sourcing et l'échauffement des comptes Reddit (§6.3) sont **la même activité** : lire ces fils et y répondre sincèrement produit les deux.
 
 **Assets à préparer à J+40** :
 - GIF final de démo (< 15s, boucle propre).
@@ -339,15 +350,25 @@ vos agents IA ont besoin d'un mandat, pas d'un dashboard ».
 
 | Jour | Canal | Angle | Objectif |
 |---|---|---|---|
-| Mardi 14h-16h Paris | **Show HN** | « Show HN: Alfred – daily stand-ups for your AI agents, computed from traces » | Front page, 100+ commentaires. Rester dispo 6h. |
-| Mercredi | **Reddit** r/AI_Agents, r/LangChain, r/LocalLLaMA | Adapté par sub. LocalLLaMA = « surveillez vos agents sans envoyer vos traces à un SaaS ». | 500 upvotes cumulés. |
+| Mardi 14h-16h Paris | **Show HN** | « Show HN: Alfred – daily stand-ups for your AI agents, computed from traces ». Les connecteurs natifs dans le titre ou le premier paragraphe : ils suppriment l'objection n°1 (« je ne sais pas produire vos fichiers OTLP ») avant qu'elle soit posée. | Front page, 100+ commentaires. Rester dispo 6h. |
+| Mercredi | **Reddit** r/AI_Agents, r/LocalLLaMA | Adapté par sub. LocalLLaMA = « surveillez vos agents sans envoyer vos traces à un SaaS ». **Posts texte, jamais posts lien** — l'automod des subs filtre les comptes neufs qui postent une URL, et le post disparaît sans notification. | 500 upvotes cumulés. |
 | Jeudi | **X thread** | GIF + le finding le plus frappant de B4 (verified NLG). | 200+ reposts sur le thread. |
-| Vendredi | **LinkedIn FR** | Angle manager/conformité, ton réseau systèmes critiques. | 5 commentaires de décideurs. |
+| Vendredi | **PRs d'exemples** (LangGraph, OpenAI Agents SDK) + **awesome-lists** | Distribution permanente au lieu d'un pic : une PR mergée est un backlink devant l'audience cible qu'aucun modérateur ne retire. Remplace le post LinkedIn FR, qui supposait un réseau de décideurs (ADR 0027). | 1-2 PRs ouvertes, 3 listes soumises. |
 | Lundi J+7 | **Pitch 4 newsletters IA** (TLDR AI, The Rundown, Ben's Bites, La Revue IA) | Angle « accountability » = angle éditorial frais. | 1-2 pickups. |
+
+**Prérequis Reddit, à traiter avant le launch** : vérifier l'âge et le karma du
+compte. Un compte neuf est filtré par l'automod de r/AI_Agents et r/LocalLLaMA.
+Deux semaines de commentaires sincères dans ces subs suffisent — et c'est le
+même travail que le sourcing des 30 noms (§6.2).
+
+Le post LinkedIn FR peut sortir hors séquence, sans objectif chiffré : il coûte
+20 minutes et ne dépend de personne.
 
 **Signal de réussite du launch** : ≥ 500 stars à J+50, ≥ 20 installs pip, ≥ 5 issues créées par des inconnus.
 
-**Si le launch rate** (< 100 stars à J+50) : ne pas paniquer, re-launch à J+120 avec la v0.2 sous un autre angle (« Alfred now speaks LangGraph natively »). Un HN raté se retente sous un autre angle à 2-3 mois.
+**Si le launch rate** (< 100 stars à J+50) : ne pas paniquer, re-launch à J+120 sous un autre angle — le **leaderboard mensuel de fiabilité** (§6.4), un objet de discussion neuf plutôt qu'une redite du produit. Un HN raté se retente sous un autre angle à 2-3 mois.
+
+**Sur la lecture du résultat** : un Show HN suit une distribution très asymétrique — l'issue la plus probable est nettement sous les 500 stars, seuil qui correspond en pratique à un top 10 front page. Le seuil reste la cible ; il ne doit pas être lu comme le cas de base, sinon un résultat médian passe pour un échec produit.
 
 ### 6.4 Post-launch (J+50 → J+150)
 
@@ -362,7 +383,7 @@ vos agents IA ont besoin d'un mandat, pas d'un dashboard ».
 - **Leaderboard mensuel de fiabilité d'agents** (ancienne Brique 9 du harnais RAG, réactivée ici) — machine à contenu la plus starrable du plan. Premier édition à J+120.
 
 **Cadence de release** :
-- v0.2 (J+90) : connecteurs natifs LangGraph, CrewAI, OpenAI Agents SDK (priorisés par les *issues*, pas par intuition). Digest Teams. Coûts multi-providers.
+- v0.2 (J+90) : connecteur natif CrewAI, endpoint OTLP HTTP, digest Teams, coûts multi-providers — priorisés par les *issues*, pas par intuition. LangGraph et OpenAI Agents SDK sont livrés avant le launch (Briques 12 et 13) et font partie de son angle.
 - v0.3 (J+120) : « entretien de performance » — bench rejoué, dérive de comportement, coût/tâche vérifié.
 - v0.4 (J+150) : chaîne de responsabilité — export dossier de preuve. C'est le pont explicite vers l'étage payant.
 
