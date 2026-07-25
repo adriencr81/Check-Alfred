@@ -130,3 +130,46 @@ def test_redacted_value_absent_from_slack_payload() -> None:
     digest = build_digest(mandate, events, date(2026, 7, 24))
     payload = build_block_kit_payload(digest)
     assert _EMAIL not in json.dumps(payload)
+
+
+_ARGS_BLOB = "gen_ai.tool.call.arguments"
+
+
+def _blob_span(span_id: str, blob: str) -> dict[str, object]:
+    """A standard-semconv tool span: arguments packed in one JSON blob."""
+    return _tool_span(span_id, extra=[_attr(_ARGS_BLOB, {"stringValue": blob})])
+
+
+def test_redacted_value_masked_inside_the_raw_arguments_blob(tmp_path: Path) -> None:
+    """ADR 0025 decision 1: flattening copied the arguments out of the blob but
+    left the blob itself, so the declared PII reached SQLite in clear text."""
+    blob = json.dumps({"customer_email": _EMAIL, "amount_eur": 250.0})
+    events = ingest_otlp_json(_payload(_blob_span("s1", blob)), frozenset({"customer_email"}))
+
+    assert _EMAIL not in events[0].attributes[_ARGS_BLOB]
+    assert "250" in events[0].attributes[_ARGS_BLOB]  # untouched fields survive
+    db_path = tmp_path / "traces.db"
+    store = TraceStore(db_path)
+    store.put_many(events)
+    store.close()
+    assert _EMAIL not in db_path.read_bytes().decode("utf-8", errors="ignore")
+
+
+def test_redacted_value_masked_inside_a_nested_blob() -> None:
+    blob = json.dumps({"customer": {"contacts": [{"customer_email": _EMAIL}]}})
+    events = ingest_otlp_json(_payload(_blob_span("s1", blob)), frozenset({"customer_email"}))
+    assert _EMAIL not in events[0].attributes[_ARGS_BLOB]
+
+
+def test_unparsable_blob_is_masked_whole_when_redaction_is_configured() -> None:
+    """Fail-closed: what cannot be inspected cannot be cleared."""
+    events = ingest_otlp_json(
+        _payload(_blob_span("s1", "{ not json " + _EMAIL)), frozenset({"customer_email"})
+    )
+    assert _EMAIL not in events[0].attributes[_ARGS_BLOB]
+
+
+def test_blob_without_a_named_field_is_left_intact() -> None:
+    blob = json.dumps({"order_id": "A-1", "amount_eur": 250.0})
+    events = ingest_otlp_json(_payload(_blob_span("s1", blob)), frozenset({"customer_email"}))
+    assert events[0].attributes[_ARGS_BLOB] == blob
