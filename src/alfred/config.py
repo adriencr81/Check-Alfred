@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tomllib
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 
+from alfred._fs import write_private
+from alfred._http import endpoint_error
 from alfred.mandate.model import Mandate
 from alfred.mandate.yaml_io import dump_mandate
 from alfred.narrate.llm import LLMClient, OpenAICompatibleClient
@@ -26,6 +30,10 @@ _DEFAULT_TRACE_DB_RELATIVE_PATH = ".alfred/trace.db"
 # passed as a CLI flag — only the non-secret endpoint (base URL + model) lives
 # in config.toml. See `build_llm_client` and docs/adr/0007.
 LLM_API_KEY_ENV = "ALFRED_LLM_API_KEY"
+# The webhook URL is itself a credential; this env var lets a deployer keep it
+# out of the config file entirely, like the API key above (ADR 0025 decision 7).
+SLACK_WEBHOOK_ENV = "ALFRED_SLACK_WEBHOOK_URL"
+_SLACK_WEBHOOK_HOST = "hooks.slack.com"
 
 
 class ConfigError(Exception):
@@ -67,17 +75,33 @@ def _scaffold_mandate(agent: str) -> Mandate:
     )
 
 
-def _validate_webhook(url: str) -> str:
-    """Return `url` if it is a plausible Slack incoming webhook, else raise.
+def _validate_endpoint(url: str, *, what: str) -> str:
+    """Return `url` if it is fit to carry a credential, else raise.
 
-    Slack incoming webhooks are always HTTPS. Reject anything else loudly at
-    `init` time rather than writing a config that `alfred watch` would only
-    fail on later — same "fail loudly" stance as the existing overwrite guard
-    and `deliver.slack._urllib_transport`'s scheme check.
+    One rule for both endpoints (`alfred._http.endpoint_error`): HTTPS, or
+    cleartext to loopback for a self-hosted model. Checked at `init` *and* at
+    load — validating only at `init` left a hand-edited `http://` to be
+    discovered by the request itself, in clear text (ADR 0025 decision 4). The
+    message never repeats the URL's path: a webhook's path is its credential.
     """
-    if not url.startswith("https://"):
-        raise ConfigError(f"slack webhook must be an https:// URL, got {url!r}")
+    unfit = endpoint_error(url)
+    if unfit is not None:
+        raise ConfigError(f"{what} {unfit}")
     return url
+
+
+def _webhook_host_warning(url: str) -> str | None:
+    """Warn when a webhook does not point at Slack — the digest carries the
+    day's activity, so a wrong host is an exfiltration channel. A warning, not
+    an error: Slack-compatible endpoints (Mattermost, internal proxies) are a
+    legitimate setup (ADR 0025 decision 8)."""
+    host = urllib.parse.urlsplit(url).hostname or ""
+    if host.lower() == _SLACK_WEBHOOK_HOST:
+        return None
+    return (
+        f"slack_webhook_url points at {host!r}, not {_SLACK_WEBHOOK_HOST} — "
+        "the digest will be sent there"
+    )
 
 
 def _dump_toml(data: dict[str, str]) -> str:
@@ -105,7 +129,8 @@ def init_project(
     written as the narration endpoint read back by `alfred watch --narrate`
     (the API key stays in env `ALFRED_LLM_API_KEY`, never on disk). Raises
     `ConfigError` if either file already exists — `init` never silently
-    overwrites an existing project — or if the webhook is not an https:// URL.
+    overwrites an existing project — or if an endpoint URL is unfit to carry a
+    credential. The config file is written owner-only.
     """
     root = Path(directory)
     mandate_path = root / _MANDATE_FILENAME
@@ -120,18 +145,21 @@ def init_project(
         "trace_db_path": _DEFAULT_TRACE_DB_RELATIVE_PATH,
     }
     if slack_webhook is not None:
-        config_values["slack_webhook_url"] = _validate_webhook(slack_webhook)
+        config_values["slack_webhook_url"] = _validate_endpoint(
+            slack_webhook, what="slack webhook"
+        )
     if llm_base_url is not None:
-        config_values["llm_base_url"] = llm_base_url
+        config_values["llm_base_url"] = _validate_endpoint(llm_base_url, what="llm_base_url")
     if llm_model is not None:
         config_values["llm_model"] = llm_model
 
     root.mkdir(parents=True, exist_ok=True)
-    config_path.parent.mkdir(parents=True, exist_ok=True)
     mandate_path.write_text(
         _SCAFFOLD_HEADER + dump_mandate(_scaffold_mandate(agent)), encoding="utf-8"
     )
-    config_path.write_text(_dump_toml(config_values), encoding="utf-8")
+    # Owner-only: this file carries the Slack webhook, whose path is the
+    # credential (ADR 0025 decision 7).
+    write_private(config_path, _dump_toml(config_values))
 
 
 def load_config(directory: Path | str) -> AlfredConfig:
@@ -157,14 +185,26 @@ def load_config(directory: Path | str) -> AlfredConfig:
     except KeyError as exc:
         raise ConfigError(f"config at {config_path} is missing required key {exc}") from exc
 
-    webhook = raw.get("slack_webhook_url")
+    # The env var wins, so a deployer can keep the webhook off disk entirely.
+    webhook = os.environ.get(SLACK_WEBHOOK_ENV) or raw.get("slack_webhook_url")
     llm_base_url = raw.get("llm_base_url")
     llm_model = raw.get("llm_model")
+
+    webhook_url = str(webhook) if webhook else None
+    if webhook_url is not None:
+        _validate_endpoint(webhook_url, what="slack webhook")
+        warning = _webhook_host_warning(webhook_url)
+        if warning is not None:
+            print(f"alfred: warning: {warning}", file=sys.stderr)
+    base_url = str(llm_base_url) if llm_base_url else None
+    if base_url is not None:
+        _validate_endpoint(base_url, what="llm_base_url")
+
     return AlfredConfig(
         mandate_path=mandate_path,
         trace_db_path=trace_db_path,
-        slack_webhook_url=str(webhook) if webhook else None,
-        llm_base_url=str(llm_base_url) if llm_base_url else None,
+        slack_webhook_url=webhook_url,
+        llm_base_url=base_url,
         llm_model=str(llm_model) if llm_model else None,
     )
 

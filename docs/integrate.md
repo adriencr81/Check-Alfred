@@ -68,10 +68,28 @@ forbidden_actions:
 escalate_when:
   - tool_error_rate > 0.10
   - budget_used > 0.80
+escalation_tools: [escalate_to_human]
 ```
 
 See [`examples/mandates/refund-bot.yaml`](../examples/mandates/refund-bot.yaml)
 for the commented reference.
+
+### Proving an escalation
+
+`escalate_when` thresholds are excused only by a call to one of the tools in
+`escalation_tools` — instrument your escalation path as a real tool call:
+
+```python
+with tracer.tool_call("escalate_to_human", arguments={"ticket": ticket_id}):
+    page_the_on_call_human(ticket_id)
+```
+
+Alfred deliberately does **not** accept a self-declared `alfred.escalated`
+attribute: an agent that can write its own escalation flag can switch off the
+check watching it ([ADR 0023](adr/0023-mandate-control-hardening.md)). A mandate
+that declares `escalate_when` without `escalation_tools` can never prove an
+escalation, so every breach is reported — `alfred mandate lint` flags that
+combination as an error.
 
 ### Redacting PII / secrets
 
@@ -87,14 +105,21 @@ redact:
   - gen_ai.prompt    # or a full attribute key
 ```
 
-Each masked value becomes a stable `redacted:sha256:<hash>` token — the content
+Each masked value becomes a stable `redacted:hmac:<hash>` token — the content
 is hidden, but identical values still compare equal, so `loop_detected` keeps
 working on a masked field. The masking is deterministic and declarative: only
 the fields you list are touched (nothing is guessed), and `alfred mandate lint`
-warns if you redact a numeric field that a `forbidden_actions` rule checks
-(masking it would silently disable that check). It is a per-field data-
-minimization control, not a defense against a targeted dictionary attack on a
-low-entropy value — see the ADR's limits.
+warns if you redact a numeric field that a `forbidden_actions` rule checks (the
+masked token can no longer be compared, so every call to that tool gets
+reported as unverifiable). Fields packed into the standard
+`gen_ai.tool.call.arguments` blob are masked inside it too, at any depth.
+
+The token is an HMAC under a per-project key, generated on first use in
+`.alfred/redaction-key` (mode 0600) — keep it with the project and out of
+version control. Without a key the token was a plain digest, and an email
+address or an order id was recoverable from it by dictionary
+([ADR 0025](adr/0025-leak-containment.md)). Tokens are therefore comparable
+within a project, not across projects.
 
 ## 3. Watch the traces
 
@@ -105,6 +130,14 @@ cp mandate.yaml my-project/mandate.yaml
 alfred watch traces/ --project my-project
 ```
 
+The webhook URL is a credential — anyone holding it can post into your channel,
+so `.alfred/config.toml` is written owner-only (as are `trace.db` and
+`seen.json`, which carry tool arguments). To keep it off disk entirely, export
+`ALFRED_SLACK_WEBHOOK_URL` instead; it wins over the config file. Both endpoint
+URLs must be `https://` (cleartext is accepted only for `localhost`, so a
+self-hosted model still works), and a webhook pointing somewhere other than
+`hooks.slack.com` is reported as a warning.
+
 Pass `--slack-webhook` to have `init` write the webhook into
 `.alfred/config.toml` for you (validated as an `https://` URL); omit it and
 the digest goes to stdout only until you add the webhook yourself.
@@ -113,6 +146,19 @@ Every line of the resulting digest is computed from identifiable trace
 events (the `[evt:…]` IDs) — never self-reported by the agent, never
 invented by an LLM. See [verified_nlg.md](verified_nlg.md) for the
 guarantee.
+
+### When a trace file cannot be read
+
+A file Alfred cannot parse is **quarantined**, not fatal: the pass still
+ingests every other file and delivers their digests, the offending file is
+named on stderr, and `alfred watch` exits `1` so a cron run surfaces the gap.
+The warning repeats on every pass until you fix or remove the file — a
+quarantined file is a hole in the audit, and it stays visible
+([ADR 0024](adr/0024-auditor-availability.md)). Fixing the file is enough:
+files are tracked by the SHA-256 of their content in `.alfred/seen.json`, so
+the corrected version is picked up on the next pass. For the same reason, a
+trace file rewritten after being ingested is audited again rather than
+skipped by name.
 
 ## 4. Make it daily
 

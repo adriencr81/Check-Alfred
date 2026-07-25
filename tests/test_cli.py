@@ -6,6 +6,7 @@ docs/adr/0008-brique6-demo-launch-polish-design.md.
 
 from __future__ import annotations
 
+import re
 import shutil
 import time
 from pathlib import Path
@@ -200,7 +201,9 @@ class _EchoStubLLM:
 
     def complete(self, prompt: str) -> str:
         allowed = prompt.rsplit(":", 1)[1].strip()
-        return f"Narrated line. [evt:{allowed}]"
+        value = re.search(r"with value (.+?)\. The sentence", prompt)
+        assert value is not None
+        return f"Narrated line, {value.group(1)}. [evt:{allowed}]"
 
 
 def _stub_narration(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -227,7 +230,7 @@ def test_cli_watch_narrate_renders_prose(
     exit_code = main(["watch", str(traces_dir), "--project", str(project_dir), "--narrate"])
     assert exit_code == 0
     out = capsys.readouterr().out
-    assert "Narrated line." in out  # prose, not the raw metric row
+    assert "Narrated line," in out  # prose, not the raw metric row
     assert "Tasks completed" not in out  # raw digest labels are replaced
     assert "tool_not_allowed" in out  # deviations still reported
 
@@ -303,23 +306,42 @@ def test_cli_watch_reports_missing_traces_dir(
     assert "not found" in capsys.readouterr().err
 
 
-def test_cli_watch_reports_malformed_trace_without_traceback(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+def test_cli_watch_quarantines_a_malformed_trace_and_delivers_the_rest(
+    tmp_path: Path, otlp_sample_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # A non-OTLP or half-written JSON file must yield a clean one-line error
-    # naming the file, not a Python traceback.
+    """A half-written JSON file must not take the whole pass down with it
+    (ADR 0024): the healthy file's digest is still delivered, the bad one is
+    named on stderr without a traceback, and the exit code flags the gap."""
     project_dir = tmp_path / "project"
     main(["init", str(project_dir), "--agent", "refund-bot-v3"])
     traces_dir = tmp_path / "traces"
     traces_dir.mkdir()
     (traces_dir / "broken.json").write_text("{ not valid json", encoding="utf-8")
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
 
     exit_code = main(["watch", str(traces_dir), "--project", str(project_dir)])
     assert exit_code == 1
-    err = capsys.readouterr().err
-    assert "cannot read traces" in err
-    assert "broken.json" in err  # the offending file is named
-    assert "Traceback" not in err
+    captured = capsys.readouterr()
+    assert "quarantined broken.json" in captured.err
+    assert "Traceback" not in captured.err
+    assert "Alfred · refund-bot-v3" in captured.out  # the healthy day was reported
+
+
+def test_cli_watch_repeats_the_quarantine_warning_on_a_later_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The hole stays visible in the cron log until a human clears it."""
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    (traces_dir / "broken.json").write_text("{ not valid json", encoding="utf-8")
+    main(["watch", str(traces_dir), "--project", str(project_dir)])
+    capsys.readouterr()
+
+    exit_code = main(["watch", str(traces_dir), "--project", str(project_dir)])
+    assert exit_code == 1
+    assert "quarantined broken.json" in capsys.readouterr().err
 
 
 def test_cli_report_writes_html_file(tmp_path: Path, otlp_sample_path: Path) -> None:
@@ -361,7 +383,7 @@ def test_cli_report_narrate_embeds_prose(
     assert exit_code == 0
     html = next(out_dir.glob("*.html")).read_text(encoding="utf-8")
     assert 'class="narrative"' in html
-    assert "Narrated line." in html
+    assert "Narrated line," in html
 
 
 def test_cli_report_narrate_without_endpoint_errors(
@@ -585,3 +607,46 @@ def test_cli_no_command_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main([])
     assert exit_code == 0
     assert "usage" in capsys.readouterr().out
+
+
+def test_cli_watch_loop_survives_a_delivery_failure(
+    tmp_path: Path,
+    otlp_sample_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR 0024 decision 7: an outage at Slack must not end the supervision.
+
+    The first pass fails to deliver; the loop must reach a second pass rather
+    than let DeliverError escape and stop `alfred watch`.
+    """
+    from alfred.deliver import slack
+
+    project_dir = tmp_path / "project"
+    url = "https://hooks.slack.com/services/T000/B000/XXX"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3", "--slack-webhook", url])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+
+    def exploding_send(digest: object, webhook_url: str) -> None:
+        raise slack.DeliverError("Slack webhook unreachable: connection refused")
+
+    monkeypatch.setattr(slack, "send", exploding_send)
+
+    passes = 0
+
+    def fake_sleep(_seconds: float) -> None:
+        nonlocal passes
+        passes += 1
+        if passes == 2:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(time, "sleep", fake_sleep)
+    exit_code = main(
+        ["watch", str(traces_dir), "--project", str(project_dir), "--loop", "--interval", "1"]
+    )
+
+    assert exit_code == 0
+    assert passes == 2  # the loop kept going after the failed delivery
+    assert "connection refused" in capsys.readouterr().err

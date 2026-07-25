@@ -74,11 +74,13 @@ auto-déclaré n'est introduit ; l'ancrage est intact.
 
 - **Aveugle hors liste.** Seuls les champs déclarés sont masqués ; une PII dans
   un attribut non listé passe. C'est le prix du déterminisme (décision 2).
-- **Hash non salé.** Pour une valeur à faible entropie (un email connu), le
-  hash est devinable par force brute. La redaction empêche la *lecture* et la
-  fuite passive, pas une attaque ciblée par dictionnaire. Un sel casserait
-  l'égalité inter-runs dont dépend `loop_detected` (décision 3) — compromis
-  assumé pour v0.1. Un sel persistant par store est une évolution possible.
+- ~~**Hash non salé.**~~ **Levée par l'ADR 0025 (décision 3).** Le compromis
+  décrit ici — un hash devinable par dictionnaire pour une valeur à faible
+  entropie — n'a pas tenu au pentest. Le masque est désormais un HMAC-SHA256
+  sous une clé par projet (`.alfred/redaction-key`), ce qui préserve l'égalité
+  intra-projet dont dépend `loop_detected` sans laisser la valeur se retrouver.
+  La décision 3 ci-dessus est amendée en conséquence (forme du jeton :
+  `redacted:hmac:<12 hex>`).
 - **Champs de police.** Redacter un argument utilisé par une règle numérique
   désactive cette règle (décision 5 alerte, ne bloque pas — c'est un choix du
   déployeur).

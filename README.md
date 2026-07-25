@@ -56,8 +56,10 @@ mandate, anchored to the event(s) that prove it:
 - **`forbidden_action`** — a call matching a `forbidden_actions` rule (an exact
   tool name, or a structured `tool:` / `when:` threshold on a call argument).
 - **`budget_exceeded`** — the day's token → € cost passed `daily_budget_eur`.
-- **`escalation_missed`** — an `escalate_when` threshold was breached but the
-  agent never raised a hand (no `alfred.escalated` event).
+- **`escalation_missed`** — an `escalate_when` threshold was breached over the
+  day but the agent never raised a hand: no call to any tool listed in the
+  mandate's `escalation_tools`. An escalation is proven by an action, never by
+  a flag the agent sets on itself.
 - **`required_action_missing`** — a triggered obligation left unmet: a
   `required_actions` rule's `when_tool` ran but its mandatory `require_tool`
   never did in the same trace (e.g. a refund issued without ever notifying the
@@ -65,6 +67,16 @@ mandate, anchored to the event(s) that prove it:
 - **`loop_detected`** — the same tool called `loop_threshold` or more times in
   a row with identical arguments (default 3): an agent spinning without
   progress. Anchored to every event in the run.
+- **`cost_mismatch`** — the cost the agent reported for the day contradicts the
+  one priced from its own token counts. The digest always shows the priced
+  figure; this says the trace tried to claim otherwise.
+- **`tool_unidentified`** — a tool call that names no tool. It can't be checked
+  against `allowed_tools`, so it is reported rather than skipped.
+
+Stored evidence is append-only: an event whose `spanId` is already recorded
+with different content is refused, the first version stands, and `alfred watch`
+names the attempt on stderr and exits non-zero. Rewriting an anchor a past
+digest already quoted is not something the audited agent gets to do.
 
 The last two catch **silent failures** — the run completes with no error
 status and looks successful, so nothing else flags them. Alfred only sees what

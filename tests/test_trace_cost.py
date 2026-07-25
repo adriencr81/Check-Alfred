@@ -78,10 +78,30 @@ def test_openai_and_gemini_model_priced_from_tokens(
     assert event_cost_eur(event) == pytest.approx(expected)
 
 
-def test_explicit_cost_still_wins_over_claude_table() -> None:
+def test_token_price_wins_over_the_declared_cost() -> None:
+    """ADR 0023 decision 2: `gen_ai.usage.cost_eur` is written by the agent.
+
+    Letting it win made the digest's most visible number a self-reported one —
+    declaring 0.0 erased the whole cost line and the budget check with it.
+    """
     event = _llm_event("claude-opus-4-8", input_tokens=1000, output_tokens=500)
+    event.attributes["gen_ai.usage.cost_eur"] = 0.0
+    assert event_cost_eur(event) == pytest.approx(0.005 + 0.5 * 0.025)
+
+
+def test_declared_cost_is_the_fallback_for_an_unpriced_model() -> None:
+    """A model the table doesn't know keeps the declared cost: better an
+    unverifiable number than a silent 0.0 (the S1 audit's original gap)."""
+    event = _llm_event("some-vendor-model-x", input_tokens=1000, output_tokens=500)
     event.attributes["gen_ai.usage.cost_eur"] = 0.99
     assert event_cost_eur(event) == pytest.approx(0.99)
+
+
+def test_declared_cost_is_the_fallback_when_tokens_are_absent() -> None:
+    event = _llm_event("claude-opus-4-8", input_tokens=1000, output_tokens=500)
+    del event.attributes["gen_ai.usage.output_tokens"]
+    event.attributes["gen_ai.usage.cost_eur"] = 0.42
+    assert event_cost_eur(event) == pytest.approx(0.42)
 
 
 def _free_event(event_id: str) -> TraceEvent:

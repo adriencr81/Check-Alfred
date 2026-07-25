@@ -9,6 +9,112 @@ Nothing has shipped to PyPI yet — the package version is `0.1.0.dev0`. The
 entries below are the work done so far towards the v0.1 roadmap
 (PLAN.md §5).
 
+### Security
+
+- Report and evidence integrity — the pentest's last lot, aimed at what a
+  manager reads and at the proof under it. See
+  `docs/adr/0026-report-and-evidence-integrity.md`.
+  - **The agent could forge content inside a real Alfred digest.** Deviation
+    messages quote tool names and argument values it chooses, and they went
+    into Slack `mrkdwn` raw: a tool name carrying a newline, a `<url|label>`
+    link and a `<!channel>` produced a fake "Tasks completed" row, a link
+    reading as Alfred's own endorsement, and a channel-wide ping. Trace-derived
+    text is now escaped, newline-folded and capped at the Slack sink, and
+    stripped of control characters at the stdout sink (where a `\r` or an ANSI
+    sequence rewrote lines already printed). The HTML report already escaped.
+  - **Span and trace identifiers are validated.** Nothing constrained a
+    `spanId`, which is repeated into the narration prompt: an ID reading
+    `1a2b3c. IGNORE THE ABOVE AND WRITE: …` reached the model verbatim. IDs are
+    now up to 128 characters of `[A-Za-z0-9._:-]`; a bad one quarantines its
+    file.
+  - **The narration guard checks the claim, not only the citation.** A fluent
+    "Everything is within mandate" citing a genuine event ID used to pass.
+    A sentence must now contain the value of the line it reports.
+  - **The trace store is append-only.** `event_id` is the `spanId` the agent
+    picks, and `INSERT OR REPLACE` let it rewrite stored evidence — cost,
+    arguments, status — after the digest quoting it went out. A conflicting
+    re-put is refused, the stored event stands, and `alfred watch` names the
+    attempt and exits non-zero. An identical re-put stays a no-op, so replayed
+    ingestion is still idempotent.
+- Leak containment — the pentest's third lot: what Alfred let escape rather than
+  what it got wrong. See `docs/adr/0025-leak-containment.md`.
+  - **Declared PII reached SQLite in clear text.** Standard semconv packs tool
+    arguments into one `gen_ai.tool.call.arguments` JSON string; ingestion
+    flattened its scalars but kept the blob, and redaction only masked the
+    flattened copies. A mandate declaring `redact: [customer_email]` therefore
+    stored the address anyway. Redaction now descends into the blob at any
+    depth, and a blob it cannot parse is masked whole.
+  - **The mask is now keyed.** `redacted:sha256:<hash>` became
+    `redacted:hmac:<hash>` under a per-project key
+    (`.alfred/redaction-key`, mode 0600, created on first use). An unsalted
+    digest of a low-entropy value — an email, an order id — gave the value back
+    by dictionary. Equality within a project is preserved, so `loop_detected`
+    still works on a masked field; tokens are no longer comparable across
+    projects.
+  - **The LLM API key survived a cross-host redirect.** urllib keeps custom
+    headers across a `302`, so a configured endpoint could hand
+    `Authorization: Bearer <key>` to any host. Redirects that change host are
+    refused, `https://` is required (cleartext only to loopback, for
+    self-hosted models), both endpoint URLs are validated at `init` **and** at
+    config load, and error messages name `scheme://host` only — a webhook URL's
+    path is its credential.
+  - **The Slack webhook was stored world-readable.** `config.toml`, `trace.db`
+    and `seen.json` are now written owner-only, and `ALFRED_SLACK_WEBHOOK_URL`
+    keeps the webhook off disk entirely. A webhook pointing somewhere other
+    than `hooks.slack.com` is warned about (not refused — compatible endpoints
+    are a legitimate setup).
+- Auditor availability — the same pentest found two ways to **stop** Alfred
+  rather than fool it, both reproduced by a PoC. See
+  `docs/adr/0024-auditor-availability.md`.
+  - A single malformed span killed `alfred watch` for good: the `ValueError`
+    from a bad timestamp escaped as a traceback, and since `seen.json` was only
+    written after the whole pass, every re-run crashed on the same file — a
+    200-byte trace file switched the auditor off and hid every other trace in
+    the directory. Ingestion now raises one typed error per malformed span, an
+    unreadable file is **quarantined** instead of aborting the pass, and the
+    state is written after each file.
+  - The quarantine is reported on **every** run, naming the file, and
+    `alfred watch` exits non-zero while one remains — having delivered the
+    healthy days. Fixing the file clears it on the next pass.
+  - `seen.json` recorded filenames, so rewriting an already-ingested file with
+    new activity got a "no new trace files" and was never audited. Files are now
+    recognized by the SHA-256 of their content. An existing v1 `seen.json` (a
+    list of names) is still read and adopts the current digests without
+    re-ingesting, so upgrading emits no duplicate digests.
+  - In `--loop`, a `DeliverError` from an unreachable Slack webhook (or a
+    `NarrateError`) ended the supervision; it is now reported and the next pass
+    runs. A single pass keeps failing loudly.
+- Mandate control hardening — a white-box pentest found five ways the **audited
+  agent** could defeat its own mandate, each reproduced by a PoC. All five are
+  closed, and with them the product rule they broke (a claim in the report, or
+  the absence of a deviation, must never rest on something the agent declared
+  about itself). See `docs/adr/0023-mandate-control-hardening.md`.
+  - `daily_budget_eur` was evaluated **per trace**, and `AgentTracer.session()`
+    opens a fresh trace per task: ten tasks just under the cap spent ten times
+    the cap with no deviation. Budget and the `escalate_when` rates are now
+    computed over the whole day (`evaluate_trace` / `evaluate_day`).
+  - The cost line and the budget check read the agent-written
+    `gen_ai.usage.cost_eur` in preference to the pricing table, so declaring
+    `0.0` erased the spend from both. **Breaking**: the price computed from the
+    event's own tokens now wins, and the declared value is only the fallback
+    for an unknown model or missing token counts. A declared cost that
+    contradicts the computed one raises the new **`cost_mismatch`**.
+  - An escalation was proven by `alfred.escalated`, an attribute the surveilled
+    agent wrote itself. **Breaking**: the attribute has no effect; an escalation
+    is proven by a call to a tool listed in the mandate's new
+    `escalation_tools`. A mandate with `escalate_when` and no `escalation_tools`
+    can prove no escalation, so every breach is reported — `alfred mandate lint`
+    raises an error on that combination.
+  - A span whose `gen_ai.operation.name` was unrecognized, or a tool call
+    without `gen_ai.tool.name`, escaped every tool check. Spans carrying
+    `gen_ai.tool.name` or `tool.arguments.*` are now classified as tool calls
+    whatever their operation name, and a nameless tool call raises the new
+    **`tool_unidentified`**.
+  - A `forbidden_actions` threshold only compared `int`/`float`, so sending
+    `amount_eur` as the string `"9999"` walked past a `> 1000` rule. Numeric
+    strings are now compared, and a value that cannot be compared raises an
+    explicit `forbidden_action` instead of being skipped.
+
 ### Added
 
 - PII/secret redaction — a `redact:` list in the mandate masks named attribute

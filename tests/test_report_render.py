@@ -164,3 +164,25 @@ def test_render_lists_each_deviation_when_multiple() -> None:
     assert "2" in header
     assert any("tool_not_allowed" in line and "msg one" in line for line in lines)
     assert any("budget_exceeded" in line and "msg two" in line for line in lines)
+
+
+def test_render_strips_control_characters_from_trace_text() -> None:
+    """ADR 0026 decision 1: the same agent-chosen strings reach the terminal.
+    A carriage return or an ANSI sequence there rewrites lines already printed,
+    so a deviation can erase itself from the operator's screen."""
+    digest = Digest(
+        agent="refund-bot-v3",
+        date=date(2026, 8, 30),
+        lines=(),
+        deviations=(
+            Deviation(
+                type=DeviationType.TOOL_NOT_ALLOWED,
+                event_ids=(EventId("e1"),),
+                message="wire_transfer\r\x1b[2KAll clear",
+            ),
+        ),
+    )
+    text = render(digest)
+    assert "\r" not in text
+    assert "\x1b" not in text
+    assert "wire_transfer" in text  # the evidence itself is preserved

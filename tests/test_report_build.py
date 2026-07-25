@@ -23,13 +23,16 @@ from alfred.trace.store import TraceStore
 def _mandate() -> Mandate:
     return Mandate(
         agent="refund-bot-v3",
-        allowed_tools=frozenset({"read_order", "issue_refund", "notify_customer"}),
+        allowed_tools=frozenset(
+            {"read_order", "issue_refund", "notify_customer", "escalate_to_human"}
+        ),
         daily_budget_eur=5.0,
         forbidden_actions=("issue_refund_above_100_eur", "send_marketing"),
         escalate_when=(
             EscalationRule("tool_error_rate", ">", 0.10),
             EscalationRule("budget_used", ">", 0.80),
         ),
+        escalation_tools=frozenset({"escalate_to_human"}),
     )
 
 
@@ -94,12 +97,8 @@ def _typical_day_events() -> list[TraceEvent]:
         ),
         _event("e5", trace_id="trace-2", kind=SpanKind.AGENT_TASK),
         _event("e6", trace_id="trace-2", attributes={"gen_ai.tool.name": "read_pii"}),
-        _event(
-            "e7",
-            trace_id="trace-2",
-            kind=SpanKind.AGENT_TASK,
-            attributes={"alfred.escalated": True},
-        ),
+        _event("e9", trace_id="trace-2", attributes={"gen_ai.tool.name": "escalate_to_human"}),
+        _event("e7", trace_id="trace-3", kind=SpanKind.AGENT_TASK),
     ]
 
 
@@ -168,15 +167,26 @@ def test_cost_line_absent_when_unpriced() -> None:
     assert all(line.kind is not LineKind.COST_EUR for line in digest.lines)
 
 
-def test_escalations_line_counts_alfred_escalated_events() -> None:
+def test_escalations_line_counts_escalation_tool_calls() -> None:
     events = [
-        _event("e1", kind=SpanKind.AGENT_TASK, attributes={"alfred.escalated": True}),
+        _event("e1", attributes={"gen_ai.tool.name": "escalate_to_human"}),
         _event("e2", attributes={"gen_ai.tool.name": "read_order"}),
     ]
     digest = build_digest(_mandate(), events, date(2026, 8, 30))
     line = _line(digest, LineKind.ESCALATIONS)
     assert line.value == 1.0
     assert line.sources == (EventId("e1"),)
+
+
+def test_escalations_line_ignores_the_self_declared_attribute() -> None:
+    """ADR 0023 decision 4: `alfred.escalated` used to buy the agent a
+    flattering Escalations line for the price of one attribute."""
+    events = [
+        _event("e1", kind=SpanKind.AGENT_TASK, attributes={"alfred.escalated": True}),
+        _event("e2", attributes={"gen_ai.tool.name": "read_order"}),
+    ]
+    digest = build_digest(_mandate(), events, date(2026, 8, 30))
+    assert all(line.kind is not LineKind.ESCALATIONS for line in digest.lines)
 
 
 def test_escalations_line_absent_when_none() -> None:
@@ -199,6 +209,54 @@ def test_deviations_span_multiple_traces_in_one_day() -> None:
     types = {deviation.type.value for deviation in digest.deviations}
     assert types == {"tool_not_allowed", "budget_exceeded", "escalation_missed"}
     assert len(digest.deviations) == 3
+
+
+def test_budget_is_measured_over_the_day_not_per_trace() -> None:
+    """ADR 0023 decision 1: one session per trace must not reset the budget.
+
+    `AgentTracer.session()` opens a fresh trace_id per task, so a per-trace
+    budget is no budget at all — ten tasks just under the cap spend ten times
+    the cap without a single deviation.
+    """
+    events = [
+        _event(
+            f"e{index}",
+            trace_id=f"trace-{index}",
+            kind=SpanKind.LLM_CALL,
+            attributes={"gen_ai.usage.cost_eur": 4.9},
+        )
+        for index in range(10)
+    ]
+    digest = build_digest(_mandate(), events, date(2026, 8, 30))
+    budget = [d for d in digest.deviations if d.type.value == "budget_exceeded"]
+    assert len(budget) == 1
+    assert budget[0].details["cost_eur"] == pytest.approx(49.0)
+    assert len(budget[0].event_ids) == 10
+
+
+def test_tool_error_rate_is_measured_over_the_day_not_per_trace() -> None:
+    """The flip side of the same scope fix: one error in ten calls is 10 %,
+    even when each call sits in its own trace (per-trace it read as 100 %)."""
+    mandate = Mandate(
+        agent="refund-bot-v3",
+        allowed_tools=frozenset({"read_order"}),
+        daily_budget_eur=5.0,
+        forbidden_actions=(),
+        escalate_when=(EscalationRule("tool_error_rate", ">", 0.10),),
+    )
+    events = [
+        _event(
+            f"e{index}",
+            trace_id=f"trace-{index}",
+            attributes={
+                "gen_ai.tool.name": "read_order",
+                "tool.result.status": "error" if index == 0 else "ok",
+            },
+        )
+        for index in range(10)
+    ]
+    digest = build_digest(mandate, events, date(2026, 8, 30))
+    assert [d for d in digest.deviations if d.type.value == "escalation_missed"] == []
 
 
 def test_digest_every_line_has_sources() -> None:
@@ -277,7 +335,7 @@ def test_reference_day_digest_snapshot() -> None:
 
     escalations = _line(digest, LineKind.ESCALATIONS)
     assert escalations.value == 1.0
-    assert escalations.sources == (EventId("e7"),)
+    assert escalations.sources == (EventId("e9"),)
 
     assert len(digest.deviations) == 1
     deviation = digest.deviations[0]

@@ -42,6 +42,42 @@ def _check_escalation_metrics(mandate: Mandate) -> list[LintFinding]:
     return findings
 
 
+def _check_escalation_tools(mandate: Mandate) -> list[LintFinding]:
+    """Error when `escalate_when` is declared without any `escalation_tools`.
+
+    An escalation is proven by a call to one of those tools (ADR 0023 decision
+    4), so a mandate that names none can never satisfy its own thresholds:
+    every breach reports `escalation_missed`. That is the intended fail-closed
+    behavior, but it must be a deliberate choice — caught here, before `watch`.
+    """
+    if mandate.escalate_when and not mandate.escalation_tools:
+        return [
+            LintFinding(
+                Severity.ERROR,
+                "escalate_when is declared without escalation_tools — no escalation can "
+                "ever be proven, so every breach will raise escalation_missed. List the "
+                "tool(s) the agent calls to escalate, e.g. `escalation_tools: [notify_human]`",
+            )
+        ]
+    return []
+
+
+def _check_escalation_tools_are_allowed(mandate: Mandate) -> list[LintFinding]:
+    """Warn when an escalation tool is missing from `allowed_tools` — calling it
+    would prove the escalation and raise `tool_not_allowed` in the same breath."""
+    if not mandate.allowed_tools:
+        return []  # already reported by _check_allowed_tools
+    orphans = sorted(mandate.escalation_tools - mandate.allowed_tools)
+    return [
+        LintFinding(
+            Severity.WARNING,
+            f"escalation tool {tool!r} is not in allowed_tools — calling it would "
+            "raise tool_not_allowed",
+        )
+        for tool in orphans
+    ]
+
+
 def _check_allowed_tools(mandate: Mandate) -> list[LintFinding]:
     if not mandate.allowed_tools:
         return [
@@ -68,10 +104,11 @@ def _check_budget(mandate: Mandate) -> list[LintFinding]:
 def _check_redact_shadows_policy(mandate: Mandate) -> list[LintFinding]:
     """Warn when a redacted field is also a structured forbidden rule's argument.
 
-    Masking a value replaces it with a string hash, so a numeric threshold rule
-    on that argument (`_rule_matches` only fires on int/float) silently stops
-    firing. Redacting a policy signal is a footgun, not an error — the deployer
-    may intend it — so this is a warning, surfaced rather than left silent.
+    Masking a value replaces it with a `redacted:sha256:…` token, which no
+    longer compares to a numeric threshold: since ADR 0023 decision 6 the rule
+    does not stop firing silently — every call to that tool is reported as
+    unverifiable instead. Redacting a policy signal is a footgun, not an error
+    — the deployer may intend it — so this stays a warning.
     """
     findings: list[LintFinding] = []
     for action in mandate.forbidden_actions:
@@ -80,7 +117,8 @@ def _check_redact_shadows_policy(mandate: Mandate) -> list[LintFinding]:
                 LintFinding(
                     Severity.WARNING,
                     f"redact lists {action.arg!r}, which forbidden_actions rule "
-                    f"'{action.tool}' checks ({action.when}) — masking it disables that check",
+                    f"'{action.tool}' checks ({action.when}) — the masked value cannot be "
+                    "compared, so every call to that tool is reported as unverifiable",
                 )
             )
     return findings
@@ -92,8 +130,10 @@ def lint_mandate(path: Path | str) -> list[LintFinding]:
     A parse/load failure (malformed YAML, missing key, missing file) is a
     single `error` finding — the mandate cannot be inspected further. A valid
     mandate is then checked semantically: unknown escalation metric (error),
-    empty allowed_tools (warning), non-positive budget (warning), a redacted
-    field that shadows a forbidden rule's argument (warning).
+    `escalate_when` without `escalation_tools` (error), empty allowed_tools
+    (warning), non-positive budget (warning), an escalation tool missing from
+    allowed_tools (warning), a redacted field that shadows a forbidden rule's
+    argument (warning).
     """
     try:
         mandate = load_mandate(path)
@@ -104,7 +144,9 @@ def lint_mandate(path: Path | str) -> list[LintFinding]:
 
     return [
         *_check_escalation_metrics(mandate),
+        *_check_escalation_tools(mandate),
         *_check_allowed_tools(mandate),
         *_check_budget(mandate),
+        *_check_escalation_tools_are_allowed(mandate),
         *_check_redact_shadows_policy(mandate),
     ]

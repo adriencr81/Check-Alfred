@@ -22,10 +22,11 @@ _ON = date(2026, 8, 30)
 def _mandate() -> Mandate:
     return Mandate(
         agent="refund-bot-v3",
-        allowed_tools=frozenset({"read_order", "issue_refund"}),
+        allowed_tools=frozenset({"read_order", "issue_refund", "escalate_to_human"}),
         daily_budget_eur=100.0,
         forbidden_actions=(),
         escalate_when=(EscalationRule("budget_used", ">", 0.80),),
+        escalation_tools=frozenset({"escalate_to_human"}),
     )
 
 
@@ -111,13 +112,15 @@ def test_baseline_omitted_when_no_active_day_has_the_metric() -> None:
 def test_all_three_lines_are_contextualized() -> None:
     def _rich_day(tag: str) -> list[TraceEvent]:
         return [
-            _event(f"{tag}-task", SpanKind.AGENT_TASK, {"alfred.escalated": True}),
+            _event(f"{tag}-task", SpanKind.AGENT_TASK),
+            _event(f"{tag}-esc", SpanKind.TOOL_CALL, {"gen_ai.tool.name": "escalate_to_human"}),
             _event(f"{tag}-cost", SpanKind.LLM_CALL, {"gen_ai.usage.cost_eur": 1.0}),
         ]
 
     history = [_rich_day("h1"), _rich_day("h2"), _rich_day("h3")]
     today = [
-        _event("today-task", SpanKind.AGENT_TASK, {"alfred.escalated": True}),
+        _event("today-task", SpanKind.AGENT_TASK),
+        _event("today-esc", SpanKind.TOOL_CALL, {"gen_ai.tool.name": "escalate_to_human"}),
         _event("today-cost", SpanKind.LLM_CALL, {"gen_ai.usage.cost_eur": 1.0}),
     ]
     digest = build_digest(_mandate(), today, _ON, history=history)

@@ -104,6 +104,7 @@ def _mandate_from_dict(raw: dict[str, Any]) -> Mandate:
             required_actions=tuple(
                 _parse_required_action(entry) for entry in raw.get("required_actions", [])
             ),
+            escalation_tools=frozenset(str(tool) for tool in raw.get("escalation_tools", [])),
             loop_threshold=int(raw.get("loop_threshold", 3)),
             redact=frozenset(str(name) for name in raw.get("redact", [])),
         )
@@ -140,6 +141,8 @@ def dump_mandate(mandate: Mandate) -> str:
         ],
         "loop_threshold": mandate.loop_threshold,
     }
+    if mandate.escalation_tools:
+        raw["escalation_tools"] = sorted(mandate.escalation_tools)
     if mandate.required_actions:
         raw["required_actions"] = [
             {"when_tool": rule.when_tool, "require_tool": rule.require_tool}

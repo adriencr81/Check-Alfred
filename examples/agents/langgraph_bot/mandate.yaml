@@ -24,7 +24,13 @@ daily_budget_eur: 5.00
 forbidden_actions:
   - approve_expense_above_100_eur
 
-# If more than 10 % of tool calls error and the agent never escalated
-# (`alfred.escalated=true`), raise an `escalation_missed` deviation.
+# If more than 10 % of tool calls error and the agent never escalated, raise an
+# `escalation_missed` deviation. An escalation is only proven by a call to one
+# of the tools listed in `escalation_tools` — never by a self-declared attribute
+# (ADR 0023). This toy agent has no escalation path, so a breach is always
+# reported: give it a real escalation tool before relying on the threshold.
 escalate_when:
   - tool_error_rate > 0.10
+
+escalation_tools:
+  - escalate_to_human

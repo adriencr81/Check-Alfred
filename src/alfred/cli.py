@@ -21,7 +21,7 @@ from alfred.mandate.bootstrap import suggest_mandate
 from alfred.mandate.lint import Severity, lint_mandate
 from alfred.mandate.model import MandateError
 from alfred.mandate.yaml_io import dump_mandate, load_mandate
-from alfred.narrate.llm import LLMClient, narrate
+from alfred.narrate.llm import LLMClient, NarrateError, narrate
 from alfred.narrate.render import render_text
 from alfred.report.build import build_digest
 from alfred.report.html import render_html
@@ -29,8 +29,9 @@ from alfred.report.model import Digest
 from alfred.schedule import ScheduleError, build_cron_line
 from alfred.trace.ingest import ingest_otlp_file, ingest_otlp_json
 from alfred.trace.model import TraceEvent, TraceIngestionError
+from alfred.trace.redact import Redactor, redactor_for
 from alfred.trace.store import TraceStore
-from alfred.watch import build_digests, watch_loop, watch_once
+from alfred.watch import QuarantinedTrace, WatchPass, build_digests, watch_loop, watch_once
 
 # Shown when `--narrate` is requested but no LLM endpoint resolves (missing
 # config keys or the API-key env var). Fail loudly rather than fall back to the
@@ -113,6 +114,39 @@ def _deliver(
                 slack.send_alert(digest, config.slack_webhook_url)
 
 
+def _report_quarantine(quarantined: tuple[QuarantinedTrace, ...], project_dir: Path) -> None:
+    """Name every trace file Alfred could not read, on every pass.
+
+    A file it cannot parse is a hole in the audit, so it is repeated until a
+    human fixes or removes it (ADR 0024 decision 3) — never announced once and
+    forgotten.
+    """
+    for trace in quarantined:
+        print(f"alfred watch: quarantined {trace.name} — {trace.reason}", file=sys.stderr)
+    if quarantined:
+        print(
+            f"alfred watch: {len(quarantined)} trace file(s) could not be read and are NOT "
+            f"covered by this digest — fix or remove them (recorded in "
+            f"{project_dir / '.alfred' / 'seen.json'}).",
+            file=sys.stderr,
+        )
+
+
+def _report_conflicts(conflicts: tuple[TraceEvent, ...]) -> None:
+    """Name every event that tried to overwrite one already stored.
+
+    The stored anchor wins (ADR 0026 decision 4), so the digest stays true to
+    what was first recorded — but an agent re-emitting a span with different
+    content is trying to rewrite evidence, and that has to be said out loud.
+    """
+    for event in conflicts:
+        print(
+            f"alfred watch: refused to overwrite evidence {event.event_id} "
+            f"(trace {event.trace_id}) — the stored event differs from the re-emitted one",
+            file=sys.stderr,
+        )
+
+
 def _cmd_watch(args: argparse.Namespace) -> int:
     project_dir = Path(args.project)
     try:
@@ -152,21 +186,36 @@ def _cmd_watch(args: argparse.Namespace) -> int:
 
     config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
     store = TraceStore(config.trace_db_path)
+    quarantined: tuple[QuarantinedTrace, ...] = ()
+    conflicts: tuple[TraceEvent, ...] = ()
+
+    def _handle(result: WatchPass) -> None:
+        _deliver(result.digests, config, alerts=args.alerts, narrate_client=narrate_client)
+        _report_quarantine(result.quarantined, project_dir)
+        _report_conflicts(result.conflicts)
+
+    def _handle_in_loop(result: WatchPass) -> None:
+        """Same handling, but a delivery outage must not end the supervision.
+
+        In `--loop` Alfred *is* the running process: letting a Slack or LLM
+        failure propagate stopped the watch until someone noticed (ADR 0024
+        decision 7). A single pass keeps failing loudly — there, cron decides
+        whether to retry.
+        """
+        try:
+            _handle(result)
+        except (slack.DeliverError, NarrateError) as exc:
+            print(f"alfred watch: delivery failed, continuing: {exc}", file=sys.stderr)
+
     try:
         if args.loop:
             watch_loop(
-                project_dir,
-                traces_dir,
-                mandate,
-                store,
-                lambda digests: _deliver(
-                    digests, config, alerts=args.alerts, narrate_client=narrate_client
-                ),
-                interval_s=interval,
+                project_dir, traces_dir, mandate, store, _handle_in_loop, interval_s=interval
             )
         else:
-            digests = watch_once(project_dir, traces_dir, mandate, store)
-            _deliver(digests, config, alerts=args.alerts, narrate_client=narrate_client)
+            result = watch_once(project_dir, traces_dir, mandate, store)
+            quarantined, conflicts = result.quarantined, result.conflicts
+            _handle(result)
     except KeyboardInterrupt:
         print("\nalfred watch: stopped.")
     except (TraceIngestionError, OSError) as exc:
@@ -174,22 +223,23 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         return 1
     finally:
         store.close()
-    return 0
+    # A quarantined file means the digest covers less than the directory does,
+    # and a conflict means something tried to rewrite what it covers: exit
+    # non-zero so a cron run surfaces either, having delivered the rest.
+    return 1 if quarantined or conflicts else 0
 
 
-def _read_trace_events(
-    traces_dir: Path, redact: frozenset[str] = frozenset()
-) -> list[TraceEvent]:
+def _read_trace_events(traces_dir: Path, redactor: Redactor | None = None) -> list[TraceEvent]:
     """Ingest every OTLP JSON file in `traces_dir`, in filename order.
 
     Raises `OSError` if a file cannot be read — each caller frames its own
-    message. Shared by `report` (which passes the mandate's `redact` set so PII
+    message. Shared by `report` (which passes the project's `Redactor` so PII
     is masked before storage, ADR 0022) and `mandate init` (which needs only
     tool names and budget, so it leaves values untouched).
     """
     events: list[TraceEvent] = []
     for file_path in sorted(traces_dir.glob("*.json")):
-        events.extend(ingest_otlp_file(file_path, redact))
+        events.extend(ingest_otlp_file(file_path, redactor))
     return events
 
 
@@ -220,7 +270,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
 
     traces_dir = Path(args.traces_dir)
     try:
-        events = _read_trace_events(traces_dir, mandate.redact)
+        events = _read_trace_events(traces_dir, redactor_for(project_dir, mandate.redact))
     except (TraceIngestionError, OSError) as exc:
         print(f"alfred report: cannot read traces: {exc}", file=sys.stderr)
         return 1

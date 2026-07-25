@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
 from alfred.mandate.model import Deviation, DeviationType, ForbiddenRule, Mandate, MandateError
-from alfred.trace.cost import contributing_costs
+from alfred.trace.cost import computed_cost_eur, contributing_costs, declared_cost_eur
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
 _FORBIDDEN_PATTERN = re.compile(r"^(?P<tool>.+?)_above_(?P<amount>\d+(?:\.\d+)?)_eur$")
@@ -23,7 +23,6 @@ _FORBIDDEN_PATTERN = re.compile(r"^(?P<tool>.+?)_above_(?P<amount>\d+(?:\.\d+)?)
 _TOOL_NAME_ATTR = "gen_ai.tool.name"
 _TOOL_STATUS_ATTR = "tool.result.status"
 _TOOL_ARGS_PREFIX = "tool.arguments."
-_ESCALATED_ATTR = "alfred.escalated"
 
 _CallSignature = tuple[str, tuple[tuple[str, Any], ...]]
 
@@ -42,17 +41,42 @@ def _is_error(event: TraceEvent) -> bool:
     return isinstance(status, str) and status.lower() != "ok"
 
 
-def _is_escalated(events: Sequence[TraceEvent]) -> bool:
-    return any(event.attributes.get(_ESCALATED_ATTR) is True for event in events)
+def _is_escalated(mandate: Mandate, tool_calls: Sequence[TraceEvent]) -> bool:
+    """True when the trace contains a call to one of the mandate's escalation tools.
+
+    Escalation is proven by an action, never by a self-declared attribute: the
+    agent used to be able to write `alfred.escalated` itself and switch off the
+    very check watching it (ADR 0023 decision 4). A mandate that declares no
+    `escalation_tools` can prove no escalation — fail-closed by design.
+    """
+    return any(_tool_name(event) in mandate.escalation_tools for event in tool_calls)
 
 
 def _check_tool_not_allowed(
     mandate: Mandate, tool_calls: Sequence[TraceEvent]
 ) -> list[Deviation]:
+    """Flag a tool outside `allowed_tools`, and a tool call that names no tool.
+
+    A nameless tool call used to be skipped in silence, so dropping
+    `gen_ai.tool.name` waved any call past the allowlist (ADR 0023 decision 5).
+    A tool that cannot be named cannot be allowed.
+    """
     deviations: list[Deviation] = []
     for event in tool_calls:
         tool = _tool_name(event)
-        if tool is not None and tool not in mandate.allowed_tools:
+        if tool is None:
+            deviations.append(
+                Deviation(
+                    type=DeviationType.TOOL_UNIDENTIFIED,
+                    event_ids=(event.event_id,),
+                    message=(
+                        f"tool call '{event.name}' carries no {_TOOL_NAME_ATTR} — "
+                        "it cannot be checked against allowed_tools"
+                    ),
+                    details={"span_name": event.name},
+                )
+            )
+        elif tool not in mandate.allowed_tools:
             deviations.append(
                 Deviation(
                     type=DeviationType.TOOL_NOT_ALLOWED,
@@ -64,17 +88,60 @@ def _check_tool_not_allowed(
     return deviations
 
 
+def _as_number(value: Any) -> float | None:
+    """`value` as a float, or None when it cannot be compared to a threshold.
+
+    OTLP carries whatever the agent put in the span, so a numeric argument may
+    arrive as a `stringValue` — `"9999"` must be compared, not skipped (ADR
+    0023 decision 6).
+    """
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
 def _rule_matches(
     rule: ForbiddenRule, tool_calls: Sequence[TraceEvent]
-) -> Iterator[tuple[TraceEvent, float]]:
-    """Yield (event, argument value) for each tool call breaching `rule`."""
+) -> Iterator[tuple[TraceEvent, float | None]]:
+    """Yield (event, value) for each tool call breaching `rule`.
+
+    A `None` value means the rule's argument was present but could not be
+    compared to its threshold: the rule is unverifiable on that call, which the
+    caller reports rather than swallows. An absent argument yields nothing — the
+    rule simply does not apply to that call.
+    """
     arg_attr = f"{_TOOL_ARGS_PREFIX}{rule.arg}"
     for event in tool_calls:
-        if _tool_name(event) != rule.tool:
+        if _tool_name(event) != rule.tool or arg_attr not in event.attributes:
             continue
-        value = event.attributes.get(arg_attr)
-        if isinstance(value, int | float) and rule.triggered_by(float(value)):
-            yield event, float(value)
+        number = _as_number(event.attributes[arg_attr])
+        if number is None:
+            yield event, None
+        elif rule.triggered_by(number):
+            yield event, number
+
+
+def _unverifiable_rule(event: TraceEvent, rule: ForbiddenRule) -> Deviation:
+    """A rule whose argument resists comparison — reported, never skipped.
+
+    Silently ignoring it is what let `amount_eur: "9999"` through; a policy
+    rule that cannot be evaluated is a finding in its own right.
+    """
+    raw = event.attributes.get(f"{_TOOL_ARGS_PREFIX}{rule.arg}")
+    return Deviation(
+        type=DeviationType.FORBIDDEN_ACTION,
+        event_ids=(event.event_id,),
+        message=(
+            f"forbidden action rule '{rule.when}' could not be verified: {rule.tool} "
+            f"called with {rule.arg}={raw!r}, which is not comparable to a number"
+        ),
+        details={"tool": rule.tool, "when": rule.when, "value": raw},
+    )
 
 
 def _check_forbidden_actions(
@@ -84,6 +151,9 @@ def _check_forbidden_actions(
     for action in mandate.forbidden_actions:
         if isinstance(action, ForbiddenRule):
             for event, value in _rule_matches(action, tool_calls):
+                if value is None:
+                    deviations.append(_unverifiable_rule(event, action))
+                    continue
                 deviations.append(
                     Deviation(
                         type=DeviationType.FORBIDDEN_ACTION,
@@ -103,6 +173,9 @@ def _check_forbidden_actions(
             tool, threshold = match["tool"], float(match["amount"])
             rule = ForbiddenRule(tool=tool, arg="amount_eur", operator=">", threshold=threshold)
             for event, amount in _rule_matches(rule, tool_calls):
+                if amount is None:
+                    deviations.append(_unverifiable_rule(event, rule))
+                    continue
                 deviations.append(
                     Deviation(
                         type=DeviationType.FORBIDDEN_ACTION,
@@ -144,6 +217,50 @@ def _check_budget_exceeded(mandate: Mandate, events: Sequence[TraceEvent]) -> li
             )
         ]
     return []
+
+
+# A declared cost is only worth reporting when it contradicts the computed one
+# by both a real share and a real amount: pricing tables lag negotiated rates
+# and cache discounts by a few percent, which is drift, not a deviation.
+_COST_MISMATCH_RATIO = 0.20
+_COST_MISMATCH_FLOOR_EUR = 0.50
+
+
+def _check_cost_mismatch(events: Sequence[TraceEvent]) -> list[Deviation]:
+    """Flag a self-reported cost that contradicts the cost priced from tokens.
+
+    The digest already prices from tokens (ADR 0023 decision 2), so this does
+    not change any number — it surfaces the contradiction instead of correcting
+    it in silence. Compared over the day's totals, so a hundred small
+    under-declarations that each stay under the floor still add up to a
+    reported gap; anchored to the events that diverge.
+    """
+    diverging: list[TraceEvent] = []
+    declared_total = computed_total = 0.0
+    for event in events:
+        declared, computed = declared_cost_eur(event), computed_cost_eur(event)
+        if declared is None or computed is None:
+            continue
+        declared_total += declared
+        computed_total += computed
+        if declared != computed:
+            diverging.append(event)
+    gap = abs(declared_total - computed_total)
+    if not diverging or gap <= _COST_MISMATCH_FLOOR_EUR:
+        return []
+    if computed_total <= 0.0 or gap / computed_total <= _COST_MISMATCH_RATIO:
+        return []
+    return [
+        Deviation(
+            type=DeviationType.COST_MISMATCH,
+            event_ids=tuple(event.event_id for event in diverging),
+            message=(
+                f"reported cost {declared_total:.2f}€ contradicts the "
+                f"{computed_total:.2f}€ priced from the trace's own tokens"
+            ),
+            details={"declared_eur": declared_total, "computed_eur": computed_total},
+        )
+    ]
 
 
 _MetricComputer = Callable[
@@ -201,7 +318,7 @@ def _check_escalation_missed(
     events: Sequence[TraceEvent],
     tool_calls: Sequence[TraceEvent],
 ) -> list[Deviation]:
-    if _is_escalated(events):
+    if _is_escalated(mandate, tool_calls):
         return []
     deviations: list[Deviation] = []
     for rule in mandate.escalate_when:
@@ -305,19 +422,44 @@ def _check_repeated_action(mandate: Mandate, tool_calls: Sequence[TraceEvent]) -
     return deviations
 
 
-def evaluate(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
-    """Compare a single trace's events against a mandate.
+def evaluate_trace(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
+    """The checks whose meaning is scoped to one trace.
 
     Contract: `events` must belong to one trace (e.g. via
-    `TraceStore.find_by_trace`). Returns every `Deviation` detected, each
-    anchored to at least one `event_id` from `events`.
+    `TraceStore.find_by_trace`) — `required_action_missing` and `loop_detected`
+    are defined within a single trace, and the per-event checks are unaffected
+    by the scope. See ADR 0023 decision 1.
     """
     tool_calls = _tool_calls(events)
     return [
         *_check_tool_not_allowed(mandate, tool_calls),
         *_check_forbidden_actions(mandate, tool_calls),
-        *_check_budget_exceeded(mandate, events),
-        *_check_escalation_missed(mandate, events, tool_calls),
         *_check_required_actions(mandate, tool_calls),
         *_check_repeated_action(mandate, tool_calls),
     ]
+
+
+def evaluate_day(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
+    """The checks computed over an aggregate — every event of one day.
+
+    `daily_budget_eur` is a *daily* budget and `escalate_when`'s metrics are
+    daily rates, so they must see the whole day at once: an agent that opens a
+    fresh trace per task (which `AgentTracer.session` does) would otherwise
+    reset the budget on every task. See ADR 0023 decision 1.
+    """
+    return [
+        *_check_budget_exceeded(mandate, events),
+        *_check_escalation_missed(mandate, events, _tool_calls(events)),
+        *_check_cost_mismatch(events),
+    ]
+
+
+def evaluate(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviation]:
+    """Compare one scope of events against a mandate — every check at once.
+
+    Kept for callers that evaluate a single trace standing alone. The digest
+    pipeline instead calls `evaluate_trace` per trace and `evaluate_day` once
+    over the day (`alfred.report.build`). Returns every `Deviation` detected,
+    each anchored to at least one `event_id` from `events`.
+    """
+    return [*evaluate_trace(mandate, events), *evaluate_day(mandate, events)]

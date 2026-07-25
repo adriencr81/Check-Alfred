@@ -14,6 +14,7 @@ allowed_tools:
   - read_order
   - issue_refund
   - notify_customer
+  - escalate_to_human
 
 # Daily budget in euros for this agent, computed by summing the
 # gen_ai.usage.cost_eur attribute over every event in the trace.
@@ -30,16 +31,23 @@ forbidden_actions:
   - issue_refund_above_100_eur
   - send_marketing
 
-# Conditions that must trigger an escalation by the agent (an event
-# carrying the `alfred.escalated=true` attribute). If the metric exceeds
-# the threshold and no escalation is present in the trace, an
-# `escalation_missed` deviation is raised.
+# Conditions that must trigger an escalation by the agent. If the metric
+# exceeds the threshold over the day and no escalation is present in the trace,
+# an `escalation_missed` deviation is raised.
 #   - tool_error_rate: share of tool calls that errored
 #     (tool.result.status != "ok") among all tool calls.
-#   - budget_used: trace cost / daily_budget_eur.
+#   - budget_used: the day's cost / daily_budget_eur.
 escalate_when:
   - tool_error_rate > 0.10
   - budget_used > 0.80
+
+# What proves the agent escalated: a call to one of these tools. Alfred does
+# not accept a self-declared `alfred.escalated` attribute — an agent writing its
+# own escalation flag would switch off the check watching it (ADR 0023). Leave
+# this list out and no escalation can ever be proven, so every breach above is
+# reported; `alfred mandate lint` treats that combination as an error.
+escalation_tools:
+  - escalate_to_human
 
 # A run of this many identical consecutive tool calls (same tool + same
 # arguments) raises a `loop_detected` deviation — an agent spinning without

@@ -90,6 +90,18 @@ def _render_line(line: Line) -> str:
     return f"{row}   ({baseline})" if baseline is not None else row
 
 
+def plain(text: str) -> str:
+    """Strip control characters from a trace-derived string.
+
+    Tool names and argument values are chosen by the audited agent and land on
+    a terminal: a `\\r` or an ANSI sequence rewrites lines already printed, so a
+    deviation can scrub itself off the operator's screen. Same stance as the
+    Slack sink — escape at the sink, keep the raw value in the store (ADR 0026
+    decision 1).
+    """
+    return "".join(character for character in text if character >= " " and character != "\x7f")
+
+
 def render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
     if not deviations:
         return []
@@ -97,11 +109,11 @@ def render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
         deviation = deviations[0]
         return [
             f"{_render_row(_DEVIATIONS_LABEL, '1')}   {format_sources(deviation.event_ids)} "
-            f"— {deviation.type.value}: {deviation.message}"
+            f"— {deviation.type.value}: {plain(deviation.message)}"
         ]
     rows = [_render_row(_DEVIATIONS_LABEL, str(len(deviations)))]
     rows.extend(
-        f"  - {deviation.type.value}: {deviation.message}   "
+        f"  - {deviation.type.value}: {plain(deviation.message)}   "
         f"{format_sources(deviation.event_ids)}"
         for deviation in deviations
     )
@@ -109,7 +121,7 @@ def render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
 
 
 def render(digest: Digest) -> str:
-    rows = [f"Alfred · {digest.agent} · {digest.date.isoformat()}", ""]
+    rows = [plain(f"Alfred · {digest.agent} · {digest.date.isoformat()}"), ""]
     rows.extend(_render_line(line) for line in digest.lines)
     rows.extend(render_deviations(digest.deviations))
     return "\n".join(rows)

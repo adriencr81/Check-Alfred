@@ -5,6 +5,7 @@ Uses in-memory SQLite (`:memory:`) to keep tests hermetic and fast.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import pytest
@@ -140,3 +141,35 @@ def test_attributes_survive_roundtrip(store: TraceStore) -> None:
     got = store.get(EventId("evt-x"))
     assert got is not None
     assert got.attributes == original.attributes
+
+
+def test_conflicting_event_does_not_overwrite_the_stored_one(store: TraceStore) -> None:
+    """ADR 0026 decision 4: `event_id` is the spanId the agent picks, and
+    INSERT OR REPLACE let it rewrite a stored anchor — cost, arguments, status
+    — long after the digest quoting it went out."""
+    original = _event("evt-1")
+    store.put(original)
+
+    rewritten = replace(original, attributes={"gen_ai.usage.output_tokens": 0})
+    conflicts = store.put_many([rewritten])
+
+    assert [event.event_id for event in conflicts] == ["evt-1"]
+    stored = store.get(EventId("evt-1"))
+    assert stored is not None
+    assert stored.attributes == {"gen_ai.usage.output_tokens": 42}  # the original wins
+    assert store.count() == 1
+
+
+def test_identical_re_put_is_not_a_conflict(store: TraceStore) -> None:
+    """Re-ingesting the same file must stay a no-op, not raise an alarm."""
+    store.put_many([_event("a"), _event("b")])
+    assert store.put_many([_event("a"), _event("b")]) == []
+
+
+def test_conflicting_event_does_not_block_its_batch(store: TraceStore) -> None:
+    store.put(_event("evt-1"))
+    conflicts = store.put_many(
+        [replace(_event("evt-1"), attributes={}), _event("evt-2")]
+    )
+    assert [event.event_id for event in conflicts] == ["evt-1"]
+    assert store.get(EventId("evt-2")) is not None  # the honest event still landed
