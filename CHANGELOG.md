@@ -11,6 +11,19 @@ entries below are the work done so far towards the v0.1 roadmap
 
 ### Added
 
+- PII/secret redaction — a `redact:` list in the mandate masks named attribute
+  values (a bare tool-argument name like `customer_email`, or a full attribute
+  key like `gen_ai.prompt`) **at ingestion, before the event reaches the trace
+  store**, so the raw value never lands in SQLite and never travels to Slack,
+  the HTML report, or the narration LLM. Masked values become a stable
+  `redacted:sha256:<hash>` token that preserves equality, so `loop_detected`
+  still works on a masked field. Declarative and deterministic (only listed
+  fields are touched — nothing is guessed); `alfred mandate lint` warns when a
+  redacted field shadows a `forbidden_actions` rule's numeric argument (masking
+  it would silently disable that check). Promotes PLAN.md §13's "honorable
+  mention" to shipped for real-client use. Falsifiable spec (including a
+  "never in the store" test) in `tests/test_trace_redact.py`. See
+  `docs/adr/0022-pii-redaction.md`.
 - F5 (first half) — native OpenAI Agents SDK connector
   (`alfred.integrations.openai_agents`): register `AlfredTracingProcessor` once
   (`set_trace_processors([...])`) and every `Runner.run(...)` becomes an

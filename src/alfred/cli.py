@@ -177,15 +177,19 @@ def _cmd_watch(args: argparse.Namespace) -> int:
     return 0
 
 
-def _read_trace_events(traces_dir: Path) -> list[TraceEvent]:
+def _read_trace_events(
+    traces_dir: Path, redact: frozenset[str] = frozenset()
+) -> list[TraceEvent]:
     """Ingest every OTLP JSON file in `traces_dir`, in filename order.
 
     Raises `OSError` if a file cannot be read — each caller frames its own
-    message. Shared by `report` and `mandate init`.
+    message. Shared by `report` (which passes the mandate's `redact` set so PII
+    is masked before storage, ADR 0022) and `mandate init` (which needs only
+    tool names and budget, so it leaves values untouched).
     """
     events: list[TraceEvent] = []
     for file_path in sorted(traces_dir.glob("*.json")):
-        events.extend(ingest_otlp_file(file_path))
+        events.extend(ingest_otlp_file(file_path, redact))
     return events
 
 
@@ -216,7 +220,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
 
     traces_dir = Path(args.traces_dir)
     try:
-        events = _read_trace_events(traces_dir)
+        events = _read_trace_events(traces_dir, mandate.redact)
     except (TraceIngestionError, OSError) as exc:
         print(f"alfred report: cannot read traces: {exc}", file=sys.stderr)
         return 1

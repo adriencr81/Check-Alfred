@@ -73,6 +73,29 @@ escalate_when:
 See [`examples/mandates/refund-bot.yaml`](../examples/mandates/refund-bot.yaml)
 for the commented reference.
 
+### Redacting PII / secrets
+
+Tool arguments often carry customer data — emails, names, order contents — or
+secrets. By default they're stored as-is. Add a `redact:` list to the mandate to
+mask named values **at ingestion, before they reach the trace store**, so the
+raw value never lands in SQLite and never travels to Slack, the HTML report, or
+the narration LLM ([ADR 0022](adr/0022-pii-redaction.md)):
+
+```yaml
+redact:
+  - customer_email   # matches tool.arguments.customer_email
+  - gen_ai.prompt    # or a full attribute key
+```
+
+Each masked value becomes a stable `redacted:sha256:<hash>` token — the content
+is hidden, but identical values still compare equal, so `loop_detected` keeps
+working on a masked field. The masking is deterministic and declarative: only
+the fields you list are touched (nothing is guessed), and `alfred mandate lint`
+warns if you redact a numeric field that a `forbidden_actions` rule checks
+(masking it would silently disable that check). It is a per-field data-
+minimization control, not a defense against a targeted dictionary attack on a
+low-entropy value — see the ADR's limits.
+
 ## 3. Watch the traces
 
 ```bash

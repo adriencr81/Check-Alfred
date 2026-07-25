@@ -145,6 +145,33 @@ def test_load_mandate_loop_threshold_override(tmp_path: Path) -> None:
     assert load_mandate(path).loop_threshold == 5
 
 
+def test_redact_roundtrip(tmp_path: Path) -> None:
+    mandate = Mandate(
+        agent="refund-bot-v3",
+        allowed_tools=frozenset({"read_order"}),
+        daily_budget_eur=5.0,
+        forbidden_actions=(),
+        escalate_when=(),
+        redact=frozenset({"customer_email", "address"}),
+    )
+    path = tmp_path / "mandate.yaml"
+    path.write_text(dump_mandate(mandate), encoding="utf-8")
+    assert load_mandate(path) == mandate
+
+
+def test_redact_defaults_empty(tmp_path: Path) -> None:
+    path = tmp_path / "mandate.yaml"
+    path.write_text(
+        "agent: refund-bot-v3\n"
+        "allowed_tools: [read_order]\n"
+        "daily_budget_eur: 5.0\n"
+        "forbidden_actions: []\n"
+        "escalate_when: []\n",
+        encoding="utf-8",
+    )
+    assert load_mandate(path).redact == frozenset()
+
+
 def test_load_mandate_missing_key_raises(tmp_path: Path) -> None:
     path = tmp_path / "mandate.yaml"
     path.write_text("agent: refund-bot-v3\n", encoding="utf-8")

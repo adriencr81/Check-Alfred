@@ -7,11 +7,13 @@ for the falsifiable specification.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
 from alfred.trace.model import EventId, SpanKind, TraceEvent, TraceIngestionError
+from alfred.trace.redact import redact_attributes
 
 
 def _value(value: dict[str, Any]) -> Any:
@@ -119,7 +121,9 @@ def _span_to_event(span: dict[str, Any]) -> TraceEvent:
     )
 
 
-def ingest_otlp_json(payload: dict[str, object]) -> list[TraceEvent]:
+def ingest_otlp_json(
+    payload: dict[str, object], redact: frozenset[str] = frozenset()
+) -> list[TraceEvent]:
     """Parse an OTLP JSON payload into normalized TraceEvents.
 
     Contract (must hold for every returned event):
@@ -127,6 +131,10 @@ def ingest_otlp_json(payload: dict[str, object]) -> list[TraceEvent]:
     - Timestamps are UTC datetimes derived from `startTimeUnixNano`/`endTimeUnixNano`.
     - `attributes` is a flat `dict[str, Any]`, un-nested from OTLP's list-of-KV format.
     - Raises `TraceIngestionError` on malformed input (missing required fields).
+
+    `redact` names the attribute values to mask *before* the event is returned,
+    so a redacted value never reaches the trace store or any downstream sink
+    (ADR 0022). Empty (the default) leaves every value untouched.
     """
     try:
         resource_spans = cast("list[dict[str, Any]]", payload["resourceSpans"])
@@ -138,10 +146,14 @@ def ingest_otlp_json(payload: dict[str, object]) -> list[TraceEvent]:
         ]
     except (KeyError, TypeError) as exc:
         raise TraceIngestionError(f"Malformed OTLP payload: {exc}") from exc
-    return events
+    if not redact:
+        return events
+    return [
+        replace(event, attributes=redact_attributes(event.attributes, redact)) for event in events
+    ]
 
 
-def ingest_otlp_file(path: Path) -> list[TraceEvent]:
+def ingest_otlp_file(path: Path, redact: frozenset[str] = frozenset()) -> list[TraceEvent]:
     """Read one or more OTLP JSON payloads from a file into TraceEvents.
 
     Decodes the file as a stream of JSON values, so every real shape lands in
@@ -149,6 +161,9 @@ def ingest_otlp_file(path: Path) -> list[TraceEvent]:
     newline-delimited payloads the OTel Collector file exporter writes (so the
     `agent → Collector → alfred watch` bridge works), or several concatenated.
     A malformed value raises `TraceIngestionError` naming the line it starts on.
+
+    `redact` is forwarded to `ingest_otlp_json` (ADR 0022): named values are
+    masked before the events leave this function.
     """
     path = Path(path)
     text = path.read_text(encoding="utf-8")
@@ -163,7 +178,7 @@ def ingest_otlp_file(path: Path) -> list[TraceEvent]:
                 f"Malformed OTLP JSON in {path} at line {exc.lineno}: {exc}"
             ) from exc
         try:
-            events.extend(ingest_otlp_json(payload))
+            events.extend(ingest_otlp_json(payload, redact))
         except TraceIngestionError as exc:
             raise TraceIngestionError(f"{path}: {exc}") from exc
     return events

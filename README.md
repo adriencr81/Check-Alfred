@@ -132,6 +132,13 @@ empty — those you declare, they aren't inferable from a trace), and
 `alfred mandate lint` catches a typo'd `escalate_when` metric before it crashes a
 `watch` run (exit 1 on error, so it drops into CI or pre-commit).
 
+Handling customer data? A `redact:` list in the mandate masks named tool
+arguments (`redact: [customer_email]`) **at ingestion, before they reach the
+trace store** — the raw value never lands in SQLite, Slack, the HTML report, or
+the narration LLM, replaced by a stable `redacted:sha256:…` token. Declarative
+and deterministic: only the fields you list are touched. See
+`docs/adr/0022-pii-redaction.md`.
+
 `alfred watch` is a single pass by design (re-run via cron — `alfred schedule`
 prints the line for you). For environments without cron, `alfred watch --loop`
 re-scans on an interval until you stop it. Add `--alerts` (with a Slack webhook)

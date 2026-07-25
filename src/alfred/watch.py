@@ -124,7 +124,7 @@ def watch_once(
 
     new_events: list[TraceEvent] = []
     for file_path in new_files:
-        events = ingest_otlp_file(file_path)
+        events = ingest_otlp_file(file_path, mandate.redact)
         store.put_many(events)
         new_events.extend(events)
         seen.add(file_path.name)
