@@ -5,8 +5,16 @@
 > aucune décision actée — voir `docs/adr/0011-growth-plan-3m.md`.
 > **Objectif unique : maximiser le nombre d'utilisateurs.**
 
-**Version** : 1.0 · **Date** : 2026-07-19 · **Horizon** : M1 (19/07→18/08),
+**Version** : 1.1 · **Date** : 2026-07-25 · **Horizon** : M1 (19/07→18/08),
 M2 (19/08→18/09), M3 (19/09→19/10).
+
+> **Révision 1.1 (2026-07-25, ADR 0027)** — trois recalages : le vivier
+> « réseau systèmes critiques » n'existe pas, donc le sourcing devient
+> intégralement froid (30 noms) ; le créneau du vendredi passe aux PRs
+> d'exemples et aux awesome-lists ; et surtout **les connecteurs natifs qui
+> constituaient tout le levier de M2 sont livrés** (Briques 12 et 13, ADR 0014
+> et 0021, postérieures à la v1.0 de ce document). Le M2 est recalé en
+> conséquence — voir §2.
 
 ---
 
@@ -26,6 +34,11 @@ publication PyPI, point zéro daté — ADR 0009 décision 4) :
 | Issues/PRs d'inconnus | GitHub | hebdo |
 | Clones uniques | GitHub traffic | hebdo |
 | Mentions (HN, Reddit, X) | recherche manuelle | hebdo |
+| **Digests partagés** | issues `show-your-digest` | hebdo |
+
+Le dernier est le seul proxy qui prouve une **exécution**, pas une intention :
+les autres comptent des gens qui ont vu le projet, celui-là compte des gens qui
+l'ont fait tourner sur leur propre agent (ADR 0027 décision 9).
 
 **La ligne qui compte** (PLAN.md §8, inchangée) : les demandes de payant
 spontanées tranchent la suite — mais sur 3 mois, tout est optimisé pour le
@@ -35,9 +48,9 @@ haut du funnel : *découverte → installation → premier digest → habitude*.
 
 | Mois | Goulot attaqué | Levier principal |
 |---|---|---|
-| M1 | **Découverte** | Launch multi-canal (§6.3) + assets publics |
-| M2 | **Installation → 1er digest** | Connecteurs natifs v0.2 (zéro friction) |
-| M3 | **Habitude + boucle virale** | Leaderboard mensuel + re-launch angle v0.2 |
+| M1 | **Découverte** | Launch multi-canal (§6.3) + assets publics — connecteurs natifs déjà livrés, donc dans l'angle du launch et non plus du M2 |
+| M2 | **Installation → 1er digest** | Ce que les issues du launch désignent : CrewAI, endpoint OTLP HTTP, frictions d'install |
+| M3 | **Habitude + boucle virale** | Leaderboard mensuel + re-launch si nécessaire |
 
 ---
 
@@ -67,13 +80,23 @@ jour du launch) :
       Test falsifiable par cas d'erreur avant toute modification.
 - [ ] Page GitHub Pages minimale (mkdocs, thème par défaut) : quickstart,
       « Why », comparatif — la landing citée dans tous les posts.
+- [x] `alfred schedule --github-actions` : un digest quotidien qui tourne
+      sans machine allumée. Attaque le goulot de M3 (l'habitude) dès M1,
+      parce que sans lui la métrique nord est inatteignable pour quiconque
+      n'a pas de serveur (ADR 0027).
+- [x] `alfred demo` invite à partager le digest obtenu (+ template d'issue) :
+      le seul signal d'activation possible sans télémétrie.
 
 Priorité 3 — **fiabilité visible** : badge CI déjà en place ; ajouter le
 badge PyPI + Python versions au README après publication.
 
 **Gel des features** : aucune feature produit en M1 (PLAN.md §9, « tout
 ajout pré-launch = non par défaut »). Le travail technique de M1 est
-exclusivement du polish d'entonnoir.
+exclusivement du polish d'entonnoir. **Exception tracée le 2026-07-25**
+(ADR 0027 décision 1) : les deux items cochés ci-dessus sont classés polish
+d'entonnoir — ils ne changent ni ce qu'Alfred calcule ni la règle D5, l'un
+change la façon dont `watch` est déclenché, l'autre ajoute une ligne de
+texte. C'est un jugement, contestable en revue mensuelle.
 
 ### 1.2 Marketing
 
@@ -81,22 +104,28 @@ Semaine du 21/07 (pré-launch, §6.2 compressé) :
 - [ ] Post build-in-public n°1 : « Comment on empêche notre LLM
       d'halluciner nos rapports » (matière : `docs/verified_nlg.md`). EN
       (X + HN en « Show » léger) + FR (LinkedIn).
-- [ ] Liste de 15 early users constituée (issues LangGraph/CrewAI/OpenAI
-      Agents mentionnant monitoring/observability ; Discords ; r/AI_Agents ;
-      réseau systèmes critiques).
+- [ ] Liste de 30 early users constituée — viviers §6.2 (issues des
+      frameworks, issues des outils adjacents, HN via Algolia, auteurs de
+      billets, Discords, r/AI_Agents, r/LocalLLaMA). Sourcing intégralement
+      froid : le vivier « réseau » du plan initial n'existe pas.
+- [ ] **Échauffement des comptes Reddit** : commentaires sincères dans
+      r/AI_Agents et r/LocalLLaMA. Même activité que le sourcing ci-dessus,
+      et prérequis pour que les posts du launch ne soient pas filtrés.
 
 Semaine du 28/07 :
 - [ ] Post n°2 : « Vos agents IA ont besoin d'un mandat, pas d'un
       dashboard ».
-- [ ] DM personnalisés à ~8 early users avec le GIF (« would you try this
+- [ ] DM personnalisés à ~15 early users avec le GIF (« would you try this
       the day it ships? »). Objectif : 5 installs jour J + 2-3 témoignages.
-- [ ] Assets launch finalisés : post Show HN relu, thread X, LinkedIn FR,
-      posts Reddit adaptés par sub.
+- [ ] Assets launch finalisés : post Show HN relu (angle connecteurs
+      natifs), thread X, posts Reddit adaptés par sub, PRs d'exemples
+      préparées.
 
-Semaine du 04/08 — **LAUNCH** (séquence §6.3 inchangée) :
-mardi Show HN 14h-16h Paris → mercredi Reddit (r/AI_Agents, r/LangChain,
-r/LocalLLaMA) → jeudi thread X → vendredi LinkedIn FR → lundi 11/08 pitch
-4 newsletters (TLDR AI, The Rundown, Ben's Bites, La Revue IA).
+Semaine du 04/08 — **LAUNCH** (séquence §6.3, révisée ADR 0027) :
+mardi Show HN 14h-16h Paris → mercredi Reddit (r/AI_Agents, r/LocalLLaMA,
+posts texte) → jeudi thread X → vendredi PRs d'exemples + awesome-lists →
+lundi 11/08 pitch 4 newsletters (TLDR AI, The Rundown, Ben's Bites,
+La Revue IA).
 
 Semaines du 11/08 et 18/08 (post-launch immédiat) :
 - [ ] **Réactivité issues < 24 h** — le signal de traction le plus
@@ -116,31 +145,55 @@ Semaines du 11/08 et 18/08 (post-launch immédiat) :
 | Installs pip/semaine | 20-50 |
 | Issues/PRs d'inconnus | ≥ 5 |
 | Témoignages écrits early users | 2-3 |
+| **Digests partagés publiquement** | ≥ 3 |
+
+Sur la lecture du résultat : un Show HN suit une distribution très asymétrique.
+L'issue la plus probable est nettement sous les 500 stars, qui correspondent en
+réalité à un top 10 front page. Le garde-fou §9 est écrit pour ça — **un tir
+raté ne conclut rien**, le re-launch M3 est déjà budgété. Les digests partagés,
+eux, se lisent au premier jour : trois personnes qui montrent une sortie réelle
+valent plus, pour la suite du plan comme pour §7.2, que trois cents stars.
 
 ---
 
 ## 2. Mois 2 — Rétention & friction zéro : v0.2 (19 août → 18 septembre)
 
-Thèse du mois : **le launch a créé la découverte ; la v0.2 convertit la
-découverte en usage**. Le plus gros abandon attendu : « j'utilise
-LangGraph/CrewAI, je ne sais pas produire vos fichiers OTLP ». Les
-connecteurs natifs suppriment cette marche.
+Thèse du mois : **le launch a créé la découverte ; le M2 la convertit en
+usage**. La v1.0 de ce document pariait tout le mois sur les connecteurs
+natifs, censés supprimer la marche « je ne sais pas produire vos fichiers
+OTLP ». **Cette marche est déjà supprimée** : LangGraph (Brique 12, ADR 0014)
+et OpenAI Agents SDK (Brique 13, ADR 0021) sont livrés, testés en CI et
+documentés dans `docs/integrate.md`. Ils appartiennent donc à l'angle du
+launch, pas au M2.
+
+Ce que ça change : le M2 n'a plus de levier décidé d'avance. Il est
+**intégralement piloté par les issues du launch** — ce qui était déjà la
+règle (§6.4, « priorisation par les issues, pas par intuition »), mais qui
+devient la seule règle. Ne rien pré-décider ici est le comportement correct,
+pas un trou dans le plan.
 
 ### 2.1 Technique — v0.2 (~J+90, PLAN.md §6.4)
 
-Priorisation **par les issues réelles du launch**, pas par intuition.
-Ordre par défaut si les issues ne tranchent pas :
+Livré avant le launch, à ne pas replanifier :
 
-- [ ] **Connecteur LangGraph** (communauté la plus large) : `pip install
-      alfred-ai[langgraph]`, 3 lignes pour instrumenter, exemple complet
-      dans `examples/`.
-- [ ] **Connecteur OpenAI Agents SDK**, puis **CrewAI** — même contrat :
-      chaque connecteur a un test d'intégration falsifiable (trace émise →
-      digest ancré) et un exemple exécutable.
+- [x] **Connecteur LangGraph** — `pip install alfred-ai[langgraph]`, un
+      callback handler, exemple exécutable dans `examples/agents/langgraph_bot/`.
+- [x] **Connecteur OpenAI Agents SDK** — `pip install alfred-ai[openai-agents]`,
+      un tracing processor, exemple dans `examples/agents/openai_agents_bot/`.
+
+Reste à faire, dans l'ordre que les issues désignent :
+
+- [ ] **Connecteur CrewAI** — même contrat que les deux précédents : test
+      d'intégration falsifiable (vrai run du framework, zéro réseau → digest
+      ancré) et exemple exécutable.
 - [ ] **Endpoint OTLP HTTP** (sort du backlog §10, prévu v0.2) : les
       agents streament leurs traces sans passer par des fichiers.
 - [ ] Digest **Teams** + coûts multi-providers (si demandés par issues —
       sinon glissent en v0.3).
+- [ ] **Dette d'entonnoir du launch** : les frictions d'installation les plus
+      citées dans les issues. Remontée de M3, parce qu'une friction signalée
+      par un inconnu pendant le launch coûte des utilisateurs tant qu'elle
+      dure.
 - [ ] Chaque connecteur isolé derrière la couche d'adaptation
       `alfred.trace.ingest` (garde-fou §9 sur les semconv mouvants).
 
@@ -154,9 +207,9 @@ commit par brique, ADR si écart au plan.
       auto-déclaré de l'agent masquait. Conclusion rituelle : « voici
       comment ça apparaît dans le daily Alfred ». Ce post est LE modèle
       qui se répète chaque mois.
-- [ ] **PRs d'exemples dans les repos des frameworks** (LangGraph, CrewAI,
-      OpenAI Agents SDK, dossier `examples/`) — chaque PR mergée est un
-      backlink permanent devant la communauté cible.
+- [ ] **PRs d'exemples dans les repos des frameworks** — poursuivies et
+      relancées ; les premières partent dès le vendredi du launch (§6.3).
+      Chaque PR mergée est un backlink permanent devant la communauté cible.
 - [ ] Cadence maintenue : 1 post/semaine EN+FR, toujours un problème
       concret + une preuve (règle §6.1).
 - [ ] **Activer les early users comme relais** : demander aux 2-3
@@ -164,8 +217,10 @@ commit par brique, ADR si écart au plan.
       (co-rédaction proposée).
 - [ ] Réactivité issues < 24 h, toujours.
 - [ ] Release **v0.2 annoncée comme un mini-launch** (changelog narratif,
-      thread X, post Reddit sur le sub du framework connecté :
-      « Alfred now speaks LangGraph natively »).
+      thread X, post Reddit sur le sub du framework nouvellement connecté).
+      L'angle « Alfred now speaks X natively » est désormais celui du launch
+      lui-même : le mini-launch M2 porte donc ce que le M1 n'avait pas —
+      CrewAI, ou l'endpoint OTLP HTTP, selon ce que les issues ont désigné.
 
 ### 2.3 Cibles fin M2 (≈ revue « J+90 » de PLAN.md §8, recalée ADR 0009)
 
@@ -195,8 +250,8 @@ mois sans effort marginal.
       sous un même mandat et publie le classement des déviations. Sortie
       = page statique + données brutes committées (reproductible par
       quiconque — c'est la crédibilité).
-- [ ] Dette d'entonnoir : traiter les 5 frictions d'installation les plus
-      citées dans les issues depuis le launch.
+- [ ] Dette d'entonnoir : le reliquat de ce que le M2 n'a pas absorbé
+      (§2.1), pas un lot neuf.
 
 ### 3.2 Marketing
 
@@ -206,8 +261,10 @@ mois sans effort marginal.
       Show HN / post Reddit naturel, et chaque framework classé a une
       communauté qui viendra vérifier.
 - [ ] **Re-launch si nécessaire** (garde-fou §9) : si le launch M1 a fait
-      < 100 stars, re-tir HN sous l'angle « Alfred now speaks LangGraph
-      natively » — un HN raté se retente à 2-3 mois sous un autre angle.
+      < 100 stars, re-tir HN — un HN raté se retente à 2-3 mois sous un autre
+      angle. L'angle connecteurs étant consommé au M1, c'est **le leaderboard**
+      qui porte le re-tir : un classement public est un objet de discussion
+      neuf, pas une redite du produit.
 - [ ] Finding public du mois (cadence rituelle).
 - [ ] **2-3 études de cas nommées** tirées des utilisateurs récurrents
       (matière YC §7.2 : « trois utilisateurs nommables »).
