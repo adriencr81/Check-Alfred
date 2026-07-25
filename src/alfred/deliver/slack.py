@@ -32,8 +32,35 @@ class DeliverError(Exception):
     """Raised when a Slack webhook delivery fails."""
 
 
+# Slack renders `<url|label>` as a masked link and `<!channel>` as a ping, so a
+# tool name carrying either forges content inside a real Alfred message. Slack's
+# documented escaping is these three characters, and nothing else.
+_MRKDWN_ESCAPES = {"&": "&amp;", "<": "&lt;", ">": "&gt;"}
+# Long enough for any honest deviation message, short enough that a hundred of
+# them still fit under Slack's 3000-character section limit.
+_MAX_TEXT = 400
+
+
+def _mrkdwn(text: str) -> str:
+    """Neutralize a trace-derived string for a Block Kit `mrkdwn` field.
+
+    Escapes Slack's markup characters, folds newlines (a forged line break is
+    how a fake "Tasks completed" row gets in) and control characters into
+    spaces, and truncates. Applied at the sink, not at ingestion: the raw value
+    stays intact in the store, which is where the evidence lives (ADR 0026
+    decision 1).
+    """
+    folded = "".join(
+        " " if character < " " or character == "\x7f" else character for character in text
+    )
+    escaped = "".join(_MRKDWN_ESCAPES.get(character, character) for character in folded)
+    if len(escaped) <= _MAX_TEXT:
+        return escaped
+    return escaped[: _MAX_TEXT - 1] + "…"
+
+
 def _field_text(line: Line) -> str:
-    text = f"*{LABELS[line.kind]}*\n{format_value(line)}"
+    text = f"*{LABELS[line.kind]}*\n{_mrkdwn(format_value(line))}"
     baseline = format_baseline(line)
     return f"{text}\n{baseline}" if baseline is not None else text
 
@@ -48,10 +75,10 @@ def _fields_section(digest: Digest) -> dict[str, Any]:
 def _deviation_section(deviations: tuple[Deviation, ...]) -> dict[str, Any]:
     if len(deviations) == 1:
         deviation = deviations[0]
-        body = f"{deviation.type.value}: {deviation.message}"
+        body = f"{deviation.type.value}: {_mrkdwn(deviation.message)}"
     else:
         body = "\n".join(
-            f"• {deviation.type.value}: {deviation.message}" for deviation in deviations
+            f"• {deviation.type.value}: {_mrkdwn(deviation.message)}" for deviation in deviations
         )
     count = len(deviations)
     title = f"⚠️ *{count} deviation{'s' if count > 1 else ''} (mandate)*"
@@ -63,7 +90,7 @@ def _evidence_block(parts: list[str]) -> dict[str, Any]:
     envelope for both the digest and the alert (their `parts` differ)."""
     return {
         "type": "context",
-        "elements": [{"type": "mrkdwn", "text": "Evidence — " + " · ".join(parts)}],
+        "elements": [{"type": "mrkdwn", "text": _mrkdwn("Evidence — " + " · ".join(parts))}],
     }
 
 
@@ -90,7 +117,7 @@ def build_block_kit_payload(digest: Digest) -> dict[str, Any]:
     """Build a native Block Kit payload: header, counter fields, a dedicated
     warning section when the mandate caught deviations, and the truncated
     evidence IDs in a context block. Full event IDs stay in the `Digest`."""
-    title = f"Alfred · {digest.agent} · {digest.date.isoformat()}"
+    title = _mrkdwn(f"Alfred · {digest.agent} · {digest.date.isoformat()}")
     count = len(digest.deviations)
     summary = f"{count} deviation{'s' if count > 1 else ''}" if count else "all clear"
 
@@ -116,7 +143,7 @@ def build_alert_payload(digest: Digest) -> dict[str, Any]:
     so this fails loudly rather than post an empty alarm."""
     if not digest.deviations:
         raise ValueError("cannot build an alert payload from a digest with no deviation")
-    title = f"🚨 Alfred alert · {digest.agent} · {digest.date.isoformat()}"
+    title = _mrkdwn(f"🚨 Alfred alert · {digest.agent} · {digest.date.isoformat()}")
     count = len(digest.deviations)
     summary = f"{count} deviation{'s' if count > 1 else ''}"
     return {
