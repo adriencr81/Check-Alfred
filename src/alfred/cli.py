@@ -26,7 +26,7 @@ from alfred.narrate.render import render_text
 from alfred.report.build import build_digest
 from alfred.report.html import render_html
 from alfred.report.model import Digest
-from alfred.schedule import ScheduleError, build_cron_line
+from alfred.schedule import ScheduleError, build_cron_line, build_github_actions_workflow
 from alfred.trace.ingest import ingest_otlp_file, ingest_otlp_json
 from alfred.trace.model import TraceEvent, TraceIngestionError
 from alfred.trace.redact import Redactor, redactor_for
@@ -313,12 +313,24 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
     except ValueError:
         print(f"alfred schedule: --at must be HH:MM, got {args.at!r}", file=sys.stderr)
         return 1
+    # A workflow always runs from the repository root, so --project has no
+    # meaning there. Say so rather than ignore it silently.
+    if args.github_actions and args.project != ".":
+        print(
+            "alfred schedule: --project does not apply to --github-actions "
+            "(a workflow runs from the repository root)",
+            file=sys.stderr,
+        )
+        return 1
     try:
-        line = build_cron_line(args.project, args.traces_dir, hour=hour, minute=minute)
+        if args.github_actions:
+            rendered = build_github_actions_workflow(args.traces_dir, hour=hour, minute=minute)
+        else:
+            rendered = build_cron_line(args.project, args.traces_dir, hour=hour, minute=minute)
     except ScheduleError as exc:
         print(f"alfred schedule: {exc}", file=sys.stderr)
         return 1
-    print(line)
+    print(rendered, end="" if args.github_actions else "\n")
     return 0
 
 
@@ -461,10 +473,16 @@ def main(argv: list[str] | None = None) -> int:
     report_parser.set_defaults(func=_cmd_report)
 
     schedule_parser = subparsers.add_parser(
-        "schedule", help="Print a crontab line that runs `alfred watch` daily"
+        "schedule", help="Print a daily schedule for `alfred watch` (crontab line or workflow)"
     )
     schedule_parser.add_argument("traces_dir")
     schedule_parser.add_argument("--project", default=".")
+    schedule_parser.add_argument(
+        "--github-actions",
+        action="store_true",
+        help="print a GitHub Actions workflow instead of a crontab line — for when no "
+        "host stays up (the webhook comes from the ALFRED_SLACK_WEBHOOK_URL secret)",
+    )
     schedule_parser.add_argument(
         "--at", default="09:00", metavar="HH:MM", help="daily run time (24h), default 09:00"
     )

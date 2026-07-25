@@ -132,6 +132,8 @@ alfred init --slack-webhook https://hooks.slack.com/…  # mandate.yaml + Slack 
 alfred mandate init --from-traces traces/ > mandate.yaml  # seed a mandate from what the agent did
 alfred mandate lint mandate.yaml                       # validate the mandate before you rely on it
 alfred schedule traces/ --at 09:00 >> mycrontab        # one daily crontab line
+alfred schedule traces/ --at 09:00 --github-actions \
+  > .github/workflows/alfred.yml                       # …or a daily workflow, no host to keep up
 alfred watch traces/                                   # one pass now (or --loop to keep running)
 alfred report traces/ --html --out reports/            # shareable HTML report, one file per day
 alfred demo                                            # fake agent → real digest, no setup
@@ -156,6 +158,16 @@ prints the line for you). For environments without cron, `alfred watch --loop`
 re-scans on an interval until you stop it. Add `--alerts` (with a Slack webhook)
 to also push a deviation the moment it's caught, instead of only in the daily
 digest — pair it with `--loop` for near real-time.
+
+A daily digest only becomes a habit if it keeps arriving, and both of those
+paths assume a machine that stays up. If you don't have one,
+`alfred schedule … --github-actions` prints a workflow you commit to
+`.github/workflows/`: it runs the same single pass on GitHub's schedule, reads
+the webhook from the `ALFRED_SLACK_WEBHOOK_URL` repository secret (never from
+the committed file), and caches `.alfred/` between runs so a digest isn't
+posted twice. The schedule is UTC, and a cache miss re-posts that day's digest
+— both are stated in the generated file. See
+`docs/adr/0027-unattended-daily-digest.md`.
 
 By default the digest is the raw computed table. `--narrate` rewrites it as
 verified LLM prose — the LLM only rephrases, and a sentence citing an event it
