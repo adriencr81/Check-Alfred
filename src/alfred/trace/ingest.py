@@ -7,6 +7,7 @@ for the falsifiable specification.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -110,6 +111,31 @@ def _flatten_tool_arguments(raw: str, attributes: dict[str, Any]) -> None:
             attributes.setdefault(f"{_TOOL_ARGS_PREFIX}{key}", value)
 
 
+_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+
+
+def _identifier(value: Any, field: str) -> str:
+    """Return `value` if it is a usable identifier, else raise.
+
+    A `spanId` is repeated into the narration prompt, the Slack digest and the
+    HTML report, and nothing constrained it: an ID could be a paragraph of
+    instructions aimed at the narrating model (ADR 0026 decision 2). The shape
+    is policed — printable, bounded, no whitespace — rather than the strict
+    OTel hex, so readable IDs like `demo-1-task` keep working.
+    """
+    if isinstance(value, str) and _IDENTIFIER_PATTERN.match(value):
+        return value
+    return _reject_identifier(value, field)
+
+
+def _reject_identifier(value: Any, field: str) -> str:
+    shown = value if isinstance(value, str) else repr(value)
+    raise TraceIngestionError(
+        f"{field} is not a usable identifier (expected up to 128 characters of "
+        f"[A-Za-z0-9._:-]): {shown[:60]!r}"
+    )
+
+
 def _timestamp(nanos: str) -> datetime:
     seconds, nanoseconds = divmod(int(nanos), 1_000_000_000)
     return datetime.fromtimestamp(seconds, tz=UTC).replace(microsecond=nanoseconds // 1_000)
@@ -132,8 +158,8 @@ def _span_to_event(span: dict[str, Any]) -> TraceEvent:
         _adapt_semconv(span, kind, attributes)
         parent_span_id = span.get("parentSpanId") or None
         return TraceEvent(
-            event_id=EventId(span["spanId"]),
-            trace_id=span["traceId"],
+            event_id=EventId(_identifier(span["spanId"], "spanId")),
+            trace_id=_identifier(span["traceId"], "traceId"),
             parent_span_id=parent_span_id,
             kind=kind,
             name=span["name"],
