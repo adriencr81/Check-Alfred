@@ -187,6 +187,57 @@ def test_budget_exceeded_absent_under_budget() -> None:
     assert not any(d.type.value == "budget_exceeded" for d in deviations)
 
 
+def _priced_event(
+    event_id: str, input_tokens: int, output_tokens: int, declared: float | None = None
+) -> TraceEvent:
+    """An opus call whose tokens price at 0.005 €/1k in + 0.025 €/1k out."""
+    attributes: dict[str, object] = {
+        "gen_ai.response.model": "claude-opus-4-8",
+        "gen_ai.usage.input_tokens": input_tokens,
+        "gen_ai.usage.output_tokens": output_tokens,
+    }
+    if declared is not None:
+        attributes["gen_ai.usage.cost_eur"] = declared
+    return _event(event_id, kind=SpanKind.LLM_CALL, attributes=attributes)
+
+
+def test_cost_mismatch_detected_when_the_declared_cost_underreports() -> None:
+    """ADR 0023 decision 3: pricing from tokens fixes the number, but a
+    declared cost that contradicts it is a signal, not something to correct
+    in silence."""
+    events = [_priced_event("e1", 100_000, 200_000, declared=0.0)]
+    deviations = evaluate(_mandate(), events)
+    matches = [d for d in deviations if d.type.value == "cost_mismatch"]
+    assert len(matches) == 1
+    assert matches[0].event_ids == (EventId("e1"),)
+    assert matches[0].details["declared_eur"] == pytest.approx(0.0)
+    assert matches[0].details["computed_eur"] == pytest.approx(5.5)
+
+
+def test_cost_mismatch_accumulates_over_the_day() -> None:
+    """Ten under-declarations of 0.15 €, each too small to matter alone, still
+    add up to a real gap — the check sums the day before comparing."""
+    events = [_priced_event(f"e{index}", 10_000, 20_000, declared=0.40) for index in range(10)]
+    deviations = evaluate(_mandate(), events)
+    matches = [d for d in deviations if d.type.value == "cost_mismatch"]
+    assert len(matches) == 1
+    assert len(matches[0].event_ids) == 10
+    assert matches[0].details["computed_eur"] == pytest.approx(5.5)
+    assert matches[0].details["declared_eur"] == pytest.approx(4.0)
+
+
+def test_cost_mismatch_absent_within_tolerance() -> None:
+    """A deployer's own conversion rate drifts a few percent from the table —
+    that is not a deviation."""
+    events = [_priced_event("e1", 100_000, 200_000, declared=5.4)]
+    assert not any(d.type.value == "cost_mismatch" for d in evaluate(_mandate(), events))
+
+
+def test_cost_mismatch_absent_when_nothing_is_declared() -> None:
+    events = [_priced_event("e1", 100_000, 200_000)]
+    assert not any(d.type.value == "cost_mismatch" for d in evaluate(_mandate(), events))
+
+
 def test_escalation_missed_on_tool_error_rate() -> None:
     events = [
         _event(

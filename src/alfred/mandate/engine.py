@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
 from alfred.mandate.model import Deviation, DeviationType, ForbiddenRule, Mandate, MandateError
-from alfred.trace.cost import contributing_costs
+from alfred.trace.cost import computed_cost_eur, contributing_costs, declared_cost_eur
 from alfred.trace.model import EventId, SpanKind, TraceEvent
 
 _FORBIDDEN_PATTERN = re.compile(r"^(?P<tool>.+?)_above_(?P<amount>\d+(?:\.\d+)?)_eur$")
@@ -144,6 +144,50 @@ def _check_budget_exceeded(mandate: Mandate, events: Sequence[TraceEvent]) -> li
             )
         ]
     return []
+
+
+# A declared cost is only worth reporting when it contradicts the computed one
+# by both a real share and a real amount: pricing tables lag negotiated rates
+# and cache discounts by a few percent, which is drift, not a deviation.
+_COST_MISMATCH_RATIO = 0.20
+_COST_MISMATCH_FLOOR_EUR = 0.50
+
+
+def _check_cost_mismatch(events: Sequence[TraceEvent]) -> list[Deviation]:
+    """Flag a self-reported cost that contradicts the cost priced from tokens.
+
+    The digest already prices from tokens (ADR 0023 decision 2), so this does
+    not change any number — it surfaces the contradiction instead of correcting
+    it in silence. Compared over the day's totals, so a hundred small
+    under-declarations that each stay under the floor still add up to a
+    reported gap; anchored to the events that diverge.
+    """
+    diverging: list[TraceEvent] = []
+    declared_total = computed_total = 0.0
+    for event in events:
+        declared, computed = declared_cost_eur(event), computed_cost_eur(event)
+        if declared is None or computed is None:
+            continue
+        declared_total += declared
+        computed_total += computed
+        if declared != computed:
+            diverging.append(event)
+    gap = abs(declared_total - computed_total)
+    if not diverging or gap <= _COST_MISMATCH_FLOOR_EUR:
+        return []
+    if computed_total <= 0.0 or gap / computed_total <= _COST_MISMATCH_RATIO:
+        return []
+    return [
+        Deviation(
+            type=DeviationType.COST_MISMATCH,
+            event_ids=tuple(event.event_id for event in diverging),
+            message=(
+                f"reported cost {declared_total:.2f}€ contradicts the "
+                f"{computed_total:.2f}€ priced from the trace's own tokens"
+            ),
+            details={"declared_eur": declared_total, "computed_eur": computed_total},
+        )
+    ]
 
 
 _MetricComputer = Callable[
@@ -333,6 +377,7 @@ def evaluate_day(mandate: Mandate, events: Sequence[TraceEvent]) -> list[Deviati
     return [
         *_check_budget_exceeded(mandate, events),
         *_check_escalation_missed(mandate, events, _tool_calls(events)),
+        *_check_cost_mismatch(events),
     ]
 
 

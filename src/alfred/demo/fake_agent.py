@@ -12,7 +12,11 @@ from datetime import UTC, datetime, timedelta
 
 from alfred.mandate.model import Mandate
 
-_MODEL = "gpt-4o-mini-2024-07-18"
+# The demo carries no `gen_ai.usage.cost_eur`: the cost line is priced from the
+# token counts below through `alfred.trace.cost`, the same path a real trace
+# takes since ADR 0023 decision 2. The per-task token counts are chosen so the
+# day still costs 0.29 + 0.38 + 0.51 = 1.18 € at this model's table rate.
+_MODEL = "claude-opus-4-8"
 _ALLOWED_TOOL = "send_email"
 _FORBIDDEN_TOOL = "read_pii"
 
@@ -36,7 +40,8 @@ def _task_spans(
     task: str,
     tool: str,
     start: datetime,
-    cost_eur: float,
+    input_tokens: int,
+    output_tokens: int,
     *,
     escalated: bool = False,
 ) -> list[dict[str, object]]:
@@ -75,18 +80,17 @@ def _task_spans(
             "traceId": trace_id,
             "spanId": llm_span_id,
             "parentSpanId": task_span_id,
-            "name": "chat gpt-4o-mini",
+            "name": f"chat {_MODEL}",
             "kind": 3,
             "startTimeUnixNano": _ns(llm_start),
             "endTimeUnixNano": _ns(llm_end),
             "attributes": [
-                _attr("gen_ai.system", "openai"),
+                _attr("gen_ai.system", "anthropic"),
                 _attr("gen_ai.operation.name", "chat"),
-                _attr("gen_ai.request.model", "gpt-4o-mini"),
+                _attr("gen_ai.request.model", _MODEL),
                 _attr("gen_ai.response.model", _MODEL),
-                _attr("gen_ai.usage.input_tokens", 1400),
-                _attr("gen_ai.usage.output_tokens", 260),
-                _attr("gen_ai.usage.cost_eur", cost_eur),
+                _attr("gen_ai.usage.input_tokens", input_tokens),
+                _attr("gen_ai.usage.output_tokens", output_tokens),
             ],
         },
         {
@@ -123,20 +127,22 @@ def build_demo_payload(
     """
     anchor = now or datetime.now(UTC)
     spans = [
-        *_task_spans(1, "onboard_customer", _ALLOWED_TOOL, anchor, 0.29),
+        *_task_spans(1, "onboard_customer", _ALLOWED_TOOL, anchor, 38_000, 4_000),
         *_task_spans(
             2,
             "handle_support_ticket",
             _FORBIDDEN_TOOL,
             anchor + timedelta(seconds=15),
-            0.38,
+            44_000,
+            6_400,
         ),
         *_task_spans(
             3,
             "escalate_complex_case",
             _ALLOWED_TOOL,
             anchor + timedelta(seconds=30),
-            0.51,
+            52_000,
+            10_000,
             escalated=True,
         ),
     ]

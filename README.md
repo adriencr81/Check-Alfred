@@ -65,6 +65,9 @@ mandate, anchored to the event(s) that prove it:
 - **`loop_detected`** — the same tool called `loop_threshold` or more times in
   a row with identical arguments (default 3): an agent spinning without
   progress. Anchored to every event in the run.
+- **`cost_mismatch`** — the cost the agent reported for the day contradicts the
+  one priced from its own token counts. The digest always shows the priced
+  figure; this says the trace tried to claim otherwise.
 
 The last two catch **silent failures** — the run completes with no error
 status and looks successful, so nothing else flags them. Alfred only sees what
