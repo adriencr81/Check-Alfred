@@ -20,6 +20,7 @@ import json
 import time
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -27,27 +28,78 @@ from alfred.mandate.model import Mandate
 from alfred.report.build import BASELINE_WINDOW_DAYS, build_digest
 from alfred.report.model import Digest
 from alfred.trace.ingest import ingest_otlp_file
-from alfred.trace.model import TraceEvent
+from alfred.trace.model import TraceEvent, TraceIngestionError
 from alfred.trace.store import TraceStore
 
 _SEEN_FILENAME = "seen.json"
+_STATE_VERSION = 2
+_INGESTED = "ingested"
+_QUARANTINED = "quarantined"
+
+
+@dataclass(frozen=True, slots=True)
+class QuarantinedTrace:
+    """A trace file `watch_once` could not read, and why."""
+
+    name: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class WatchPass:
+    """The outcome of one `watch_once` pass.
+
+    `quarantined` lists *every* file still in quarantine, not only the ones this
+    pass tripped over: a hole in the audit must stay visible in the cron log
+    until a human fixes or removes the file (ADR 0024 decision 3).
+    """
+
+    digests: list[Digest]
+    quarantined: tuple[QuarantinedTrace, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class _SeenFile:
+    status: str
+    reason: str | None = None
 
 
 def _seen_path(project_dir: Path) -> Path:
     return project_dir / ".alfred" / _SEEN_FILENAME
 
 
-def _load_seen(project_dir: Path) -> set[str]:
+def _load_state(project_dir: Path) -> dict[str, _SeenFile]:
+    """Read `.alfred/seen.json`, accepting the v1 format (a list of names)."""
     path = _seen_path(project_dir)
     if not path.exists():
-        return set()
-    return set(json.loads(path.read_text(encoding="utf-8")))
+        return {}
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(raw, list):  # v1: names only, all of them ingested
+        return {str(name): _SeenFile(status=_INGESTED) for name in raw}
+    return {
+        str(name): _SeenFile(status=str(entry["status"]), reason=entry.get("reason"))
+        for name, entry in raw["files"].items()
+    }
 
 
-def _save_seen(project_dir: Path, seen: set[str]) -> None:
+def _save_state(project_dir: Path, state: dict[str, _SeenFile]) -> None:
     path = _seen_path(project_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(sorted(seen)), encoding="utf-8")
+    files = {
+        name: {"status": entry.status, "reason": entry.reason}
+        for name, entry in sorted(state.items())
+    }
+    path.write_text(
+        json.dumps({"version": _STATE_VERSION, "files": files}, indent=2), encoding="utf-8"
+    )
+
+
+def _quarantined(state: dict[str, _SeenFile]) -> tuple[QuarantinedTrace, ...]:
+    return tuple(
+        QuarantinedTrace(name=name, reason=entry.reason or "unknown")
+        for name, entry in sorted(state.items())
+        if entry.status == _QUARANTINED
+    )
 
 
 def _group_by_day(events: Iterable[TraceEvent]) -> dict[date, list[TraceEvent]]:
@@ -106,31 +158,44 @@ def build_digests(
 
 def watch_once(
     project_dir: Path, traces_dir: Path, mandate: Mandate, store: TraceStore
-) -> list[Digest]:
+) -> WatchPass:
     """Ingest OTLP JSON files in `traces_dir` not yet recorded as seen.
 
     Returns one `Digest` per calendar day among the newly-ingested events,
-    ordered by date. Returns an empty list if every file was already seen
-    (or `traces_dir` has no `*.json` files) — this is what makes a second
-    call over the same directory a no-op.
+    ordered by date, plus every file still in quarantine. The digests are empty
+    if every file was already seen (or `traces_dir` has no `*.json` files) —
+    this is what makes a second call over the same directory a no-op.
+
+    A file that cannot be read is quarantined, not fatal: the pass carries on
+    with the other files and records the failure, so one malformed span can
+    neither hide the rest of the day nor stop `alfred watch` for good (ADR
+    0024 decisions 2 and 3). The state is written after each file — and only
+    once its events are in the store — so an interrupted pass never replays
+    work it already did (decision 6).
 
     Each digest carries a rolling baseline computed from the prior days already
     in the store (F3), so a number reads against its own recent history.
     """
-    seen = _load_seen(project_dir)
-    new_files = sorted(p for p in Path(traces_dir).glob("*.json") if p.name not in seen)
-    if not new_files:
-        return []
-
+    state = _load_state(project_dir)
     new_events: list[TraceEvent] = []
-    for file_path in new_files:
-        events = ingest_otlp_file(file_path, mandate.redact)
+    for file_path in sorted(Path(traces_dir).glob("*.json")):
+        if file_path.name in state:
+            continue
+        try:
+            events = ingest_otlp_file(file_path, mandate.redact)
+        except (TraceIngestionError, OSError) as exc:
+            state[file_path.name] = _SeenFile(status=_QUARANTINED, reason=str(exc))
+            _save_state(project_dir, state)
+            continue
         store.put_many(events)
         new_events.extend(events)
-        seen.add(file_path.name)
+        state[file_path.name] = _SeenFile(status=_INGESTED)
+        _save_state(project_dir, state)
 
-    _save_seen(project_dir, seen)
-    return build_digests(mandate, new_events, store)
+    return WatchPass(
+        digests=build_digests(mandate, new_events, store),
+        quarantined=_quarantined(state),
+    )
 
 
 def watch_loop(
@@ -138,13 +203,13 @@ def watch_loop(
     traces_dir: Path,
     mandate: Mandate,
     store: TraceStore,
-    on_digests: Callable[[list[Digest]], None],
+    on_pass: Callable[[WatchPass], None],
     *,
     interval_s: float,
     sleep: Callable[[float], None] | None = None,
     max_passes: int | None = None,
 ) -> None:
-    """Run `watch_once` repeatedly, delivering each pass's digests.
+    """Run `watch_once` repeatedly, handing each pass's outcome to `on_pass`.
 
     Opt-in continuous mode (ADR 0015). Each pass reuses `.alfred/seen.json`,
     so only newly-arrived trace files produce digests — no re-delivery. After
@@ -157,7 +222,7 @@ def watch_loop(
     do_sleep = time.sleep if sleep is None else sleep
     passes = 0
     while True:
-        on_digests(watch_once(project_dir, traces_dir, mandate, store))
+        on_pass(watch_once(project_dir, traces_dir, mandate, store))
         passes += 1
         if max_passes is not None and passes >= max_passes:
             return

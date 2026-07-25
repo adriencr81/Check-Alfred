@@ -30,7 +30,7 @@ from alfred.schedule import ScheduleError, build_cron_line
 from alfred.trace.ingest import ingest_otlp_file, ingest_otlp_json
 from alfred.trace.model import TraceEvent, TraceIngestionError
 from alfred.trace.store import TraceStore
-from alfred.watch import build_digests, watch_loop, watch_once
+from alfred.watch import QuarantinedTrace, WatchPass, build_digests, watch_loop, watch_once
 
 # Shown when `--narrate` is requested but no LLM endpoint resolves (missing
 # config keys or the API-key env var). Fail loudly rather than fall back to the
@@ -113,6 +113,24 @@ def _deliver(
                 slack.send_alert(digest, config.slack_webhook_url)
 
 
+def _report_quarantine(quarantined: tuple[QuarantinedTrace, ...], project_dir: Path) -> None:
+    """Name every trace file Alfred could not read, on every pass.
+
+    A file it cannot parse is a hole in the audit, so it is repeated until a
+    human fixes or removes it (ADR 0024 decision 3) — never announced once and
+    forgotten.
+    """
+    for trace in quarantined:
+        print(f"alfred watch: quarantined {trace.name} — {trace.reason}", file=sys.stderr)
+    if quarantined:
+        print(
+            f"alfred watch: {len(quarantined)} trace file(s) could not be read and are NOT "
+            f"covered by this digest — fix or remove them (recorded in "
+            f"{project_dir / '.alfred' / 'seen.json'}).",
+            file=sys.stderr,
+        )
+
+
 def _cmd_watch(args: argparse.Namespace) -> int:
     project_dir = Path(args.project)
     try:
@@ -152,21 +170,19 @@ def _cmd_watch(args: argparse.Namespace) -> int:
 
     config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
     store = TraceStore(config.trace_db_path)
+    quarantined: tuple[QuarantinedTrace, ...] = ()
+
+    def _handle(result: WatchPass) -> None:
+        _deliver(result.digests, config, alerts=args.alerts, narrate_client=narrate_client)
+        _report_quarantine(result.quarantined, project_dir)
+
     try:
         if args.loop:
-            watch_loop(
-                project_dir,
-                traces_dir,
-                mandate,
-                store,
-                lambda digests: _deliver(
-                    digests, config, alerts=args.alerts, narrate_client=narrate_client
-                ),
-                interval_s=interval,
-            )
+            watch_loop(project_dir, traces_dir, mandate, store, _handle, interval_s=interval)
         else:
-            digests = watch_once(project_dir, traces_dir, mandate, store)
-            _deliver(digests, config, alerts=args.alerts, narrate_client=narrate_client)
+            result = watch_once(project_dir, traces_dir, mandate, store)
+            quarantined = result.quarantined
+            _handle(result)
     except KeyboardInterrupt:
         print("\nalfred watch: stopped.")
     except (TraceIngestionError, OSError) as exc:
@@ -174,7 +190,9 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         return 1
     finally:
         store.close()
-    return 0
+    # A quarantined file means the digest covers less than the directory does:
+    # exit non-zero so a cron run surfaces the gap, having delivered the rest.
+    return 1 if quarantined else 0
 
 
 def _read_trace_events(

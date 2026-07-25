@@ -303,23 +303,42 @@ def test_cli_watch_reports_missing_traces_dir(
     assert "not found" in capsys.readouterr().err
 
 
-def test_cli_watch_reports_malformed_trace_without_traceback(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+def test_cli_watch_quarantines_a_malformed_trace_and_delivers_the_rest(
+    tmp_path: Path, otlp_sample_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # A non-OTLP or half-written JSON file must yield a clean one-line error
-    # naming the file, not a Python traceback.
+    """A half-written JSON file must not take the whole pass down with it
+    (ADR 0024): the healthy file's digest is still delivered, the bad one is
+    named on stderr without a traceback, and the exit code flags the gap."""
     project_dir = tmp_path / "project"
     main(["init", str(project_dir), "--agent", "refund-bot-v3"])
     traces_dir = tmp_path / "traces"
     traces_dir.mkdir()
     (traces_dir / "broken.json").write_text("{ not valid json", encoding="utf-8")
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
 
     exit_code = main(["watch", str(traces_dir), "--project", str(project_dir)])
     assert exit_code == 1
-    err = capsys.readouterr().err
-    assert "cannot read traces" in err
-    assert "broken.json" in err  # the offending file is named
-    assert "Traceback" not in err
+    captured = capsys.readouterr()
+    assert "quarantined broken.json" in captured.err
+    assert "Traceback" not in captured.err
+    assert "Alfred · refund-bot-v3" in captured.out  # the healthy day was reported
+
+
+def test_cli_watch_repeats_the_quarantine_warning_on_a_later_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The hole stays visible in the cron log until a human clears it."""
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    (traces_dir / "broken.json").write_text("{ not valid json", encoding="utf-8")
+    main(["watch", str(traces_dir), "--project", str(project_dir)])
+    capsys.readouterr()
+
+    exit_code = main(["watch", str(traces_dir), "--project", str(project_dir)])
+    assert exit_code == 1
+    assert "quarantined broken.json" in capsys.readouterr().err
 
 
 def test_cli_report_writes_html_file(tmp_path: Path, otlp_sample_path: Path) -> None:

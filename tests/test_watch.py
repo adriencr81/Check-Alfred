@@ -14,11 +14,11 @@ from pathlib import Path
 import pytest
 
 from alfred.mandate.model import Mandate
-from alfred.report.model import Digest, LineKind
+from alfred.report.model import LineKind
 from alfred.trace.ingest import ingest_otlp_file
 from alfred.trace.model import TraceEvent
 from alfred.trace.store import TraceStore
-from alfred.watch import build_digests, watch_loop, watch_once
+from alfred.watch import WatchPass, build_digests, watch_loop, watch_once
 
 
 def _mandate() -> Mandate:
@@ -49,12 +49,12 @@ def project_dir(tmp_path: Path) -> Path:
 def test_watch_ingests_new_files_only(project_dir: Path, traces_dir: Path) -> None:
     store = TraceStore(project_dir / "trace.db")
 
-    digests = watch_once(project_dir, traces_dir, _mandate(), store)
+    digests = watch_once(project_dir, traces_dir, _mandate(), store).digests
     assert len(digests) == 1
     ingested_count = store.count()
     assert ingested_count == 3
 
-    digests_second_pass = watch_once(project_dir, traces_dir, _mandate(), store)
+    digests_second_pass = watch_once(project_dir, traces_dir, _mandate(), store).digests
     assert digests_second_pass == []
     assert store.count() == ingested_count
     store.close()
@@ -67,7 +67,7 @@ def test_watch_ingests_a_file_added_after_first_pass(
     watch_once(project_dir, traces_dir, _mandate(), store)
 
     shutil.copy(otlp_sample_path, traces_dir / "day2.json")
-    digests = watch_once(project_dir, traces_dir, _mandate(), store)
+    digests = watch_once(project_dir, traces_dir, _mandate(), store).digests
     assert len(digests) == 1
     store.close()
 
@@ -76,7 +76,7 @@ def test_watch_returns_empty_when_no_json_files(project_dir: Path, tmp_path: Pat
     empty_dir = tmp_path / "empty"
     empty_dir.mkdir()
     store = TraceStore(project_dir / "trace.db")
-    assert watch_once(project_dir, empty_dir, _mandate(), store) == []
+    assert watch_once(project_dir, empty_dir, _mandate(), store).digests == []
     store.close()
 
 
@@ -84,7 +84,7 @@ def test_watch_loop_runs_max_passes_and_sleeps_between_them(
     project_dir: Path, traces_dir: Path
 ) -> None:
     store = TraceStore(project_dir / "trace.db")
-    collected: list[list[Digest]] = []
+    collected: list[WatchPass] = []
     sleeps: list[float] = []
 
     watch_loop(
@@ -102,8 +102,8 @@ def test_watch_loop_runs_max_passes_and_sleeps_between_them(
     # Three passes: first delivers the one day's digest, the rest are empty
     # (seen.json dedups), so no digest is re-emitted.
     assert len(collected) == 3
-    assert len(collected[0]) == 1
-    assert collected[1] == [] and collected[2] == []
+    assert len(collected[0].digests) == 1
+    assert collected[1].digests == [] and collected[2].digests == []
     # Sleeps happen between passes only — not after the last.
     assert sleeps == [42.0, 42.0]
 
@@ -112,10 +112,10 @@ def test_watch_loop_delivers_a_file_that_arrives_between_passes(
     project_dir: Path, traces_dir: Path, otlp_sample_path: Path
 ) -> None:
     store = TraceStore(project_dir / "trace.db")
-    collected: list[list[Digest]] = []
+    collected: list[WatchPass] = []
 
-    def on_digests(digests: list[Digest]) -> None:
-        collected.append(digests)
+    def on_pass(result: WatchPass) -> None:
+        collected.append(result)
         if len(collected) == 1:  # drop a new file in after the first pass
             shutil.copy(otlp_sample_path, traces_dir / "day2.json")
 
@@ -124,15 +124,15 @@ def test_watch_loop_delivers_a_file_that_arrives_between_passes(
         traces_dir,
         _mandate(),
         store,
-        on_digests,
+        on_pass,
         interval_s=0.0,
         sleep=lambda _s: None,
         max_passes=2,
     )
     store.close()
 
-    assert len(collected[0]) == 1  # day1
-    assert len(collected[1]) == 1  # day2, picked up on the second pass
+    assert len(collected[0].digests) == 1  # day1
+    assert len(collected[1].digests) == 1  # day2, picked up on the second pass
 
 
 def _write_cost_trace(directory: Path, day: date, span_id: str, cost_eur: float) -> None:
@@ -167,7 +167,7 @@ def test_watch_attaches_rolling_baseline_from_store_history(
     _write_cost_trace(directory, date(2026, 8, 29), "d29", 8.0)
 
     store = TraceStore(project_dir / "trace.db")
-    digests = watch_once(project_dir, directory, _mandate(), store)
+    digests = watch_once(project_dir, directory, _mandate(), store).digests
     store.close()
 
     assert [d.date for d in digests] == [
@@ -230,5 +230,67 @@ def test_watch_persists_seen_state_across_processes(project_dir: Path, traces_di
     first_store.close()
 
     second_store = TraceStore(project_dir / "trace.db")
-    assert watch_once(project_dir, traces_dir, _mandate(), second_store) == []
+    assert watch_once(project_dir, traces_dir, _mandate(), second_store).digests == []
+    second_store.close()
+
+
+def _write_broken(directory: Path, name: str = "broken.json") -> Path:
+    """A file whose JSON parses but whose span cannot be normalized."""
+    payload = {
+        "resourceSpans": [{"scopeSpans": [{"spans": [{
+            "spanId": "badspan",
+            "traceId": "trace-bad",
+            "name": "chat",
+            "startTimeUnixNano": "boom",
+            "endTimeUnixNano": "boom",
+            "attributes": [],
+        }]}]}]
+    }
+    path = directory / name
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_watch_quarantines_an_unparsable_file_and_still_delivers_the_rest(
+    project_dir: Path, traces_dir: Path
+) -> None:
+    """ADR 0024 decision 2: one bad span used to abort the whole pass — and
+    since seen-state was written only at the end, every re-run aborted again."""
+    _write_broken(traces_dir, "00-broken.json")  # sorts before the good file
+    store = TraceStore(project_dir / "trace.db")
+
+    result = watch_once(project_dir, traces_dir, _mandate(), store)
+
+    assert len(result.digests) == 1  # the healthy file was still ingested
+    assert [q.name for q in result.quarantined] == ["00-broken.json"]
+    assert "badspan" in result.quarantined[0].reason
+    store.close()
+
+
+def test_watch_keeps_reporting_a_quarantined_file_on_later_passes(
+    project_dir: Path, traces_dir: Path
+) -> None:
+    """Decision 3: a hole in the audit stays visible until a human fixes it."""
+    _write_broken(traces_dir)
+    store = TraceStore(project_dir / "trace.db")
+    watch_once(project_dir, traces_dir, _mandate(), store)
+
+    second = watch_once(project_dir, traces_dir, _mandate(), store)
+    assert [q.name for q in second.quarantined] == ["broken.json"]
+    assert second.digests == []  # but it is not re-ingested
+    store.close()
+
+
+def test_watch_state_survives_a_failure_on_a_later_file(
+    project_dir: Path, traces_dir: Path
+) -> None:
+    """Decision 6: state is written per file, so a pass interrupted after the
+    first file does not replay it."""
+    _write_broken(traces_dir, "zz-broken.json")  # sorts after day1.json
+    store = TraceStore(project_dir / "trace.db")
+    watch_once(project_dir, traces_dir, _mandate(), store)
+    store.close()
+
+    second_store = TraceStore(project_dir / "trace.db")
+    assert watch_once(project_dir, traces_dir, _mandate(), second_store).digests == []
     second_store.close()
