@@ -133,6 +133,19 @@ events (the `[evt:…]` IDs) — never self-reported by the agent, never
 invented by an LLM. See [verified_nlg.md](verified_nlg.md) for the
 guarantee.
 
+### When a trace file cannot be read
+
+A file Alfred cannot parse is **quarantined**, not fatal: the pass still
+ingests every other file and delivers their digests, the offending file is
+named on stderr, and `alfred watch` exits `1` so a cron run surfaces the gap.
+The warning repeats on every pass until you fix or remove the file — a
+quarantined file is a hole in the audit, and it stays visible
+([ADR 0024](adr/0024-auditor-availability.md)). Fixing the file is enough:
+files are tracked by the SHA-256 of their content in `.alfred/seen.json`, so
+the corrected version is picked up on the next pass. For the same reason, a
+trace file rewritten after being ingested is audited again rather than
+skipped by name.
+
 ## 4. Make it daily
 
 `alfred watch` does one pass and exits — that's deliberate (no daemon, no

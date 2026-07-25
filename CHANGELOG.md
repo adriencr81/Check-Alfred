@@ -11,6 +11,27 @@ entries below are the work done so far towards the v0.1 roadmap
 
 ### Security
 
+- Auditor availability — the same pentest found two ways to **stop** Alfred
+  rather than fool it, both reproduced by a PoC. See
+  `docs/adr/0024-auditor-availability.md`.
+  - A single malformed span killed `alfred watch` for good: the `ValueError`
+    from a bad timestamp escaped as a traceback, and since `seen.json` was only
+    written after the whole pass, every re-run crashed on the same file — a
+    200-byte trace file switched the auditor off and hid every other trace in
+    the directory. Ingestion now raises one typed error per malformed span, an
+    unreadable file is **quarantined** instead of aborting the pass, and the
+    state is written after each file.
+  - The quarantine is reported on **every** run, naming the file, and
+    `alfred watch` exits non-zero while one remains — having delivered the
+    healthy days. Fixing the file clears it on the next pass.
+  - `seen.json` recorded filenames, so rewriting an already-ingested file with
+    new activity got a "no new trace files" and was never audited. Files are now
+    recognized by the SHA-256 of their content. An existing v1 `seen.json` (a
+    list of names) is still read and adopts the current digests without
+    re-ingesting, so upgrading emits no duplicate digests.
+  - In `--loop`, a `DeliverError` from an unreachable Slack webhook (or a
+    `NarrateError`) ended the supervision; it is now reported and the next pass
+    runs. A single pass keeps failing loudly.
 - Mandate control hardening — a white-box pentest found five ways the **audited
   agent** could defeat its own mandate, each reproduced by a PoC. All five are
   closed, and with them the product rule they broke (a claim in the report, or
