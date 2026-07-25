@@ -1,8 +1,11 @@
 """Cost of a trace event in EUR, shared by the report and the mandate engine.
 
-Priority: an explicit `gen_ai.usage.cost_eur` attribute always wins;
-otherwise the cost is computed from tokens and the pricing table when the
-model is known; otherwise 0.0. Extracted from `alfred.report.build` for
+Priority: the cost computed from the event's token counts and the pricing
+table wins; the agent-declared `gen_ai.usage.cost_eur` is only the fallback
+when nothing is computable (unknown model, missing tokens); otherwise 0.0.
+The order was the reverse until ADR 0023 decision 2 — a self-reported cost
+outranking the computed one let an agent erase its own spend from the digest
+and from the budget check. Extracted from `alfred.report.build` for
 Brique 9 (PLAN.md §12, ADR 0013 decision 4) so budget checks and the digest
 cost line always agree to the cent.
 """
@@ -60,20 +63,44 @@ def contributing_costs(events: Iterable[TraceEvent]) -> list[tuple[TraceEvent, f
     return [(event, cost) for event in events if (cost := event_cost_eur(event)) > 0.0]
 
 
-def event_cost_eur(event: TraceEvent) -> float:
-    """EUR cost of one event: explicit cost_eur, else tokens priced by model, else 0.0."""
+def declared_cost_eur(event: TraceEvent) -> float | None:
+    """The `gen_ai.usage.cost_eur` the agent wrote, or None if it wrote none.
+
+    Self-reported: never trusted over a computable price (`event_cost_eur`),
+    and compared against it by the engine's `cost_mismatch` check.
+    """
     cost = event.attributes.get(_COST_ATTR)
-    if isinstance(cost, int | float):
-        return float(cost)
+    return float(cost) if isinstance(cost, int | float) else None
+
+
+def computed_cost_eur(event: TraceEvent) -> float | None:
+    """The cost priced from the event's own token counts, or None if it cannot
+    be computed (model absent from the pricing table, or missing token counts)."""
     model = event.attributes.get(_MODEL_ATTR)
     rates = _PRICING_EUR_PER_1K_TOKENS.get(model) if isinstance(model, str) else None
     input_tokens = event.attributes.get(_INPUT_TOKENS_ATTR)
     output_tokens = event.attributes.get(_OUTPUT_TOKENS_ATTR)
     if (
-        rates is not None
-        and isinstance(input_tokens, int | float)
-        and isinstance(output_tokens, int | float)
+        rates is None
+        or not isinstance(input_tokens, int | float)
+        or not isinstance(output_tokens, int | float)
     ):
-        rate_in, rate_out = rates
-        return (input_tokens / 1000) * rate_in + (output_tokens / 1000) * rate_out
-    return 0.0
+        return None
+    rate_in, rate_out = rates
+    return (input_tokens / 1000) * rate_in + (output_tokens / 1000) * rate_out
+
+
+def event_cost_eur(event: TraceEvent) -> float:
+    """EUR cost of one event: tokens priced by model, else declared cost, else 0.0.
+
+    The computed price wins (ADR 0023 decision 2): `gen_ai.usage.cost_eur` is
+    written by the audited agent, so letting it win turned the digest's cost
+    line — and the budget check reading the same function — into a
+    self-reported claim. The declared value remains the fallback when nothing
+    is computable, which keeps an unknown model priced rather than free.
+    """
+    computed = computed_cost_eur(event)
+    if computed is not None:
+        return computed
+    declared = declared_cost_eur(event)
+    return declared if declared is not None else 0.0
