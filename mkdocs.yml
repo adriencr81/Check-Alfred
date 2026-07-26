@@ -1,0 +1,24 @@
+# The landing page cited in every launch post (GROWTH_PLAN_3M.md §1.1).
+#
+# `docs_dir` is `docs/site`, NOT `docs/`, and that is deliberate: `docs/` holds
+# the ADRs, the VCD, and the growth plan — which carries YC targets, revenue
+# thresholds and the founder's own decision criteria. The repository is public,
+# so none of it is secret, but building it into an indexed site framed as
+# official documentation is a different exposure than living in a repo folder.
+# Publishing here is opt-in, one file at a time.
+site_name: Alfred
+site_description: >-
+  Accountability layer for AI employees — daily stand-ups for your AI agents,
+  computed from traces, every line anchored to a trace event ID.
+site_url: https://adriencr81.github.io/Check-Alfred/
+repo_url: https://github.com/adriencr81/Check-Alfred
+repo_name: adriencr81/Check-Alfred
+docs_dir: docs/site
+
+# Default mkdocs theme, on purpose: the landing has to exist for launch day, and
+# a theme choice is not on that critical path.
+theme:
+  name: mkdocs
+
+nav:
+  - Home: index.md

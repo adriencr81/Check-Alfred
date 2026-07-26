@@ -32,6 +32,9 @@ langgraph = ["langgraph>=1.0"]
 # Native OpenAI Agents SDK connector (alfred.integrations.openai_agents). Same
 # discipline: optional, the core keeps its single pyyaml dependency. See docs/adr/0021.
 openai-agents = ["openai-agents>=0.1"]
+# Landing page only (mkdocs.yml, docs/site/). Kept out of [dev] so the everyday
+# test/lint install stays as small as it is.
+docs = ["mkdocs>=1.6"]
 dev = [
   "pytest>=8.0",
   "pytest-cov>=5.0",
@@ -46,6 +49,12 @@ dev = [
 
 [project.scripts]
 alfred = "alfred.cli:main"
+# Alias so the zero-install path is the short command people are told to run:
+# `uvx alfred-ai demo` / `pipx run alfred-ai demo` resolve the executable from
+# the *distribution* name, and without this they fail with "executable not
+# found" on a package that installed perfectly. Same entry point, so `alfred`
+# stays the name in every doc once installed. Pinned by tests/test_version.py.
+alfred-ai = "alfred.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/adriencr81/Check-Alfred"

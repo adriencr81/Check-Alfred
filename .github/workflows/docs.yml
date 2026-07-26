@@ -1,0 +1,46 @@
+name: Docs
+
+# Builds the landing page and publishes it to GitHub Pages from `main`.
+# A pull request builds without deploying, so a broken `mkdocs.yml` or a dead
+# internal link fails on the PR instead of taking the launch landing offline.
+#
+# One-time setup: Settings -> Pages -> Source = GitHub Actions. Until that is
+# done the deploy job fails while the build job still guards the PR.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[docs]"
+        # --strict turns warnings (dead internal link, page missing from nav)
+        # into failures.
+      - run: mkdocs build --strict
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -12,7 +12,7 @@
 **Status** — v0.1 core feature-complete, plus a "Bring Your Own Agent" sprint
 landed: a public `alfred.instrument` SDK, native LangGraph and OpenAI Agents SDK
 connectors, real-world OTel Collector ingestion, and a 5-minute example that
-needs no API key. 393 tests green, mypy --strict on source *and* tests,
+needs no API key. 398 tests green, mypy --strict on source *and* tests,
 Python 3.11–3.14, CI + CodeQL. Public **v0.1 targeted for early August 2026**.
 Full roadmap: [PLAN.md](PLAN.md).
 
@@ -104,8 +104,16 @@ stay within its mandate?* for the person accountable for it.
 
 ## Quickstart
 
-See it work in one command — an instrumented fake agent produces a real trace
-and a real digest, no mandate file, no Slack webhook, no network call:
+See it work in one command, without installing anything — an instrumented fake
+agent produces a real trace and a real digest, no virtualenv, no mandate file,
+no Slack webhook, no network call:
+
+```bash
+uvx alfred-ai demo          # or: pipx run alfred-ai demo
+```
+
+Both run the package in a throwaway environment and leave nothing behind. To
+keep it:
 
 ```bash
 pip install alfred-ai

@@ -35,6 +35,10 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
+# Docs site build output (mkdocs). Anchored to the root on purpose: a bare
+# `site/` also matches `docs/site/`, which holds the landing page *source*.
+/site/
+
 # IDE
 .vscode/
 .idea/

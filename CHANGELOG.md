@@ -16,6 +16,23 @@ features F1–F4 (§13), and four rounds of security hardening.
 
 ### Onboarding
 
+- **`uvx alfred-ai demo` / `pipx run alfred-ai demo` work.** Both launchers
+  resolve the executable from the *distribution* name, and the package shipped
+  only an `alfred` script — so the zero-install command the docs were about to
+  advertise failed with "executable not found" on a package that had installed
+  perfectly. An `alfred-ai` alias now points at the same entry point; `alfred`
+  stays the name every doc uses once installed. Pinned by `tests/test_version.py`,
+  because dropping it breaks a documented command without breaking any existing
+  environment.
+- A minimal landing page (`mkdocs.yml`, `docs/site/`, default theme) published
+  to GitHub Pages by `.github/workflows/docs.yml` — the URL every launch post
+  points at. `docs_dir` is `docs/site` rather than `docs/` on purpose: the
+  latter holds the growth plan, the VCD and the ADRs, and publishing those as
+  official documentation on an indexed site is a different exposure than their
+  living in a repo folder. Publication is opt-in, one file at a time, and a test
+  fails if that ever regresses. See
+  `docs/adr/0029-zero-install-entry-point-and-landing-page.md`.
+
 - The three errors a newcomer meets in the first quarter hour now name the
   fix, not only the failure: a missing project points at `alfred init <dir>`,
   a broken mandate leads with its own path and points at

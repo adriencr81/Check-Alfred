@@ -30,11 +30,11 @@ Commandes exactes, exécutées le 2026-07-26 sur la branche
 ```
 $ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 $ .venv/bin/python -m pytest -q
-393 passed
+398 passed
 $ .venv/bin/ruff check .
 All checks passed!
 $ .venv/bin/mypy --strict src/ tests/
-Success: no issues found in 72 source files
+Success: no issues found in 73 source files
 ```
 
 Le `mypy --strict` couvre désormais `tests/` en plus de `src/` (38 fichiers pour
@@ -58,15 +58,29 @@ Alfred · demo-bot · 2026-07-26 … Deviations (mandate): 1 [evt:demo-2-tool]
 Le wheel s'installe dans un environnement vierge et `alfred demo` produit un
 digest ancré sans le repo — ce qui restait non vérifié en version 1.
 
-**Python 3.14** : le cœur passe, les extras connecteurs restent à confirmer par
-la CI. Voir « Limites connues ».
+**Python 3.14 : confirmé par la CI, connecteurs compris.** La vérification
+locale ne pouvait porter que sur le cœur — le seul interpréteur 3.14 que
+l'environnement pouvait récupérer était un release candidate :
 
 ```
 $ uv venv --python 3.14 && uv pip install -e . pytest
 $ python -m pytest -q --ignore=tests/test_integration_langgraph.py \
                       --ignore=tests/test_integration_openai_agents.py
-379 passed        # Python 3.14.0rc2, soit 393 moins les 14 tests connecteurs
+379 passed        # Python 3.14.0rc2 ; suite d'alors (393) moins les 14 connecteurs
 ```
+
+Le doute portait sur les extras connecteurs, dont pydantic est une dépendance
+transitive. Il est **levé** : sur un 3.14 final, le job `test (3.14)` de la CI
+passe avec `pip install -e ".[dev]"`, `pytest -q` (les 14 tests connecteurs
+inclus), `ruff` et `mypy --strict` verts
+([run 30207988529](https://github.com/adriencr81/Check-Alfred/actions/runs/30207988529)).
+L'échec local était bien un artefact du rc, comme l'ADR 0028 l'avançait — la
+matrice a servi exactement à ce qu'on attendait d'elle.
+
+**Chemin zéro-install** : `uvx --from <wheel local> alfred-ai demo` produit le
+digest attendu, ce qui exerce la résolution du nom d'exécutable (l'alias
+`alfred-ai` de l'ADR 0029). Le chemin `pipx` reste non vérifié — voir « Limites
+connues ».
 
 ## Invariants produits (PLAN.md §3) → preuve
 
@@ -137,13 +151,19 @@ Le modèle de menace traite **l'agent audité comme l'adversaire** : c'est lui q
 | `alfred.demo` | `test_demo.py` | 5 |
 | `alfred.cli` / `alfred.schedule` | `test_cli.py` (46), `test_schedule.py` (17) | 63 |
 | `examples/agents` | `test_example_refund_bot.py` (6), `test_example_minimal.py` (3) | 9 |
-| version | `test_version.py` | 1 |
-| **Total** | | **393** |
+| Emballage / landing | `test_version.py` (2), `test_docs_site.py` (4) | 6 |
+| **Total** | | **398** |
 
 Compté via `pytest --collect-only -q`, pas par grep de `def test_*` — un test
-paramétré compte pour ses N cas, pas pour 1 définition (364 définitions pour 393
-cas). Toute divergence future entre ce tableau et `pytest --collect-only -q`
-signale que ce document doit être régénéré.
+paramétré compte pour ses N cas, pas pour 1 définition. Toute divergence future
+entre ce tableau et `pytest --collect-only -q` signale que ce document doit être
+régénéré.
+
+La dernière ligne ne teste pas du code applicatif mais des **faits
+d'emballage** : la cohérence des versions, les deux scripts console (sans quoi
+`uvx alfred-ai demo` échoue sur un paquet correctement installé), et le fait que
+la landing ne publie ni le plan de croissance ni les ADR. Chacun est une panne
+que seul un nouvel utilisateur — ou personne — rencontrerait (ADR 0029).
 
 ## Limites connues (honnêtes, pas des trous cachés)
 
@@ -151,14 +171,11 @@ signale que ce document doit être régénéré.
   (`Transport`/`LLMClient` fakes), pas une lacune de couverture ; voir
   `docs/adr/0006-brique4-verified-nlg-design.md` et
   `docs/adr/0007-brique5-delivery-cli-design.md`.
-- **Python 3.14 : le cœur est vérifié, les connecteurs non.** Les 379 tests hors
-  connecteurs passent sur 3.14.0rc2. Les 14 tests connecteurs n'ont pas pu y
-  être exécutés : pydantic 2.13.4 (transitif de `[langgraph]` et
-  `[openai-agents]`) appelle `typing._eval_type(..., prefer_fwd_module=…)`, une
-  API privée dont la signature diffère entre 3.14.0rc2 et 3.14 final — et rc2
-  est le seul interpréteur 3.14 que l'environnement de vérification pouvait
-  récupérer. C'est un artefact du rc, pas un constat sur 3.14 final : la
-  matrice CI (3.11 → 3.14, installant `.[dev]`) est ce qui tranchera.
+- **Le chemin `pipx run` n'est pas vérifié.** `uvx` l'est (voir « Exécution de
+  référence »), et les deux lanceurs résolvent l'exécutable de la même façon,
+  mais le binaire `pipx` de l'environnement de vérification refuse de démarrer
+  contre l'`uv` installé, quel que soit le backend. L'affirmation reste à
+  confirmer sur une machine où `pipx` tourne (ADR 0029).
 - Le validateur Block Kit (`tests/_block_kit.py`) est un contrat maison dérivé
   de la documentation Slack, pas le validateur officiel Slack (qui n'existe pas
   sous forme de schéma téléchargeable) — documenté dans l'ADR 0007, décision 7.
