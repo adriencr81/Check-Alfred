@@ -13,7 +13,7 @@
 landed: a public `alfred.instrument` SDK, native LangGraph and OpenAI Agents SDK
 connectors, real-world OTel Collector ingestion, and a 5-minute example that
 needs no API key. 393 tests green, mypy --strict on source *and* tests,
-Python 3.11–3.13, CI + CodeQL. Public **v0.1 targeted for early August 2026**.
+Python 3.11–3.14, CI + CodeQL. Public **v0.1 targeted for early August 2026**.
 Full roadmap: [PLAN.md](PLAN.md).
 
 ---
