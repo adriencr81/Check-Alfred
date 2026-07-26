@@ -72,16 +72,28 @@ Priorité 2 — **réduire le time-to-first-digest sous 5 minutes pour un
 inconnu pressé** (chaque friction du quickstart coûte des utilisateurs le
 jour du launch) :
 
-- [ ] `pipx run alfred-ai demo` / `uvx alfred-ai demo` fonctionnels et
-      documentés — l'essai sans même créer un venv.
+- [x] `pipx run alfred-ai demo` / `uvx alfred-ai demo` fonctionnels et
+      documentés (2026-07-26) — l'essai sans même créer un venv. Les deux
+      lanceurs cherchent un exécutable portant le nom de la *distribution*,
+      donc un alias `alfred-ai` a été ajouté à côté de `alfred` : sans lui la
+      commande annoncée échoue sur un paquet parfaitement installé. Chemin
+      `uvx` vérifié depuis un wheel local ; `pipx` non vérifiable dans
+      l'environnement de vérification (son binaire refuse de démarrer contre
+      l'`uv` présent). Alias verrouillé par `tests/test_version.py`.
 - [x] Messages d'erreur du CLI relus (2026-07-26) : les trois erreurs du
       premier quart d'heure nomment le geste qui les répare — projet absent
       → `alfred init <dir>`, mandat YAML cassé → le chemin du fichier puis
       `alfred mandate lint`, et une passe qui met tout en quarantaine ne
       prétend plus « no new trace files ». OTLP invalide et webhook Slack
       absent étaient déjà actionnables. Un test falsifiable par cas.
-- [ ] Page GitHub Pages minimale (mkdocs, thème par défaut) : quickstart,
-      « Why », comparatif — la landing citée dans tous les posts.
+- [x] Page GitHub Pages minimale (mkdocs, thème par défaut) : quickstart,
+      « Why », comparatif — la landing citée dans tous les posts (2026-07-26).
+      `docs_dir` est `docs/site`, **pas** `docs/` : ce dernier contient ce
+      document (cibles YC, seuils de revenu, critère CDI/fondation), la VCD et
+      les ADR — les publier comme documentation officielle sur un site indexé
+      est une exposition différente de leur présence dans un dossier du repo.
+      Publication opt-in, un fichier à la fois. Reste une action mainteneur :
+      Settings → Pages → Source = GitHub Actions.
 - [x] `alfred schedule --github-actions` : un digest quotidien qui tourne
       sans machine allumée. Attaque le goulot de M3 (l'habitude) dès M1,
       parce que sans lui la métrique nord est inatteignable pour quiconque
