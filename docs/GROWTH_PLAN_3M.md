@@ -74,10 +74,12 @@ jour du launch) :
 
 - [ ] `pipx run alfred-ai demo` / `uvx alfred-ai demo` fonctionnels et
       documentés — l'essai sans même créer un venv.
-- [ ] Messages d'erreur du CLI relus : chaque erreur probable du premier
-      quart d'heure (OTLP invalide, mandat YAML mal formé, webhook Slack
-      absent) doit dire *quoi faire*, pas seulement *quoi s'est passé*.
-      Test falsifiable par cas d'erreur avant toute modification.
+- [x] Messages d'erreur du CLI relus (2026-07-26) : les trois erreurs du
+      premier quart d'heure nomment le geste qui les répare — projet absent
+      → `alfred init <dir>`, mandat YAML cassé → le chemin du fichier puis
+      `alfred mandate lint`, et une passe qui met tout en quarantaine ne
+      prétend plus « no new trace files ». OTLP invalide et webhook Slack
+      absent étaient déjà actionnables. Un test falsifiable par cas.
 - [ ] Page GitHub Pages minimale (mkdocs, thème par défaut) : quickstart,
       « Why », comparatif — la landing citée dans tous les posts.
 - [x] `alfred schedule --github-actions` : un digest quotidien qui tourne
@@ -87,8 +89,9 @@ jour du launch) :
 - [x] `alfred demo` invite à partager le digest obtenu (+ template d'issue) :
       le seul signal d'activation possible sans télémétrie.
 
-Priorité 3 — **fiabilité visible** : badge CI déjà en place ; ajouter le
-badge PyPI + Python versions au README après publication.
+Priorité 3 — **fiabilité visible** : badges CI, PyPI, versions Python et
+licence en place au README (2026-07-26). Les deux badges PyPI restent vides
+tant que le paquet n'est pas publié — c'est leur état normal avant le tag.
 
 **Gel des features** : aucune feature produit en M1 (PLAN.md §9, « tout
 ajout pré-launch = non par défaut »). Le travail technique de M1 est

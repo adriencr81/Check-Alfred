@@ -1,6 +1,9 @@
 # Alfred
 
 [![CI](https://github.com/adriencr81/check-alfred/actions/workflows/ci.yml/badge.svg)](https://github.com/adriencr81/check-alfred/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/alfred-ai.svg)](https://pypi.org/project/alfred-ai/)
+[![Python versions](https://img.shields.io/pypi/pyversions/alfred-ai.svg)](https://pypi.org/project/alfred-ai/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **Accountability layer for AI employees.** A Python package that turns raw
 > agent traces into a daily stand-up your team can actually trust — every line
