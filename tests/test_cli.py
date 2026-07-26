@@ -15,6 +15,7 @@ import pytest
 import yaml
 
 from alfred.cli import main
+from alfred.report.model import Digest
 
 
 def test_cli_init_creates_project(tmp_path: Path) -> None:
@@ -124,13 +125,13 @@ def test_cli_watch_loop_floors_tiny_interval(
 
 def _watch_with_recorded_slack(
     monkeypatch: pytest.MonkeyPatch,
-) -> tuple[list[object], list[object]]:
+) -> tuple[list[Digest], list[Digest]]:
     """Replace Slack delivery with in-memory recorders so `watch` tests never
     hit the network. Returns (digests_sent, alerts_sent)."""
     from alfred.deliver import slack
 
-    digests_sent: list[object] = []
-    alerts_sent: list[object] = []
+    digests_sent: list[Digest] = []
+    alerts_sent: list[Digest] = []
     monkeypatch.setattr(slack, "send", lambda digest, url: digests_sent.append(digest))
     monkeypatch.setattr(slack, "send_alert", lambda digest, url: alerts_sent.append(digest))
     return digests_sent, alerts_sent

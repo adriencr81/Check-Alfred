@@ -33,7 +33,7 @@ Aucun résumé auto-déclaré. Si une implémentation viole ça : STOP, replanif
 
 ## Commandes
 - Tests : pytest -q
-- Lint : ruff check . && mypy --strict src/
+- Lint : ruff check . && mypy --strict src/ tests/
 - Démo locale : alfred demo (agent factice → daily en stdout)
 - Setup hooks (une fois) : pre-commit install
 

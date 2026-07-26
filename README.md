@@ -210,7 +210,7 @@ the trace, it doesn't claim.
 ```bash
 pip install -e ".[dev]"
 pytest -q
-ruff check . && mypy --strict src/
+ruff check . && mypy --strict src/ tests/
 ```
 
 Layout:

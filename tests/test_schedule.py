@@ -42,7 +42,7 @@ def _parse(workflow: str) -> dict[str, Any]:
     return parsed
 
 
-def _triggers(workflow: dict[str, Any]) -> dict[str, Any]:
+def _triggers(workflow: dict[Any, Any]) -> dict[str, Any]:
     """Return the workflow's `on:` block.
 
     PyYAML resolves the bare key `on` to the boolean True (YAML 1.1), which is

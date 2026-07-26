@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,4 +19,7 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest -q
       - run: ruff check .
-      - run: mypy --strict src/
+        # `tests/` too: pyproject's [tool.mypy] files already lists it, but a
+        # positional argument overrides that setting, so the test suite was
+        # never actually type-checked.
+      - run: mypy --strict src/ tests/
