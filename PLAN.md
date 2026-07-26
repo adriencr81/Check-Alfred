@@ -307,6 +307,51 @@ Le launch (§6.3) est re-daté seulement après ce run.
 > à la place du post LinkedIn FR, qui supposait un réseau de décideurs. L'angle
 > de launch devient les connecteurs natifs, livrés depuis (Briques 12 et 13).
 
+> **Révision 2026-07-26** (ADR 0030) : ce qui précède décrivait *par quels
+> canaux* on lance, pas *quelle traction on construit*. Un §6.0 est ajouté
+> ci-dessous et énonce la politique directrice — cible, canal possédé, signal
+> payant, actif composé. §6.4 est recalé en conséquence (leaderboard en M2).
+
+### 6.0 Stratégie de traction (politique directrice)
+
+Quatre décisions qui priment sur le choix des canaux, parce qu'elles disent
+*qui* on vise, *ce qu'on possède* et *ce qu'on mesure*. Détail, alternatives
+écartées et coûts assumés : `docs/adr/0030-traction-strategy.md`.
+
+**1. Dev-champion assumé.** Le développeur est l'utilisateur *et* le relais
+interne. Tous les canaux restent dev — c'est là que le problème s'exprime
+publiquement (§6.2) — et le vocabulaire manager reste dans le positionnement,
+car c'est lui qui différencie Alfred de l'observabilité. On n'essaie plus
+d'atteindre le décideur directement : **on outille le transfert vers lui**.
+L'artefact de ce transfert existe déjà — le rapport HTML autonome (ADR 0020).
+Il reste **intact** : `alfred report --html` imprime le pointeur vers §6.0
+point 3 sur stdout, à destination du dev qui lance la commande, et jamais dans
+le fichier — celui-ci est archivé pour audit (ADR 0030 décision 5).
+
+**2. Un canal possédé : la liste mail.** Aucun canal du plan n'était possédé
+(ni mail, ni télémétrie, ni Discord §10) : passé le mardi du launch, personne
+n'était recontactable, et le re-launch du garde-fou §9 repartait de zéro. Une
+liste opt-in, alimentée par une édition par release + le finding mensuel — de
+la matière déjà au calendrier. C'est le seul canal qui survit à un HN raté, à
+un re-launch, et au transfert du dépôt vers l'org `alfred-ai` (D3).
+**Ce n'est pas de la télémétrie** : le paquet n'émet toujours rien, l'abonnement
+est un geste volontaire hors du produit. « Vos traces restent chez vous » reste
+intact, et ne doit jamais être entamé par dérive de ce canal.
+
+**3. Le signal payant est instrumenté.** §8 fait des demandes de payant
+spontanées la ligne qui tranche — sans qu'aucun dispositif ne les suscite. Une
+page « Alfred for teams » décrit l'étage closed-source déjà annoncé (D4) et
+invite à ouvrir une demande qualifiée, capturée par un template d'issue étiqueté
+`teams-inquiry` : datée, attribuable, comptable. Pas de prix, pas de date, pas
+de waitlist annoncée dans les posts — un launch open-source ne se transforme pas
+en collecte de leads.
+
+**4. Le leaderboard devient un moteur, pas un plan B.** Il portait deux rôles
+incompatibles (machine à contenu la plus starrable *et* assurance du re-launch à
+J+120). Une **édition zéro** sort en M2 — 2-3 frameworks, un mandat commun,
+données brutes rejouables. Le jour où le garde-fou §9 doit servir, l'angle est
+déjà rodé au lieu d'être découvert sous pression.
+
 ### 6.1 Principes
 
 Les stars viennent d'une **thèse racontée avec des preuves**. La thèse d'Alfred : *« on déploie des employés IA sans mandat, sans daily, sans dossier de preuve — voici la couche manquante »*. Chaque contenu la ré-encode. Aucun post ne parle du produit sans une preuve concrète (finding, code, GIF).
@@ -380,10 +425,11 @@ Le post LinkedIn FR peut sortir hors séquence, sans objectif chiffré : il coû
 - **Réactivité issues < 24h** les 3 premiers mois. C'est le signal de star le plus sous-estimé.
 - **PRs d'exemples** dans les repos LangGraph, CrewAI, OpenAI Agents SDK (dossier `examples/`).
 - **Soumission** aux awesome-lists : `awesome-llm-agents`, `awesome-ai-agents`, `awesome-opentelemetry`.
-- **Leaderboard mensuel de fiabilité d'agents** (ancienne Brique 9 du harnais RAG, réactivée ici) — machine à contenu la plus starrable du plan. Premier édition à J+120.
+- **Leaderboard mensuel de fiabilité d'agents** (ancienne Brique 9 du harnais RAG, réactivée ici) — machine à contenu la plus starrable du plan. **Édition zéro en M2** (minimale : 2-3 frameworks, mandat commun, données brutes committées), édition n°1 à J+120 (§6.0 point 4, ADR 0030). L'assurance du re-launch §9 est ainsi un angle déjà rodé, et non un lot à découvrir sous pression.
+- **Une édition de liste mail par release**, plus le finding mensuel ci-dessus (§6.0 point 2). Le seul canal du moteur qui ne soit pas loué.
 
 **Cadence de release** :
-- v0.2 (J+90) : connecteur natif CrewAI, endpoint OTLP HTTP, digest Teams, coûts multi-providers — priorisés par les *issues*, pas par intuition. LangGraph et OpenAI Agents SDK sont livrés avant le launch (Briques 12 et 13) et font partie de son angle.
+- v0.2 (J+90) : connecteur natif CrewAI, endpoint OTLP HTTP, digest Microsoft Teams, coûts multi-providers — priorisés par les *issues*, pas par intuition. LangGraph et OpenAI Agents SDK sont livrés avant le launch (Briques 12 et 13) et font partie de son angle.
 - v0.3 (J+120) : « entretien de performance » — bench rejoué, dérive de comportement, coût/tâche vérifié.
 - v0.4 (J+150) : chaîne de responsabilité — export dossier de preuve. C'est le pont explicite vers l'étage payant.
 
@@ -438,6 +484,14 @@ YC exige le temps plein si accepté. À J+150 la décision « saut CDI → fonda
 
 **La ligne qui tranche** entre CDI premium / freelance-runway / fondation à J+150 = *demandes de payant spontanées*, pas stars. Si 0 à J+150 avec 1000 stars → le produit intéresse la communauté mais pas les acheteurs → repivoter le pitch payant, ne pas fonder.
 
+**Comment elle se compte** (ADR 0030) : issues étiquetées `teams-inquiry`, plus
+les demandes arrivées par DM ou par mail, reportées manuellement dans le relevé
+hebdo. Jusqu'au 2026-07-26 ce critère n'avait aucune source et aucun dispositif
+pour le susciter — la page « Alfred for teams » (§6.0 point 3) est ce dispositif.
+**Sans elle, un zéro à J+150 ne se lit pas** : on ne peut pas distinguer
+« personne ne veut payer » de « personne n'a jamais su qu'il y avait un étage
+payant », et la décision fondateur reposerait sur une absence auto-organisée.
+
 ---
 
 ## 9. Risques et garde-fous
@@ -463,7 +517,7 @@ Décisions actives de *ne pas* faire, pour éviter la dérive :
 - ❌ Bench rejoué / dérive comportement (v0.3).
 - ❌ Endpoint OTLP HTTP (v0.2, fichiers OTLP JSON suffisent pour v0.1).
 - ❌ Connecteurs natifs LangGraph/CrewAI/OpenAI (v0.2, priorisés par issues).
-- ❌ Digest Teams (v0.2), Discord (jamais sauf demande insistante).
+- ❌ Digest Microsoft Teams (v0.2), Discord (jamais sauf demande insistante).
 - ❌ Base de données autre que SQLite (jamais en v0.x — zéro infra est un feature).
 - ❌ Auth, RBAC, multi-tenancy (v0.4+, closed-source).
 - ❌ Export dossier de preuve (v0.4 — c'est le pont vers le payant).

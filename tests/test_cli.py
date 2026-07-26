@@ -417,6 +417,60 @@ def test_cli_report_writes_html_file(tmp_path: Path, otlp_sample_path: Path) -> 
     assert 'href="#evt-' in html  # lines are clickable to their source events
 
 
+def test_cli_report_points_the_forwarder_at_teams(
+    tmp_path: Path, otlp_sample_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The dev who renders a report is the one who forwards it (ADR 0030 decision 1).
+    They are told once, on stdout, where to go when the open package stops being
+    enough — the person they forward it to has no other way to find out."""
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+    out_dir = tmp_path / "out"
+
+    assert (
+        main(
+            [
+                "report",
+                str(traces_dir),
+                "--project",
+                str(project_dir),
+                "--html",
+                "--out",
+                str(out_dir),
+            ]
+        )
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert "/teams/" in out
+    # It follows the written-file lines; it is a footnote, not a result.
+    assert out.index("wrote ") < out.index("/teams/")
+
+
+def test_cli_report_pointer_stays_out_of_the_evidence_file(
+    tmp_path: Path, otlp_sample_path: Path
+) -> None:
+    """ADR 0020 decision 2 keeps the HTML free of any external reference, and ADR
+    0030 decision 5 declines to relax it: this artifact gets filed for audit, so
+    the pointer lives on stdout and never in the file."""
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    shutil.copy(otlp_sample_path, traces_dir / "day1.json")
+    out_dir = tmp_path / "out"
+
+    main(
+        ["report", str(traces_dir), "--project", str(project_dir), "--html", "--out", str(out_dir)]
+    )
+    html = next(iter(out_dir.glob("*.html"))).read_text(encoding="utf-8")
+    assert "teams" not in html
+    assert "http" not in html
+
+
 def test_cli_report_narrate_embeds_prose(
     tmp_path: Path, otlp_sample_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

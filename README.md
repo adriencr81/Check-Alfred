@@ -272,6 +272,18 @@ downloads it for *their* agents
 
 Post-v0.1: native connectors (v0.2 — CrewAI remaining), performance review — behavioral drift & cost-per-task (v0.3), evidence file export (v0.4 — the bridge to the closed-source engine).
 
+## Staying in touch
+
+- **One email per release**, plus the monthly finding — subscribe on the
+  [project page](https://adriencr81.github.io/Check-Alfred/). Alfred itself
+  collects nothing: there is no telemetry in the package, and subscribing
+  happens on a web page, outside the product.
+- **Ran Alfred on a real agent?** [Show us the digest](https://github.com/adriencr81/Check-Alfred/issues/new?template=show_your_digest.md)
+  — it's the only way we learn what Alfred catches in the wild, since nothing
+  phones home.
+- **The open package doesn't cover what your team is accountable for?**
+  [Alfred for teams](https://adriencr81.github.io/Check-Alfred/teams/).
+
 ## License
 
 **Apache-2.0** for this package.

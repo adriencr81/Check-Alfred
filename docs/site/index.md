@@ -81,6 +81,20 @@ asks *did my agent stay within its mandate?* for the person accountable for it.
 The floor is five minutes and no credentials. Full walkthrough:
 [**docs/integrate.md**](https://github.com/adriencr81/Check-Alfred/blob/main/docs/integrate.md).
 
+## Stay in the loop
+
+One email per release, plus the monthly finding — a real case where Alfred
+caught a deviation an agent's own summary had smoothed over. No drip sequence,
+no product announcements between releases, unsubscribe in one click.
+
+<!-- MAINTAINER ACTION (ADR 0030): pick a provider (Buttondown, listmonk, …) and
+     drop the subscribe form or link here. Deliberately left empty rather than
+     filled with a placeholder URL that would 404 on launch day. -->
+
+Nothing here is collected by Alfred itself: the package emits no telemetry, and
+subscribing is a deliberate act on this page, outside the product. Your traces
+stay on your machine either way.
+
 ## More
 
 - [Repository, README and full deviation reference](https://github.com/adriencr81/Check-Alfred)
@@ -90,4 +104,5 @@ The floor is five minutes and no credentials. Full walkthrough:
 
 **Apache-2.0.** The advanced mandate engine (formal verdict semantics,
 verifiable policies, multi-agent, retention, compliance) is planned as
-closed-source — open-core, announced up front.
+closed-source — open-core, announced up front. If that is the half your team
+needs, [tell us what you're accountable for](teams.md).
