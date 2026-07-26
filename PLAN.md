@@ -323,8 +323,10 @@ interne. Tous les canaux restent dev — c'est là que le problème s'exprime
 publiquement (§6.2) — et le vocabulaire manager reste dans le positionnement,
 car c'est lui qui différencie Alfred de l'observabilité. On n'essaie plus
 d'atteindre le décideur directement : **on outille le transfert vers lui**.
-L'artefact de ce transfert existe déjà — le rapport HTML autonome (ADR 0020),
-qui porte désormais un lien vers §6.0 point 3.
+L'artefact de ce transfert existe déjà — le rapport HTML autonome (ADR 0020).
+Il reste **intact** : `alfred report --html` imprime le pointeur vers §6.0
+point 3 sur stdout, à destination du dev qui lance la commande, et jamais dans
+le fichier — celui-ci est archivé pour audit (ADR 0030 décision 5).
 
 **2. Un canal possédé : la liste mail.** Aucun canal du plan n'était possédé
 (ni mail, ni télémétrie, ni Discord §10) : passé le mardi du launch, personne

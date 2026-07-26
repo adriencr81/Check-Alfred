@@ -91,14 +91,25 @@ priorité reste néanmoins intacte dans un cas — **la dette d'entonnoir signal
 par des inconnus pendant le launch passe devant**, parce qu'une friction
 d'installation coûte des utilisateurs tant qu'elle dure.
 
-**5. Le lien du footer HTML est du polish d'entonnoir, pas une feature.** Le
-`<footer>` du rapport partageable gagne un lien vers la page teams. Classement au
-même titre que les items de l'ADR 0027 décision 1 (`uvx`, messages d'erreur
-actionnables) : cela ne change ni ce qu'Alfred calcule, ni la règle D5, ni une
-ligne de digest — c'est une ligne de texte dans un pied de page. Sans ce lien, le
-motion dev-champion de la décision 1 s'arrête sur un fichier HTML sans suite :
-le décideur reçoit la preuve et n'a nulle part où aller. C'est un jugement,
-contestable en revue mensuelle, tracé ici pour qu'il puisse l'être.
+**5. Le pointeur teams est imprimé par le CLI, jamais écrit dans le rapport.**
+Sans lui, le motion dev-champion de la décision 1 s'arrête sur un fichier HTML
+sans suite. La première intention était de l'ajouter au `<footer>` du rapport
+partageable ; elle a été **abandonnée en cours d'exécution**. L'ADR 0020
+décision 2 pose que ce fichier ne contient « aucune ressource externe (pas de
+`<script>`, pas de `src=`, pas de CDN/police/`http`) », propriété verrouillée par
+`test_render_html_is_a_self_contained_document`. Deux raisons de ne pas la
+relâcher : ce fichier est décrit par l'ADR 0020 lui-même comme la preuve qu'on
+forwarde « à un audit » — y injecter un appel à l'action éditeur change la nature
+de l'artefact ; et le rapport reste ainsi archivable sans réserve, ce qui est un
+argument produit plutôt qu'une contrainte subie.
+
+`alfred report --html` imprime donc la ligne sur **stdout**, après les fichiers
+écrits. C'est un meilleur ciblage, pas un repli : sous la décision 1, la personne
+qu'on outille est le **développeur** — or c'est lui qui lance la commande, au
+moment exact où il produit l'artefact à transmettre. Deux tests falsifiables :
+la ligne apparaît sur stdout après les chemins écrits, et l'HTML ne contient ni
+`teams` ni `http`. Le second est une **régression gardée** : il échouera le jour
+où quelqu'un retentera l'idée du footer.
 
 **6. Non-décision : `alfred demo` reste inchangé.** La tentation était d'y
 ajouter l'invitation à s'abonner, le moment étant celui d'enthousiasme maximal.
@@ -128,8 +139,10 @@ n'est pas entamé, et il ne doit jamais le devenir par dérive du nouveau canal.
   `mkdocs.yml` ajoute `teams.md` à la nav — la publication reste **opt-in fichier
   par fichier**, la règle `docs_dir = docs/site` posée par l'ADR 0029 est
   inchangée : ni ce document, ni la VCD, ni les autres ADR ne sont publiés.
-- `src/alfred/report/html.py` : un lien dans le `<footer>` existant, verrouillé
-  par un test falsifiable dans `tests/test_report_html.py`.
+- `src/alfred/cli.py` : `_cmd_report` imprime le pointeur teams après les
+  fichiers écrits (`_TEAMS_URL`). `src/alfred/report/html.py` est **inchangé** —
+  l'ADR 0020 décision 2 n'est ni amendée ni relâchée. Deux tests dans
+  `tests/test_cli.py`, dont un qui garde le rapport contre toute réintroduction.
 - **Action mainteneur** (comme le « Settings → Pages → Source = GitHub Actions »
   de l'ADR 0029) : choisir le fournisseur de liste (Buttondown, listmonk ou
   équivalent) et brancher l'URL du formulaire dans `docs/site/index.md`. Aucune

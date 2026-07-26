@@ -136,8 +136,10 @@ launch qu'ils sont censés capter.
 - [x] **Page « Alfred for teams »** (`docs/site/teams.md`) + template d'issue
       `teams-inquiry` (2026-07-26). Instrumente le critère qui tranche à J+150
       (PLAN.md §8). Décrit l'étage closed-source déjà annoncé (D4), sans prix ni
-      date. Le rapport HTML partageable y renvoie depuis son footer : c'est
-      l'artefact que le dev transfère à son responsable (motion dev-champion).
+      date. `alfred report --html` y renvoie **sur stdout**, à destination du dev
+      qui produit l'artefact à transmettre (motion dev-champion) ; le fichier HTML
+      lui-même reste vierge de toute référence externe, l'ADR 0020 décision 2
+      n'étant pas relâchée — un rapport archivé pour audit ne porte pas de CTA.
 - [ ] **Liste mail** — section « Stay in the loop » en place sur la landing et au
       README (2026-07-26) ; **reste une action mainteneur** : choisir le
       fournisseur (Buttondown, listmonk…) et brancher l'URL du formulaire dans
@@ -413,9 +415,9 @@ mois sans effort marginal.
   *par* Alfred, ni dérivée d'une issue ou d'un digest partagé. Le jour où le
   canal possédé entamerait l'argument produit, c'est le canal qui cède.
 - **Une demande par moment** (ADR 0030 décision 6) : chaque surface ne porte
-  qu'un seul appel à l'action. `alfred demo` demande le digest partagé, le
-  rapport HTML pointe vers teams, la landing propose l'abonnement. Empiler les
-  demandes sur une même surface les annule toutes.
+  qu'un seul appel à l'action. `alfred demo` demande le digest partagé,
+  `alfred report --html` pointe vers teams, la landing propose l'abonnement.
+  Empiler les demandes sur une même surface les annule toutes.
 - **Un tir raté ne conclut rien** (§9) : le re-launch M3 est déjà budgété.
 - **Épuisement** (contrainte ~1 h/jour) : chaque mois a UNE priorité
   technique et UNE machine marketing ; tout le reste est backlog.

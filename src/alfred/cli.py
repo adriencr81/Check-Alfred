@@ -259,6 +259,13 @@ def _slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_-]+", "-", text).strip("-") or "agent"
 
 
+# The HTML report is what a developer forwards to whoever answers for the agent
+# (ADR 0030 decision 1). The file itself stays free of any external reference —
+# ADR 0020 decision 2, and it gets filed for audit — so the pointer is printed
+# here instead, to the person actually running the command. See ADR 0030 dec. 5.
+_TEAMS_URL = "https://adriencr81.github.io/Check-Alfred/teams/"
+
+
 def _cmd_report(args: argparse.Namespace) -> int:
     if not args.html:
         print(
@@ -314,6 +321,11 @@ def _cmd_report(args: argparse.Namespace) -> int:
         path = out_dir / f"alfred-{_slug(digest.agent)}-{digest.date.isoformat()}.html"
         path.write_text(render_html(digest, narrative=narrative), encoding="utf-8")
         print(f"alfred report: wrote {path}")
+    if digests:
+        print(
+            f"\nForwarding this to whoever is accountable? When the open package "
+            f"stops covering what they answer for: {_TEAMS_URL}"
+        )
     return 0
 
 
