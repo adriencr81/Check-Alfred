@@ -50,7 +50,9 @@ alfred demo
 2. In `.github/workflows/release.yml`, point the publish job at real PyPI:
    rename `publish-testpypi` → `publish-pypi`, set `environment: pypi`, and
    **remove** the `repository-url:` line (it defaults to real PyPI).
-3. Set the release version in `pyproject.toml` to `0.1.0` (drop the `.dev`).
+3. The release version is already `0.1.0` in `pyproject.toml` **and**
+   `src/alfred/__init__.py` — `tests/test_version.py` fails if the two drift.
+   Set the `[0.1.0]` heading in `CHANGELOG.md` to the tag date.
 4. Tag it: `git tag v0.1.0 && git push origin v0.1.0`. CI publishes.
 5. `pip install alfred-ai` now works for everyone. **This is irreversible** —
    the name and version are permanent.

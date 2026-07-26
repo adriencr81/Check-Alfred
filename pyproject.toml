@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "alfred-ai"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Accountability layer for AI employees: mandate-anchored daily digests from agent traces."
 readme = "README.md"
 license = "Apache-2.0"
@@ -18,6 +18,7 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: System :: Monitoring",
 ]

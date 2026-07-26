@@ -5,9 +5,28 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-Nothing has shipped to PyPI yet — the package version is `0.1.0.dev0`. The
-entries below are the work done so far towards the v0.1 roadmap
-(PLAN.md §5).
+Nothing yet.
+
+## [0.1.0] — targeted 2026-08-04
+
+First public release; set this to the tag date when you publish. The entries
+below are the whole v0.1 roadmap
+(PLAN.md §5), the "Bring Your Own Agent" sprint (§12), the post-launch
+features F1–F4 (§13), and four rounds of security hardening.
+
+### Onboarding
+
+- The three errors a newcomer meets in the first quarter hour now name the
+  fix, not only the failure: a missing project points at `alfred init <dir>`,
+  a broken mandate leads with its own path and points at
+  `alfred mandate lint`, and a pass that quarantined every file it found no
+  longer also claims "no new trace files".
+
+### Tooling
+
+- `mypy --strict` covers `tests/` as well as `src/` — pyproject already asked
+  for it, but a positional argument had been overriding it everywhere.
+- Python 3.13 is tested in CI and declared in the classifiers.
 
 ### Security
 

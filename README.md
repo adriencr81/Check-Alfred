@@ -1,16 +1,20 @@
 # Alfred
 
 [![CI](https://github.com/adriencr81/check-alfred/actions/workflows/ci.yml/badge.svg)](https://github.com/adriencr81/check-alfred/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/alfred-ai.svg)](https://pypi.org/project/alfred-ai/)
+[![Python versions](https://img.shields.io/pypi/pyversions/alfred-ai.svg)](https://pypi.org/project/alfred-ai/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **Accountability layer for AI employees.** A Python package that turns raw
 > agent traces into a daily stand-up your team can actually trust — every line
 > anchored to a trace event ID.
 
 **Status** — v0.1 core feature-complete, plus a "Bring Your Own Agent" sprint
-landed: a public `alfred.instrument` SDK, real-world OTel Collector ingestion,
-and a 5-minute example that needs no API key. 151 tests green, mypy --strict,
-CI + CodeQL. Public **v0.1 targeted for early August 2026**. Full roadmap:
-[PLAN.md](PLAN.md).
+landed: a public `alfred.instrument` SDK, native LangGraph and OpenAI Agents SDK
+connectors, real-world OTel Collector ingestion, and a 5-minute example that
+needs no API key. 393 tests green, mypy --strict on source *and* tests,
+Python 3.11–3.13, CI + CodeQL. Public **v0.1 targeted for early August 2026**.
+Full roadmap: [PLAN.md](PLAN.md).
 
 ---
 
@@ -100,34 +104,17 @@ stay within its mandate?* for the person accountable for it.
 
 ## Quickstart
 
-`alfred-ai` isn't on PyPI yet (the release pipeline is wired and rehearsing on
-TestPyPI first — see [docs/RELEASING.md](docs/RELEASING.md)), but `alfred demo`
-already works today from a clone — an instrumented fake agent produces a real
-trace and a real digest, no mandate file, no Slack webhook, no network call:
-
-```bash
-git clone https://github.com/adriencr81/check-alfred.git && cd check-alfred
-python -m venv .venv && source .venv/bin/activate   # recommended: isolates from system Python
-pip install -e ".[dev]"
-alfred demo
-```
-
-Use a virtualenv — installing into a distro-managed Python (e.g. Debian/Ubuntu
-system `pip`) can fail with `Cannot uninstall … RECORD file not found`. On
-Windows the activate step is `.venv\Scripts\activate`.
-
-### Verify a real agent
-
-`alfred demo` replays a scripted scenario. To watch Alfred catch a *real*
-agent's deviation — a framework-free Claude tool loop that decides on its
-own whether to grant an over-limit refund — see
-[`examples/agents/refund_bot/`](examples/agents/refund_bot/). Nothing is
-scripted there: the model decides, Alfred verifies.
-
-Once v0.1 ships to PyPI:
+See it work in one command — an instrumented fake agent produces a real trace
+and a real digest, no mandate file, no Slack webhook, no network call:
 
 ```bash
 pip install alfred-ai
+alfred demo
+```
+
+Then point it at your own agent:
+
+```bash
 alfred init --slack-webhook https://hooks.slack.com/…  # mandate.yaml + Slack config
 alfred mandate init --from-traces traces/ > mandate.yaml  # seed a mandate from what the agent did
 alfred mandate lint mandate.yaml                       # validate the mandate before you rely on it
@@ -136,8 +123,19 @@ alfred schedule traces/ --at 09:00 --github-actions \
   > .github/workflows/alfred.yml                       # …or a daily workflow, no host to keep up
 alfred watch traces/                                   # one pass now (or --loop to keep running)
 alfred report traces/ --html --out reports/            # shareable HTML report, one file per day
-alfred demo                                            # fake agent → real digest, no setup
 ```
+
+Install into a virtualenv — a distro-managed Python (e.g. Debian/Ubuntu system
+`pip`) can fail with `Cannot uninstall … RECORD file not found`. On Windows the
+activate step is `.venv\Scripts\activate`.
+
+### Verify a real agent
+
+`alfred demo` replays a scripted scenario. To watch Alfred catch a *real*
+agent's deviation — a framework-free Claude tool loop that decides on its
+own whether to grant an over-limit refund — see
+[`examples/agents/refund_bot/`](examples/agents/refund_bot/). Nothing is
+scripted there: the model decides, Alfred verifies.
 
 Writing the first `mandate.yaml` is the onboarding cliff, so Alfred meets you
 where the traces already are: `alfred mandate init --from-traces` proposes the
@@ -208,9 +206,11 @@ the trace, it doesn't claim.
 ## Development
 
 ```bash
+git clone https://github.com/adriencr81/check-alfred.git && cd check-alfred
+python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q
-ruff check . && mypy --strict src/
+ruff check . && mypy --strict src/ tests/
 ```
 
 Layout:

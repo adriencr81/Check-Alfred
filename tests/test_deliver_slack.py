@@ -15,9 +15,9 @@ from typing import cast
 
 import pytest
 
+from alfred._http import HTTPRequest
 from alfred.deliver.slack import (
     DeliverError,
-    HTTPRequest,
     Transport,
     build_alert_payload,
     build_block_kit_payload,

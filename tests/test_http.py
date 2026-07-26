@@ -8,8 +8,10 @@ each sink wraps `HttpError` in its own domain error.
 
 from __future__ import annotations
 
+import io
 import urllib.error
 import urllib.request
+from http.client import HTTPMessage
 
 import pytest
 
@@ -89,7 +91,7 @@ def test_redirect_to_another_host_is_refused() -> None:
     request = urllib.request.Request("https://api.example/v1/chat")
     with pytest.raises(urllib.error.HTTPError, match="another host"):
         handler.redirect_request(
-            request, None, 302, "Found", {}, "https://evil.example/collect"
+            request, io.BytesIO(), 302, "Found", HTTPMessage(), "https://evil.example/collect"
         )
 
 
@@ -97,6 +99,6 @@ def test_redirect_within_the_same_host_is_followed() -> None:
     handler = _NoCrossHostRedirect()
     request = urllib.request.Request("https://api.example/v1/chat")
     redirected = handler.redirect_request(
-        request, None, 302, "Found", {}, "https://api.example/v2/chat"
+        request, io.BytesIO(), 302, "Found", HTTPMessage(), "https://api.example/v2/chat"
     )
     assert redirected is not None

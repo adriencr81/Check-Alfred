@@ -27,7 +27,7 @@ pre-commit install
 
 ```bash
 pytest -q
-ruff check . && mypy --strict src/
+ruff check . && mypy --strict src/ tests/
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same three commands on Python

@@ -484,7 +484,9 @@ de squat (`alfred-ai` vérifié libre le 2026-07-18) :
       l'adresse définitive). Réserver le domaine (`getalfred.dev` ou `alfred.sh`).
 - [ ] Enregistrer le GIF de démo (< 15 s, boucle propre) → haut du README.
 - [ ] Ouvrir les 3 issues « good first issue ».
-- [ ] Basculer le quickstart README sur `pip install alfred-ai`.
+- [x] Basculer le quickstart README sur `pip install alfred-ai` (fait le
+      2026-07-26 ; la ligne ne devient vraie qu'à la publication — publier
+      avant de merger sur `main`).
 - [ ] Tag `v0.1.0` + release PyPI finale.
 
 Puis, semaines du 21 et 28 juillet (pré-launch compressé, §6.2) :

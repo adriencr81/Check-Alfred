@@ -116,15 +116,27 @@ def load_mandate(path: Path | str) -> Mandate:
     """Parse a mandate YAML file into a `Mandate`.
 
     Raises `MandateError` on malformed YAML or a missing/invalid required key.
+    The message names the offending file and points at `alfred mandate lint`:
+    a raw parser dump tells the reader what happened but not what to do, and a
+    broken mandate is a first-quarter-hour error (GROWTH_PLAN_3M.md §1.1).
     """
-    text = Path(path).read_text(encoding="utf-8")
+    mandate_path = Path(path)
+    text = mandate_path.read_text(encoding="utf-8")
     try:
         raw = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        raise MandateError(f"Invalid mandate YAML: {exc}") from exc
+        raise MandateError(_mandate_problem(mandate_path, f"invalid YAML: {exc}")) from exc
     if not isinstance(raw, dict):
-        raise MandateError("Mandate YAML must be a mapping at the top level")
-    return _mandate_from_dict(cast("dict[str, Any]", raw))
+        raise MandateError(_mandate_problem(mandate_path, "the YAML must be a mapping"))
+    try:
+        return _mandate_from_dict(cast("dict[str, Any]", raw))
+    except MandateError as exc:
+        raise MandateError(_mandate_problem(mandate_path, str(exc))) from exc
+
+
+def _mandate_problem(path: Path, detail: str) -> str:
+    """Frame a mandate failure: which file, what is wrong, how to check it."""
+    return f"{path}: {detail}\nRun `alfred mandate lint {path}` to validate the file."
 
 
 def dump_mandate(mandate: Mandate) -> str:

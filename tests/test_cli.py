@@ -15,6 +15,7 @@ import pytest
 import yaml
 
 from alfred.cli import main
+from alfred.report.model import Digest
 
 
 def test_cli_init_creates_project(tmp_path: Path) -> None:
@@ -124,13 +125,13 @@ def test_cli_watch_loop_floors_tiny_interval(
 
 def _watch_with_recorded_slack(
     monkeypatch: pytest.MonkeyPatch,
-) -> tuple[list[object], list[object]]:
+) -> tuple[list[Digest], list[Digest]]:
     """Replace Slack delivery with in-memory recorders so `watch` tests never
     hit the network. Returns (digests_sent, alerts_sent)."""
     from alfred.deliver import slack
 
-    digests_sent: list[object] = []
-    alerts_sent: list[object] = []
+    digests_sent: list[Digest] = []
+    alerts_sent: list[Digest] = []
     monkeypatch.setattr(slack, "send", lambda digest, url: digests_sent.append(digest))
     monkeypatch.setattr(slack, "send_alert", lambda digest, url: alerts_sent.append(digest))
     return digests_sent, alerts_sent
@@ -286,6 +287,27 @@ def test_cli_watch_reports_no_new_files(
     assert "no new trace files" in capsys.readouterr().out
 
 
+def test_cli_watch_does_not_claim_no_new_files_when_one_was_quarantined(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unreadable file is not "no new trace files" — that reads as "all clear".
+
+    The pass found a file and refused it; saying nothing arrived contradicts
+    the quarantine notice printed right after it.
+    """
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    (traces_dir / "broken.json").write_text("not json at all", encoding="utf-8")
+
+    exit_code = main(["watch", str(traces_dir), "--project", str(project_dir)])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "no new trace files" not in captured.out
+    assert "quarantined broken.json" in captured.err
+
+
 def test_cli_watch_reports_missing_project(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -294,6 +316,37 @@ def test_cli_watch_reports_missing_project(
     exit_code = main(["watch", str(traces_dir), "--project", str(tmp_path / "nope")])
     assert exit_code == 1
     assert "no Alfred project found" in capsys.readouterr().err
+
+
+def test_cli_watch_missing_project_names_the_command_that_fixes_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The first-quarter-hour errors must say what to do, not only what happened."""
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    missing = tmp_path / "nope"
+    exit_code = main(["watch", str(traces_dir), "--project", str(missing)])
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "alfred init" in err
+    assert str(missing) in err
+
+
+def test_cli_watch_broken_mandate_names_file_and_lint(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A YAML parse error must name the file it came from and the way to check it."""
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    (project_dir / "mandate.yaml").write_text("agent: x\nallowed_tools: [a\n", encoding="utf-8")
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+
+    exit_code = main(["watch", str(traces_dir), "--project", str(project_dir)])
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert str(project_dir / "mandate.yaml") in err
+    assert "alfred mandate lint" in err
 
 
 def test_cli_watch_reports_missing_traces_dir(
