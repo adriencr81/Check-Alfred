@@ -5,8 +5,17 @@
 > aucune décision actée — voir `docs/adr/0011-growth-plan-3m.md`.
 > **Objectif unique : maximiser le nombre d'utilisateurs.**
 
-**Version** : 1.1 · **Date** : 2026-07-25 · **Horizon** : M1 (19/07→18/08),
+**Version** : 1.2 · **Date** : 2026-07-26 · **Horizon** : M1 (19/07→18/08),
 M2 (19/08→18/09), M3 (19/09→19/10).
+
+> **Révision 1.2 (2026-07-26, ADR 0030)** — la politique directrice manquait au
+> plan : il décrivait par quels canaux on lance, pas quelle traction on
+> construit. Quatre décisions (PLAN.md §6.0) se répercutent ici : le motion
+> **dev-champion** (on outille le transfert vers le décideur au lieu de le
+> viser), un **canal possédé** (liste mail) qui n'existait nulle part, un
+> **signal payant instrumenté** (page teams + label `teams-inquiry`) sans lequel
+> le critère §8 n'est pas lisible, et le **leaderboard avancé en M2** pour qu'il
+> soit un moteur avant d'être un plan B. §0, §1, §2, §3 et §5 sont recalés.
 
 > **Révision 1.1 (2026-07-25, ADR 0027)** — trois recalages : le vivier
 > « réseau systèmes critiques » n'existe pas, donc le sourcing devient
@@ -35,10 +44,20 @@ publication PyPI, point zéro daté — ADR 0009 décision 4) :
 | Clones uniques | GitHub traffic | hebdo |
 | Mentions (HN, Reddit, X) | recherche manuelle | hebdo |
 | **Digests partagés** | issues `show-your-digest` | hebdo |
+| **Abonnés liste mail** | back-office du fournisseur | hebdo |
+| **Demandes teams** | issues `teams-inquiry` + DM/mail reportés | hebdo |
 
-Le dernier est le seul proxy qui prouve une **exécution**, pas une intention :
-les autres comptent des gens qui ont vu le projet, celui-là compte des gens qui
-l'ont fait tourner sur leur propre agent (ADR 0027 décision 9).
+Les trois derniers sont les seuls proxies qui mesurent autre chose qu'une
+audience de passage (ADR 0027 décision 9, ADR 0030) :
+
+- **Digests partagés** prouve une **exécution**, pas une intention — les proxies
+  du haut comptent des gens qui ont *vu* le projet, celui-là compte des gens qui
+  ont fait tourner Alfred sur leur propre agent.
+- **Abonnés liste** est le seul stock qu'on **possède** : il survit à un HN raté
+  et rend le re-launch M3 possible sans repartir de zéro.
+- **Demandes teams** est la source du critère qui tranche à J+150 (PLAN.md §8).
+  Il vaut zéro tant que la page teams n'est pas en ligne — et un zéro sans page
+  ne se lit pas.
 
 **La ligne qui compte** (PLAN.md §8, inchangée) : les demandes de payant
 spontanées tranchent la suite — mais sur 3 mois, tout est optimisé pour le
@@ -49,8 +68,14 @@ haut du funnel : *découverte → installation → premier digest → habitude*.
 | Mois | Goulot attaqué | Levier principal |
 |---|---|---|
 | M1 | **Découverte** | Launch multi-canal (§6.3) + assets publics — connecteurs natifs déjà livrés, donc dans l'angle du launch et non plus du M2 |
-| M2 | **Installation → 1er digest** | Ce que les issues du launch désignent : CrewAI, endpoint OTLP HTTP, frictions d'install |
-| M3 | **Habitude + boucle virale** | Leaderboard mensuel + re-launch si nécessaire |
+| M2 | **Installation → 1er digest** | Ce que les issues du launch désignent (frictions d'install, CrewAI, OTLP HTTP) + édition zéro du leaderboard |
+| M3 | **Habitude + boucle virale** | Leaderboard édition n°2 + re-launch si nécessaire |
+
+**Ce qui traverse les trois mois** (PLAN.md §6.0, ADR 0030) : chaque mois
+alimente le canal possédé (une édition de liste par release + le finding
+mensuel) et laisse la page teams capter le signal payant. Ce ne sont pas des
+tâches de mois, ce sont les deux choses qui empêchent le funnel de fuir par le
+bas — sans elles, tout utilisateur acquis est perdu de vue le lendemain.
 
 ---
 
@@ -99,7 +124,26 @@ jour du launch) :
       parce que sans lui la métrique nord est inatteignable pour quiconque
       n'a pas de serveur (ADR 0027).
 - [x] `alfred demo` invite à partager le digest obtenu (+ template d'issue) :
-      le seul signal d'activation possible sans télémétrie.
+      le seul signal d'activation possible sans télémétrie. **Non modifié depuis**
+      (ADR 0030 décision 6) : la tentation d'y ajouter l'invitation à s'abonner a
+      été refusée — deux demandes au même instant se cannibalisent, et le digest
+      partagé est le seul proxy qui prouve une exécution. Une demande par moment.
+
+Priorité 2bis — **les deux canaux de la stratégie de traction** (ADR 0030), à
+livrer avant le launch : ils ne servent à rien après, puisque c'est le pic du
+launch qu'ils sont censés capter.
+
+- [x] **Page « Alfred for teams »** (`docs/site/teams.md`) + template d'issue
+      `teams-inquiry` (2026-07-26). Instrumente le critère qui tranche à J+150
+      (PLAN.md §8). Décrit l'étage closed-source déjà annoncé (D4), sans prix ni
+      date. Le rapport HTML partageable y renvoie depuis son footer : c'est
+      l'artefact que le dev transfère à son responsable (motion dev-champion).
+- [ ] **Liste mail** — section « Stay in the loop » en place sur la landing et au
+      README (2026-07-26) ; **reste une action mainteneur** : choisir le
+      fournisseur (Buttondown, listmonk…) et brancher l'URL du formulaire dans
+      `docs/site/index.md`. Aucune URL n'a été inventée. Tant que ce n'est pas
+      fait, le canal possédé n'existe pas — c'est le seul item bloquant de
+      l'ADR 0030, et il est antérieur au launch.
 
 Priorité 3 — **fiabilité visible** : badges CI, PyPI, versions Python et
 licence en place au README (2026-07-26). Les deux badges PyPI restent vides
@@ -142,6 +186,12 @@ posts texte) → jeudi thread X → vendredi PRs d'exemples + awesome-lists →
 lundi 11/08 pitch 4 newsletters (TLDR AI, The Rundown, Ben's Bites,
 La Revue IA).
 
+- [ ] **Capter le pic dans le canal possédé** : chaque post de la séquence cite
+      la landing, et la landing porte le formulaire d'abonnement. C'est la seule
+      semaine de l'horizon où le trafic est gratuit et massif — un visiteur non
+      capté ce mardi-là coûte une réacquisition complète au M3. Cible : **50
+      abonnés** au 18/08.
+
 Semaines du 11/08 et 18/08 (post-launch immédiat) :
 - [ ] **Réactivité issues < 24 h** — le signal de traction le plus
       sous-estimé, et le moins cher.
@@ -161,6 +211,8 @@ Semaines du 11/08 et 18/08 (post-launch immédiat) :
 | Issues/PRs d'inconnus | ≥ 5 |
 | Témoignages écrits early users | 2-3 |
 | **Digests partagés publiquement** | ≥ 3 |
+| **Abonnés liste mail** | 50 |
+| **Demandes `teams-inquiry`** | ≥ 1 (informatif, pas un échec à 0) |
 
 Sur la lecture du résultat : un Show HN suit une distribution très asymétrique.
 L'issue la plus probable est nettement sous les 500 stars, qui correspondent en
@@ -168,6 +220,13 @@ réalité à un top 10 front page. Le garde-fou §9 est écrit pour ça — **un
 raté ne conclut rien**, le re-launch M3 est déjà budgété. Les digests partagés,
 eux, se lisent au premier jour : trois personnes qui montrent une sortie réelle
 valent plus, pour la suite du plan comme pour §7.2, que trois cents stars.
+
+Deux nuances de lecture sur les métriques ajoutées en 1.2 : les **abonnés** sont
+la seule cible de ce tableau qui ne dépende pas de la loterie HN — on la manque
+par négligence (ne pas citer la landing), pas par malchance. Les **demandes
+teams**, à l'inverse, ne se lisent pas à M1 : un mois est trop court pour qu'un
+inconnu passe de la découverte à une demande d'achat. La métrique compte à J+150
+(PLAN.md §8) ; ici, elle sert seulement à vérifier que le dispositif fonctionne.
 
 ---
 
@@ -181,11 +240,18 @@ et OpenAI Agents SDK (Brique 13, ADR 0021) sont livrés, testés en CI et
 documentés dans `docs/integrate.md`. Ils appartiennent donc à l'angle du
 launch, pas au M2.
 
-Ce que ça change : le M2 n'a plus de levier décidé d'avance. Il est
-**intégralement piloté par les issues du launch** — ce qui était déjà la
-règle (§6.4, « priorisation par les issues, pas par intuition »), mais qui
-devient la seule règle. Ne rien pré-décider ici est le comportement correct,
-pas un trou dans le plan.
+Ce que ça change : le M2 n'a plus de levier **produit** décidé d'avance. Il
+reste **piloté par les issues du launch** — ce qui était déjà la règle (§6.4,
+« priorisation par les issues, pas par intuition »).
+
+**Recalage 1.2 (ADR 0030)** : la v1.1 en concluait « aucun levier décidé
+d'avance ». C'était correct pour le produit, mais cela laissait le mois sans
+machine marketing, et repoussait le seul actif composé du plan au 4ᵉ mois.
+Le M2 reçoit donc **une** priorité nommée qui n'est pas tirée par les issues —
+l'édition zéro du leaderboard (§2.1) — sous une règle d'ordre stricte : **la
+dette d'entonnoir signalée par des inconnus pendant le launch passe devant**.
+Une friction d'installation coûte des utilisateurs tant qu'elle dure ; un
+leaderboard qui glisse de deux semaines ne coûte rien.
 
 ### 2.1 Technique — v0.2 (~J+90, PLAN.md §6.4)
 
@@ -196,19 +262,27 @@ Livré avant le launch, à ne pas replanifier :
 - [x] **Connecteur OpenAI Agents SDK** — `pip install alfred-ai[openai-agents]`,
       un tracing processor, exemple dans `examples/agents/openai_agents_bot/`.
 
-Reste à faire, dans l'ordre que les issues désignent :
+Reste à faire. **La dette d'entonnoir du launch passe avant tout le reste** ;
+l'édition zéro du leaderboard vient ensuite ; le solde est trié par les issues :
 
+- [ ] **Dette d'entonnoir du launch** : les frictions d'installation les plus
+      citées dans les issues. Priorité 1 du mois, remontée de M3 — une friction
+      signalée par un inconnu pendant le launch coûte des utilisateurs tant
+      qu'elle dure.
+- [ ] **Leaderboard, édition zéro** (ADR 0030 décision 4) — version minimale et
+      volontairement pauvre : 2-3 frameworks déjà connectés (LangGraph, OpenAI
+      Agents SDK, + CrewAI s'il est livré), **un mandat commun**, sortie = page
+      statique + **données brutes committées et rejouables**. La reproductibilité
+      *est* la crédibilité : quiconque conteste un classement doit pouvoir le
+      rejouer. Règle D5 non négociable ici comme ailleurs — chaque écart affiché
+      est ancré sur des event IDs, sinon il ne s'affiche pas.
 - [ ] **Connecteur CrewAI** — même contrat que les deux précédents : test
       d'intégration falsifiable (vrai run du framework, zéro réseau → digest
       ancré) et exemple exécutable.
 - [ ] **Endpoint OTLP HTTP** (sort du backlog §10, prévu v0.2) : les
       agents streament leurs traces sans passer par des fichiers.
-- [ ] Digest **Teams** + coûts multi-providers (si demandés par issues —
+- [ ] Digest **Microsoft Teams** + coûts multi-providers (si demandés par issues —
       sinon glissent en v0.3).
-- [ ] **Dette d'entonnoir du launch** : les frictions d'installation les plus
-      citées dans les issues. Remontée de M3, parce qu'une friction signalée
-      par un inconnu pendant le launch coûte des utilisateurs tant qu'elle
-      dure.
 - [ ] Chaque connecteur isolé derrière la couche d'adaptation
       `alfred.trace.ingest` (garde-fou §9 sur les semconv mouvants).
 
@@ -231,6 +305,13 @@ commit par brique, ADR si écart au plan.
       témoins de M1 un post court « I tried Alfred, here's what I got »
       (co-rédaction proposée).
 - [ ] Réactivité issues < 24 h, toujours.
+- [ ] **Publier l'édition zéro du leaderboard** (§2.1) — Show HN / post Reddit
+      naturel, et chaque framework classé a une communauté qui viendra vérifier.
+      C'est le premier contenu du plan qui rapporte sans être une redite du
+      produit, et il rode l'angle du re-launch M3 avant qu'on en ait besoin.
+- [ ] **Première édition de la liste mail** au moment de la v0.2 : le changelog
+      narratif y part tel quel. Zéro contenu supplémentaire à produire — c'est
+      tout l'intérêt d'avoir cadré le canal sur de la matière existante.
 - [ ] Release **v0.2 annoncée comme un mini-launch** (changelog narratif,
       thread X, post Reddit sur le sub du framework nouvellement connecté).
       L'angle « Alfred now speaks X natively » est désormais celui du launch
@@ -246,6 +327,7 @@ commit par brique, ADR si écart au plan.
 | Utilisateurs récurrents | 5 |
 | Demandes de connecteurs (issues) | 3+ (elles priorisent la suite) |
 | Demandes payant spontanées | 1 |
+| **Abonnés liste mail** | 150 |
 
 ---
 
@@ -260,11 +342,11 @@ mois sans effort marginal.
 - [ ] **« Entretien de performance »** : bench rejoué, dérive de
       comportement, coût/tâche vérifié — chaque affirmation ancrée sur des
       event IDs (règle D5, non négociable).
-- [ ] **Infra du leaderboard mensuel de fiabilité d'agents** (Brique 9
-      réactivée, §6.4) : harnais qui rejoue N agents/frameworks publics
-      sous un même mandat et publie le classement des déviations. Sortie
-      = page statique + données brutes committées (reproductible par
-      quiconque — c'est la crédibilité).
+- [ ] **Industrialiser le leaderboard** (Brique 9 réactivée, §6.4) : l'édition
+      zéro de M2 est artisanale et assumée comme telle. M3 en fait un harnais
+      qui rejoue N agents/frameworks publics sous un même mandat, de sorte que
+      l'édition n+1 coûte une commande et non une semaine. C'est ce qui
+      transforme un contenu en machine.
 - [ ] Dette d'entonnoir : le reliquat de ce que le M2 n'a pas absorbé
       (§2.1), pas un lot neuf.
 
@@ -274,12 +356,17 @@ mois sans effort marginal.
       starrable du plan : classement mensuel public « quel framework
       d'agents dévie le moins de son mandat ». Chaque édition est un
       Show HN / post Reddit naturel, et chaque framework classé a une
-      communauté qui viendra vérifier.
+      communauté qui viendra vérifier. Deuxième tour de piste, pas une
+      première : l'édition zéro est sortie en M2 (ADR 0030), donc le format,
+      les objections et la méthodologie ont déjà été confrontés au public.
 - [ ] **Re-launch si nécessaire** (garde-fou §9) : si le launch M1 a fait
       < 100 stars, re-tir HN — un HN raté se retente à 2-3 mois sous un autre
       angle. L'angle connecteurs étant consommé au M1, c'est **le leaderboard**
       qui porte le re-tir : un classement public est un objet de discussion
-      neuf, pas une redite du produit.
+      neuf, pas une redite du produit. Il est désormais **rodé au lieu d'être
+      découvert sous pression** — c'était tout l'objet d'avancer l'édition zéro.
+      Le re-tir vise en priorité la liste mail constituée depuis M1 : c'est la
+      seule audience qu'un second passage n'a pas à racheter.
 - [ ] Finding public du mois (cadence rituelle).
 - [ ] **2-3 études de cas nommées** tirées des utilisateurs récurrents
       (matière YC §7.2 : « trois utilisateurs nommables »).
@@ -297,6 +384,7 @@ mois sans effort marginal.
 | Utilisateurs récurrents | 10-20 |
 | Équipes nommables | 2-3 |
 | Demandes payant spontanées | 2+ |
+| **Abonnés liste mail** | 400 |
 
 ---
 
@@ -315,10 +403,19 @@ mois sans effort marginal.
 - **Règle D5** : si une feature de v0.2/v0.3 ne peut pas ancrer ses
   affirmations sur des event IDs → STOP, replanifier.
 - **Priorisation par issues, pas par intuition** (§6.4) : les connecteurs
-  et le digest Teams n'avancent que tirés par la demande.
+  et le digest Microsoft Teams n'avancent que tirés par la demande.
 - **Pas de télémétrie dans le paquet** : la mesure d'usage reste
   proxy-based ; « vos traces restent chez vous » est un argument
   d'acquisition (angle r/LocalLLaMA).
+- **La liste mail n'est pas une brèche dans ce qui précède** (ADR 0030
+  décision 7) : le paquet n'émet toujours rien, l'abonnement est opt-in depuis
+  une page web, hors du produit. Aucune adresse ne doit jamais être collectée
+  *par* Alfred, ni dérivée d'une issue ou d'un digest partagé. Le jour où le
+  canal possédé entamerait l'argument produit, c'est le canal qui cède.
+- **Une demande par moment** (ADR 0030 décision 6) : chaque surface ne porte
+  qu'un seul appel à l'action. `alfred demo` demande le digest partagé, le
+  rapport HTML pointe vers teams, la landing propose l'abonnement. Empiler les
+  demandes sur une même surface les annule toutes.
 - **Un tir raté ne conclut rien** (§9) : le re-launch M3 est déjà budgété.
 - **Épuisement** (contrainte ~1 h/jour) : chaque mois a UNE priorité
   technique et UNE machine marketing ; tout le reste est backlog.
