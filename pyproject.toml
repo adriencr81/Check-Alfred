@@ -46,6 +46,12 @@ dev = [
 
 [project.scripts]
 alfred = "alfred.cli:main"
+# Alias so the zero-install path is the short command people are told to run:
+# `uvx alfred-ai demo` / `pipx run alfred-ai demo` resolve the executable from
+# the *distribution* name, and without this they fail with "executable not
+# found" on a package that installed perfectly. Same entry point, so `alfred`
+# stays the name in every doc once installed. Pinned by tests/test_version.py.
+alfred-ai = "alfred.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/adriencr81/Check-Alfred"

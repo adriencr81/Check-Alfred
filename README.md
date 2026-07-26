@@ -104,8 +104,16 @@ stay within its mandate?* for the person accountable for it.
 
 ## Quickstart
 
-See it work in one command — an instrumented fake agent produces a real trace
-and a real digest, no mandate file, no Slack webhook, no network call:
+See it work in one command, without installing anything — an instrumented fake
+agent produces a real trace and a real digest, no virtualenv, no mandate file,
+no Slack webhook, no network call:
+
+```bash
+uvx alfred-ai demo          # or: pipx run alfred-ai demo
+```
+
+Both run the package in a throwaway environment and leave nothing behind. To
+keep it:
 
 ```bash
 pip install alfred-ai
