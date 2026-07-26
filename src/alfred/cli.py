@@ -88,12 +88,16 @@ def _deliver(
     *,
     alerts: bool = False,
     narrate_client: LLMClient | None = None,
+    announce_empty: bool = True,
 ) -> None:
     """Deliver each digest to stdout and, if configured, to Slack.
 
     Shared by the single-pass and `--loop` paths. When empty (no new trace
     files) it prints one notice; in loop mode that keeps each idle pass quiet
-    but visible. With `alerts` set, a digest that carries deviations also
+    but visible. `announce_empty` suppresses that notice when the pass *did*
+    find files but quarantined them all: "no new trace files" reads as all
+    clear, and the quarantine report right after it says the opposite. With
+    `alerts` set, a digest that carries deviations also
     triggers an immediate Slack alert (ADR 0017) alongside the digest. With
     `narrate_client` set, stdout gets the verified LLM prose (`narrate` →
     `render_text`) instead of the raw digest; a `NarrateError` — endpoint down
@@ -101,7 +105,8 @@ def _deliver(
     silently degrading (PLAN D5). Slack keeps the raw Block Kit digest.
     """
     if not digests:
-        print("alfred watch: no new trace files.")
+        if announce_empty:
+            print("alfred watch: no new trace files.")
         return
     for digest in digests:
         if narrate_client is not None:
@@ -190,7 +195,13 @@ def _cmd_watch(args: argparse.Namespace) -> int:
     conflicts: tuple[TraceEvent, ...] = ()
 
     def _handle(result: WatchPass) -> None:
-        _deliver(result.digests, config, alerts=args.alerts, narrate_client=narrate_client)
+        _deliver(
+            result.digests,
+            config,
+            alerts=args.alerts,
+            narrate_client=narrate_client,
+            announce_empty=not result.quarantined,
+        )
         _report_quarantine(result.quarantined, project_dir)
         _report_conflicts(result.conflicts)
 

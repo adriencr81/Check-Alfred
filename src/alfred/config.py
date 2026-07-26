@@ -173,7 +173,10 @@ def load_config(directory: Path | str) -> AlfredConfig:
     try:
         text = config_path.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
-        raise ConfigError(f"no Alfred project found at {root} (missing {config_path})") from exc
+        raise ConfigError(
+            f"no Alfred project found at {root} (missing {config_path})\n"
+            f"Run `alfred init {root}` to create one."
+        ) from exc
     try:
         raw = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
