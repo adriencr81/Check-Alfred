@@ -27,6 +27,36 @@ features F1–F4 (§13), and four rounds of security hardening.
 - `mypy --strict` covers `tests/` as well as `src/` — pyproject already asked
   for it, but a positional argument had been overriding it everywhere.
 - Python 3.13 is tested in CI and declared in the classifiers.
+- **The LICENSE file is the real Apache-2.0 text.** It had been a 24-line
+  abbreviated notice ending on its own TODO to replace itself before v0.1.0,
+  which GitHub classified as `NOASSERTION` / "Other" while the README showed an
+  Apache-2.0 badge — and `license-files` shipped that stub inside the wheel and
+  the sdist. Now the official 202-line text with the appendix filled in.
+- Python 3.14 joins the CI matrix and the classifiers. `requires-python`
+  already let pip install Alfred there, so it was the one version a user could
+  meet before CI did; the core suite (379 tests) passes on it.
+- Dependabot watches `pip` and `github-actions` weekly. CodeQL scanned Alfred's
+  own code but nothing watched what it depends on, including the pinned actions
+  in `release.yml` — the workflow that holds a publishing OIDC token.
+- See `docs/adr/0028-launch-hardening-license-supply-chain-disclosure.md`.
+
+### Documentation
+
+- `SECURITY.md` — a disclosure channel (GitHub private vulnerability reporting)
+  and a scope built on Alfred's actual threat model, where **the audited agent
+  is the adversary**: defeating a mandate check, forging report content,
+  breaking the anchoring rule, leaking what Alfred holds, or stopping the
+  auditor are in scope. An agent that escapes its instrumentation, a tool that
+  returns garbage with a success status, and `chmod` on Windows are documented
+  limits, not vulnerabilities.
+- The v0.1 VCD (`docs/vcd/alfred-v0.1.md`) is regenerated. It still attested 112
+  tests and bricks B1–B6 while B7–B13, F1–F4 and four hardening rounds had
+  landed — a stale scope in the document you open to *check* a claim is a false
+  attestation, not a late journal. Version 2 adds evidence tables for the whole
+  current scope, replaces the counts with a real `pytest --collect-only -q`
+  reading (393 cases for 364 definitions), and closes one of its own open
+  limits: the wheel is now verified installed in a clean environment, outside
+  the repo.
 
 ### Security
 

@@ -1,6 +1,6 @@
 # Alfred
 
-[![CI](https://github.com/adriencr81/check-alfred/actions/workflows/ci.yml/badge.svg)](https://github.com/adriencr81/check-alfred/actions/workflows/ci.yml)
+[![CI](https://github.com/adriencr81/Check-Alfred/actions/workflows/ci.yml/badge.svg)](https://github.com/adriencr81/Check-Alfred/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/alfred-ai.svg)](https://pypi.org/project/alfred-ai/)
 [![Python versions](https://img.shields.io/pypi/pyversions/alfred-ai.svg)](https://pypi.org/project/alfred-ai/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -13,7 +13,7 @@
 landed: a public `alfred.instrument` SDK, native LangGraph and OpenAI Agents SDK
 connectors, real-world OTel Collector ingestion, and a 5-minute example that
 needs no API key. 393 tests green, mypy --strict on source *and* tests,
-Python 3.11–3.13, CI + CodeQL. Public **v0.1 targeted for early August 2026**.
+Python 3.11–3.14, CI + CodeQL. Public **v0.1 targeted for early August 2026**.
 Full roadmap: [PLAN.md](PLAN.md).
 
 ---
@@ -206,7 +206,7 @@ the trace, it doesn't claim.
 ## Development
 
 ```bash
-git clone https://github.com/adriencr81/check-alfred.git && cd check-alfred
+git clone https://github.com/adriencr81/Check-Alfred.git && cd Check-Alfred
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q
