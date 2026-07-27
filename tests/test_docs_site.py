@@ -13,6 +13,7 @@ be shorter and phrased differently — it is a landing, not a mirror.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +68,19 @@ def test_landing_install_commands_match_the_readme() -> None:
     for command in ("uvx alfred-ai demo", "pip install alfred-ai"):
         assert command in landing, f"landing lost the documented command: {command}"
         assert command in readme, f"README and landing disagree on: {command}"
+
+
+def test_readme_states_no_test_count() -> None:
+    """A hardcoded suite size on the front page is stale the next commit.
+
+    It went 398 → 400 → 401 in a single day, each time contradicting a page
+    whose whole argument is that no number should be self-declared. The CI
+    badge is the living version of the claim; this is a guarded regression, so
+    it fails the day someone writes the number back in.
+    """
+    readme = README.read_text(encoding="utf-8")
+    stale = re.findall(r"\d+\s+tests\b", readme)
+    assert not stale, f"README states a test count that will drift: {stale}"
 
 
 def test_deploy_queues_instead_of_racing_itself() -> None:
