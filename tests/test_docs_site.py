@@ -21,6 +21,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 MKDOCS = ROOT / "mkdocs.yml"
 README = ROOT / "README.md"
+DOCS_WORKFLOW = ROOT / ".github/workflows/docs.yml"
 
 
 def _config() -> dict[str, Any]:
@@ -66,6 +67,24 @@ def test_landing_install_commands_match_the_readme() -> None:
     for command in ("uvx alfred-ai demo", "pip install alfred-ai"):
         assert command in landing, f"landing lost the documented command: {command}"
         assert command in readme, f"README and landing disagree on: {command}"
+
+
+def test_deploy_queues_instead_of_racing_itself() -> None:
+    """Two pushes to main close together must not fail the second deployment.
+
+    GitHub Pages accepts one deployment at a time; without a concurrency group
+    the second gets a 400 and main shows a red run for something that is not a
+    defect. `cancel-in-progress` must stay false so a deployment already under
+    way is allowed to finish.
+    """
+    workflow = yaml.safe_load(DOCS_WORKFLOW.read_text(encoding="utf-8"))
+    concurrency = workflow["jobs"]["deploy"]["concurrency"]
+    assert concurrency["group"], "deploy job lost its concurrency group"
+    assert concurrency["cancel-in-progress"] is False
+
+    # On the job, not the workflow: pull request builds never deploy, so
+    # serialising them behind the same group would queue them for nothing.
+    assert "concurrency" not in workflow
 
 
 def test_landing_compares_the_same_neighbours_as_the_readme() -> None:
