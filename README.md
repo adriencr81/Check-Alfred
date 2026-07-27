@@ -5,14 +5,64 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/alfred-ai.svg)](https://pypi.org/project/alfred-ai/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Accountability layer for AI employees.** A Python package that turns raw
-> agent traces into a daily stand-up your team can actually trust — every line
-> anchored to a trace event ID.
+> **Accountability layer for AI agents.** Every line of an Alfred report is
+> anchored to a trace event ID. The ones that aren't, don't ship.
+
+![An Alfred digest: four counted lines, each followed by the trace event IDs it was computed from, and one flagged deviation.](docs/assets/social-preview.png)
+
+## Try it — 20 seconds, no install, no API key, no webhook
+
+```bash
+uvx alfred-ai demo          # or: pipx run alfred-ai demo
+```
+
+That command prints:
+
+```
+Alfred · demo-bot · 2026-07-27
+
+Tasks completed:               3   [evt:demo-1-task, demo-2-task, demo-3-task]
+Cost (tokens → €):        1.18 €   [evt:demo-1-llm, demo-2-llm, demo-3-llm]
+Escalations:                   1   [evt:demo-3-tool]
+Deviations (mandate):          1   [evt:demo-2-tool] — tool_not_allowed: tool 'read_pii' is not in allowed_tools
+```
+
+An instrumented fake agent emits a real trace; Alfred reads it and catches the
+one call its mandate forbids. Nothing is mocked, nothing phones home, and the
+throwaway environment leaves nothing behind.
+
+## What is proven, and how
+
+Every claim below is held by a test, named here so you can go read it before
+believing any of this:
+
+| Claim | Test that fails if it stops being true |
+|---|---|
+| A report line cannot exist without at least one source event | `test_line_requires_at_least_one_event_id` |
+| A narrated sentence citing an event it wasn't given aborts the run | `test_narrate_raises_on_hallucinated_citation` |
+| An agent declaring its own escalation doesn't get credit for it | `test_self_declared_escalation_attribute_no_longer_suppresses_the_deviation` |
+| A redacted argument never reaches the store, Slack, or the LLM | `test_redacted_value_absent_from_store` |
+| A recorded event cannot be rewritten with different content | `test_conflicting_event_does_not_overwrite_the_stored_one` |
+| The shareable HTML report loads nothing from the network | `test_render_html_is_a_self_contained_document` |
+
+## What Alfred refuses to say
+
+Most agent reports are a summary the agent wrote about itself. Alfred's can't be:
+
+| Situation | A self-reported summary says | Alfred says |
+|---|---|---|
+| The agent claims it escalated | "Escalated to a human ✅" | Nothing — unless a tool listed in `escalation_tools` was actually called `[evt:…]` |
+| The agent reports its own cost | "Cost: €0.40" | The cost priced from its own token counts — plus a `cost_mismatch` deviation if the two disagree |
+| The agent answers confidently, but wrong | "47 tasks completed ✅" | 47 — and nothing about whether they were *right*, because the trace doesn't record that |
+
+The third row is the point: **Alfred does not claim what it cannot anchor.** A
+wrong-but-confident answer leaves no signal in a trace, so Alfred stays silent
+about it rather than inventing reassurance.
 
 **Status** — v0.1 core feature-complete, plus a "Bring Your Own Agent" sprint
 landed: a public `alfred.instrument` SDK, native LangGraph and OpenAI Agents SDK
 connectors, real-world OTel Collector ingestion, and a 5-minute example that
-needs no API key. 398 tests green, mypy --strict on source *and* tests,
+needs no API key. 400 tests green, mypy --strict on source *and* tests,
 Python 3.11–3.14, CI + CodeQL. Public **v0.1 targeted for early August 2026**.
 Full roadmap: [PLAN.md](PLAN.md).
 
@@ -31,7 +81,10 @@ The LLM only rephrases what was already computed from the traces. No self-declar
 summaries, no hallucinated numbers. A report line without a source event is a bug,
 not a feature — and there's a test that says so (see [PLAN.md §5 Brique 4](PLAN.md)).
 
-## What a digest looks like (v0.1 target)
+## Each number reads against its own baseline
+
+The demo digest above is a real run of a three-step agent. On a busier one, each
+line also carries how it compares to its own recent history — illustrated here:
 
 ```
 Alfred · refund-bot-v3 · 2026-08-30
@@ -104,16 +157,8 @@ stay within its mandate?* for the person accountable for it.
 
 ## Quickstart
 
-See it work in one command, without installing anything — an instrumented fake
-agent produces a real trace and a real digest, no virtualenv, no mandate file,
-no Slack webhook, no network call:
-
-```bash
-uvx alfred-ai demo          # or: pipx run alfred-ai demo
-```
-
-Both run the package in a throwaway environment and leave nothing behind. To
-keep it:
+`uvx alfred-ai demo` (above) runs the package in a throwaway environment and
+leaves nothing behind. To keep it:
 
 ```bash
 pip install alfred-ai

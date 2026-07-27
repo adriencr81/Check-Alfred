@@ -247,7 +247,7 @@ Trois règles de discipline pour cette zone :
   sentences » et « Status » descendent sous le tableau de preuve.
 - **Le statut ne s'excuse pas.** « v0.1 core feature-complete, plus a "Bring Your
   Own Agent" sprint landed » est une phrase de journal de bord. Ce qui se lit :
-  « 398 tests · mypy --strict on source *and* tests · Python 3.11–3.14 » — trois
+  « 400 tests · mypy --strict on source *and* tests · Python 3.11–3.14 » — trois
   nombres, en badge.
 - **Le mot « manager » reste** : c'est la ligne de fracture avec l'observabilité
   (ADR 0030 décision 1), et aucun des trois concurrents ne l'occupe.

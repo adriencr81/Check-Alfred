@@ -1,0 +1,58 @@
+# Alfred
+
+> Accountability layer for AI agents. Alfred ingests OpenTelemetry GenAI traces,
+> confronts them with a declared YAML mandate, and produces a daily digest in
+> which every line is anchored to identifiable trace event IDs. An LLM is used
+> only to rephrase what was already computed; a sentence citing an event it was
+> not given aborts the run instead of shipping.
+
+Python 3.11–3.14, Apache-2.0, single runtime dependency (pyyaml). SQLite trace
+store, no server, no telemetry: the package emits nothing over the network
+except the Slack webhook you configure.
+
+## Try it
+
+```
+uvx alfred-ai demo
+```
+
+Runs an instrumented fake agent, ingests its trace, prints a digest with one
+caught deviation. No install, no API key, no webhook, no network call.
+
+## What Alfred reports
+
+Counted lines (tasks, cost priced from token counts, escalations) each carrying
+the event IDs they were computed from, plus typed deviations: tool_not_allowed,
+forbidden_action, budget_exceeded, escalation_missed, required_action_missing,
+loop_detected, cost_mismatch, tool_unidentified.
+
+Two properties matter when reasoning about Alfred's output: an escalation counts
+only when a tool listed in the mandate's `escalation_tools` was actually called
+(never when the agent flags itself as having escalated), and stored evidence is
+append-only (a recorded event cannot be rewritten with different content).
+
+Alfred does not judge correctness. A wrong-but-confident answer leaves no signal
+in a trace, so Alfred reports nothing about it rather than inventing reassurance.
+
+## Getting an agent's runs into Alfred
+
+- `alfred.instrument` SDK — wrap the loop, the model call, the tool call (~10 lines): docs/integrate.md
+- LangGraph — one callback handler, `pip install alfred-ai[langgraph]`: docs/integrate.md#langgraph-connector
+- OpenAI Agents SDK — one tracing processor, `pip install alfred-ai[openai-agents]`: docs/integrate.md#openai-agents-sdk-connector
+- OpenTelemetry Collector — point its file exporter at the watched folder: docs/integrate.md#otel-collector-bridge
+
+## Docs
+
+- README.md: overview, quickstart, positioning against observability tools
+- docs/integrate.md: instrumenting your own agent, all four ingestion paths
+- docs/verified_nlg.md: how the narration is constrained to its sources
+- docs/adr/: numbered architecture decision records, one per design decision
+- examples/agents/minimal/: ~30-line agent, no LLM, no API key
+- examples/agents/refund_bot/: framework-free Claude tool loop whose over-limit refund Alfred catches
+
+## Not in the open package
+
+Formal verdict semantics, verifiable policies, multi-agent, retention and
+compliance features are planned as a closed-source tier (open-core, announced up
+front). The open package is not a limited trial of it: what it does, it does
+fully.
