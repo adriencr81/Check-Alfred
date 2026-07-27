@@ -62,8 +62,9 @@ about it rather than inventing reassurance.
 **Status** — v0.1 core feature-complete, plus a "Bring Your Own Agent" sprint
 landed: a public `alfred.instrument` SDK, native LangGraph and OpenAI Agents SDK
 connectors, real-world OTel Collector ingestion, and a 5-minute example that
-needs no API key. 400 tests green, mypy --strict on source *and* tests,
-Python 3.11–3.14, CI + CodeQL. Public **v0.1 targeted for early August 2026**.
+needs no API key. mypy --strict on source *and* tests, Python 3.11–3.14,
+CI + CodeQL — the badge above is the live version of that claim, which is why
+no test count is written here. Public **v0.1 targeted for early August 2026**.
 Full roadmap: [PLAN.md](PLAN.md).
 
 ---
