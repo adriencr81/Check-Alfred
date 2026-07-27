@@ -34,6 +34,18 @@ jobs:
   deploy:
     needs: build
     if: github.ref == 'refs/heads/main'
+    # Pages accepts one deployment at a time: a second push while the first is
+    # still deploying gets a 400 ("due to in progress deployment") and paints
+    # main red for a reason that is not a defect. Queue instead. The group is
+    # on this job, not the workflow, so pull request *builds* stay parallel —
+    # they never deploy, so they are not competing for anything.
+    #
+    # cancel-in-progress stays false: a deployment already under way finishes.
+    # Runs queued behind it are superseded by the newest, which is the one that
+    # matches main.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     environment:
       name: github-pages
