@@ -5,7 +5,8 @@ Uses in-memory SQLite (`:memory:`) to keep tests hermetic and fast.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -51,6 +52,37 @@ def test_put_many_and_count(store: TraceStore) -> None:
     assert store.count() == 3
 
 
+class _CountingConnection:
+    """Delegates to a real connection but tallies `commit()` calls."""
+
+    def __init__(self, conn: object) -> None:
+        self._conn = conn
+        self.commits = 0
+
+    def commit(self) -> None:
+        self.commits += 1
+        self._conn.commit()  # type: ignore[attr-defined]
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._conn, name)
+
+
+def test_put_many_commits_once_regardless_of_event_count(store: TraceStore) -> None:
+    """A whole trace file is one transaction — not one fsync per span."""
+    spy = _CountingConnection(store._conn)
+    store._conn = spy  # type: ignore[assignment]
+    store.put_many([_event("a"), _event("b"), _event("c"), _event("d")])
+    assert spy.commits == 1
+    assert store.count() == 4
+
+
+def test_put_many_is_idempotent_on_repeated_id(store: TraceStore) -> None:
+    """Re-ingesting a file (watch replay) must not double-count in the batch path."""
+    store.put_many([_event("a"), _event("b")])
+    store.put_many([_event("a"), _event("b")])
+    assert store.count() == 2
+
+
 def test_put_is_idempotent_on_same_id(store: TraceStore) -> None:
     """Re-ingesting the same span (e.g., watch replay) must not double-count."""
     store.put(_event("evt-1"))
@@ -78,6 +110,30 @@ def test_find_by_trace_orders_by_start_time(store: TraceStore) -> None:
     assert [e.event_id for e in got] == ["a", "b", "c"]
 
 
+def _at(day: date) -> datetime:
+    return datetime(day.year, day.month, day.day, 9, 0, 0, tzinfo=UTC)
+
+
+def test_find_by_date_range_is_inclusive_on_both_bounds(store: TraceStore) -> None:
+    store.put_many([
+        _event("d23", start_time=_at(date(2026, 8, 23))),
+        _event("d26", start_time=_at(date(2026, 8, 26))),
+        _event("d29", start_time=_at(date(2026, 8, 29))),
+    ])
+    got = store.find_by_date_range(date(2026, 8, 23), date(2026, 8, 29))
+    assert {e.event_id for e in got} == {"d23", "d26", "d29"}
+
+
+def test_find_by_date_range_excludes_days_outside_the_window(store: TraceStore) -> None:
+    store.put_many([
+        _event("before", start_time=_at(date(2026, 8, 22))),
+        _event("inside", start_time=_at(date(2026, 8, 25))),
+        _event("after", start_time=_at(date(2026, 8, 30))),
+    ])
+    got = store.find_by_date_range(date(2026, 8, 23), date(2026, 8, 29))
+    assert {e.event_id for e in got} == {"inside"}
+
+
 def test_attributes_survive_roundtrip(store: TraceStore) -> None:
     """Attribute values must round-trip verbatim (used for cost computation)."""
     original = _event("evt-x")
@@ -85,3 +141,35 @@ def test_attributes_survive_roundtrip(store: TraceStore) -> None:
     got = store.get(EventId("evt-x"))
     assert got is not None
     assert got.attributes == original.attributes
+
+
+def test_conflicting_event_does_not_overwrite_the_stored_one(store: TraceStore) -> None:
+    """ADR 0026 decision 4: `event_id` is the spanId the agent picks, and
+    INSERT OR REPLACE let it rewrite a stored anchor — cost, arguments, status
+    — long after the digest quoting it went out."""
+    original = _event("evt-1")
+    store.put(original)
+
+    rewritten = replace(original, attributes={"gen_ai.usage.output_tokens": 0})
+    conflicts = store.put_many([rewritten])
+
+    assert [event.event_id for event in conflicts] == ["evt-1"]
+    stored = store.get(EventId("evt-1"))
+    assert stored is not None
+    assert stored.attributes == {"gen_ai.usage.output_tokens": 42}  # the original wins
+    assert store.count() == 1
+
+
+def test_identical_re_put_is_not_a_conflict(store: TraceStore) -> None:
+    """Re-ingesting the same file must stay a no-op, not raise an alarm."""
+    store.put_many([_event("a"), _event("b")])
+    assert store.put_many([_event("a"), _event("b")]) == []
+
+
+def test_conflicting_event_does_not_block_its_batch(store: TraceStore) -> None:
+    store.put(_event("evt-1"))
+    conflicts = store.put_many(
+        [replace(_event("evt-1"), attributes={}), _event("evt-2")]
+    )
+    assert [event.event_id for event in conflicts] == ["evt-1"]
+    assert store.get(EventId("evt-2")) is not None  # the honest event still landed

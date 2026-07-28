@@ -12,9 +12,14 @@ from datetime import UTC, datetime, timedelta
 
 from alfred.mandate.model import Mandate
 
-_MODEL = "gpt-4o-mini-2024-07-18"
+# The demo carries no `gen_ai.usage.cost_eur`: the cost line is priced from the
+# token counts below through `alfred.trace.cost`, the same path a real trace
+# takes since ADR 0023 decision 2. The per-task token counts are chosen so the
+# day still costs 0.29 + 0.38 + 0.51 = 1.18 € at this model's table rate.
+_MODEL = "claude-opus-4-8"
 _ALLOWED_TOOL = "send_email"
 _FORBIDDEN_TOOL = "read_pii"
+_ESCALATION_TOOL = "escalate_to_human"
 
 
 def _ns(dt: datetime) -> str:
@@ -36,9 +41,8 @@ def _task_spans(
     task: str,
     tool: str,
     start: datetime,
-    cost_eur: float,
-    *,
-    escalated: bool = False,
+    input_tokens: int,
+    output_tokens: int,
 ) -> list[dict[str, object]]:
     trace_id = f"demo-trace-{index}"
     task_span_id = f"demo-{index}-task"
@@ -57,8 +61,6 @@ def _task_spans(
         _attr("agent.task", task),
         _attr("agent.task.id", f"task-{index}"),
     ]
-    if escalated:
-        task_attributes.append(_attr("alfred.escalated", True))
 
     return [
         {
@@ -75,18 +77,17 @@ def _task_spans(
             "traceId": trace_id,
             "spanId": llm_span_id,
             "parentSpanId": task_span_id,
-            "name": "chat gpt-4o-mini",
+            "name": f"chat {_MODEL}",
             "kind": 3,
             "startTimeUnixNano": _ns(llm_start),
             "endTimeUnixNano": _ns(llm_end),
             "attributes": [
-                _attr("gen_ai.system", "openai"),
+                _attr("gen_ai.system", "anthropic"),
                 _attr("gen_ai.operation.name", "chat"),
-                _attr("gen_ai.request.model", "gpt-4o-mini"),
+                _attr("gen_ai.request.model", _MODEL),
                 _attr("gen_ai.response.model", _MODEL),
-                _attr("gen_ai.usage.input_tokens", 1400),
-                _attr("gen_ai.usage.output_tokens", 260),
-                _attr("gen_ai.usage.cost_eur", cost_eur),
+                _attr("gen_ai.usage.input_tokens", input_tokens),
+                _attr("gen_ai.usage.output_tokens", output_tokens),
             ],
         },
         {
@@ -118,26 +119,28 @@ def build_demo_payload(
        mandate's `allowed_tools` — the one deliberate `tool_not_allowed`
        deviation (echoes the `read_pii` example already used in
        PLAN.md/README).
-    3. `escalate_complex_case` is flagged `alfred.escalated` — populates
-       the Escalations line without tripping `escalation_missed`.
+    3. `escalate_complex_case` calls `escalate_to_human`, the demo mandate's
+       declared escalation tool — a real action, which is what populates the
+       Escalations line (ADR 0023 decision 4).
     """
     anchor = now or datetime.now(UTC)
     spans = [
-        *_task_spans(1, "onboard_customer", _ALLOWED_TOOL, anchor, 0.29),
+        *_task_spans(1, "onboard_customer", _ALLOWED_TOOL, anchor, 38_000, 4_000),
         *_task_spans(
             2,
             "handle_support_ticket",
             _FORBIDDEN_TOOL,
             anchor + timedelta(seconds=15),
-            0.38,
+            44_000,
+            6_400,
         ),
         *_task_spans(
             3,
             "escalate_complex_case",
-            _ALLOWED_TOOL,
+            _ESCALATION_TOOL,
             anchor + timedelta(seconds=30),
-            0.51,
-            escalated=True,
+            52_000,
+            10_000,
         ),
     ]
     return {
@@ -153,14 +156,15 @@ def build_demo_payload(
 def demo_mandate(agent: str = "demo-bot") -> Mandate:
     """The mandate the demo trace is evaluated against.
 
-    Only `send_email` is allowed — deliberately narrower than the demo
-    trace's tool calls, so the digest always shows the mandate catching
-    something (see `build_demo_payload`).
+    Only `send_email` and the escalation tool are allowed — deliberately
+    narrower than the demo trace's tool calls, so the digest always shows the
+    mandate catching something (see `build_demo_payload`).
     """
     return Mandate(
         agent=agent,
-        allowed_tools=frozenset({_ALLOWED_TOOL}),
+        allowed_tools=frozenset({_ALLOWED_TOOL, _ESCALATION_TOOL}),
         daily_budget_eur=5.00,
         forbidden_actions=(),
         escalate_when=(),
+        escalation_tools=frozenset({_ESCALATION_TOOL}),
     )

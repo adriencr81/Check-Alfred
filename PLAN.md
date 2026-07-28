@@ -4,7 +4,7 @@
 > soit modifier ce document, soit être documentée dans un ADR daté sous
 > `docs/adr/`. Pas de plan parallèle en tête ou en Notion.
 
-**Version** : 1.2 · **Date** : 2026-07-20 · **Cible produit** : v0.1 publique le **4 août 2026** (J+20).
+**Version** : 1.3 · **Date** : 2026-07-21 · **Cible produit** : v0.1 publique le **4 août 2026** (J+20).
 **Cible fondateur** : candidature YC **déposée le 2026-07-18** — traction démontrable avant la réponse YC.
 
 > Révision v1.1 (2026-07-18, ADR 0009) : les 6 briques §5 sont livrées à
@@ -20,6 +20,16 @@
 > externe avec *ses* agents ; B8 + B11 sont sur le chemin critique du
 > launch (maintenu au 4 août s'ils sont verts au 1er août, sinon 11 août).
 > Voir `docs/adr/0013-byoa-bring-your-own-agent-plan.md`.
+
+> Révision v1.3 (2026-07-21, ADR 0014) : le **connecteur natif LangGraph**
+> (§12, Brique 12) est avancé sur demande produit, en anticipé sur la v0.2 où
+> il était backlogué (§10, « priorisés par les issues »). Écart de
+> séquencement assumé et cloisonné : un `BaseCallbackHandler`
+> (`alfred.integrations.langgraph`) derrière l'extra optionnel `[langgraph]`,
+> pilotant les context managers d'`AgentTracer` — le cœur garde sa seule
+> dépendance `pyyaml`. Les autres connecteurs (CrewAI, OpenAI) et non-objectifs
+> du backlog §10 restent en v0.2+. Voir
+> `docs/adr/0014-langgraph-native-connector.md`.
 
 ---
 
@@ -291,6 +301,57 @@ Le launch (§6.3) est re-daté seulement après ce run.
 
 ## 6. Plan marketing
 
+> **Révision 2026-07-25** (ADR 0027) : le vivier « ex-collègues » de §6.2
+> n'existe pas — le sourcing devient intégralement froid, d'où 30 noms au lieu
+> de 15. Le créneau du vendredi de §6.3 passe des PRs d'exemples + awesome-lists
+> à la place du post LinkedIn FR, qui supposait un réseau de décideurs. L'angle
+> de launch devient les connecteurs natifs, livrés depuis (Briques 12 et 13).
+
+> **Révision 2026-07-26** (ADR 0030) : ce qui précède décrivait *par quels
+> canaux* on lance, pas *quelle traction on construit*. Un §6.0 est ajouté
+> ci-dessous et énonce la politique directrice — cible, canal possédé, signal
+> payant, actif composé. §6.4 est recalé en conséquence (leaderboard en M2).
+
+### 6.0 Stratégie de traction (politique directrice)
+
+Quatre décisions qui priment sur le choix des canaux, parce qu'elles disent
+*qui* on vise, *ce qu'on possède* et *ce qu'on mesure*. Détail, alternatives
+écartées et coûts assumés : `docs/adr/0030-traction-strategy.md`.
+
+**1. Dev-champion assumé.** Le développeur est l'utilisateur *et* le relais
+interne. Tous les canaux restent dev — c'est là que le problème s'exprime
+publiquement (§6.2) — et le vocabulaire manager reste dans le positionnement,
+car c'est lui qui différencie Alfred de l'observabilité. On n'essaie plus
+d'atteindre le décideur directement : **on outille le transfert vers lui**.
+L'artefact de ce transfert existe déjà — le rapport HTML autonome (ADR 0020).
+Il reste **intact** : `alfred report --html` imprime le pointeur vers §6.0
+point 3 sur stdout, à destination du dev qui lance la commande, et jamais dans
+le fichier — celui-ci est archivé pour audit (ADR 0030 décision 5).
+
+**2. Un canal possédé : la liste mail.** Aucun canal du plan n'était possédé
+(ni mail, ni télémétrie, ni Discord §10) : passé le mardi du launch, personne
+n'était recontactable, et le re-launch du garde-fou §9 repartait de zéro. Une
+liste opt-in, alimentée par une édition par release + le finding mensuel — de
+la matière déjà au calendrier. C'est le seul canal qui survit à un HN raté, à
+un re-launch, et au transfert du dépôt vers l'org `alfred-ai` (D3).
+**Ce n'est pas de la télémétrie** : le paquet n'émet toujours rien, l'abonnement
+est un geste volontaire hors du produit. « Vos traces restent chez vous » reste
+intact, et ne doit jamais être entamé par dérive de ce canal.
+
+**3. Le signal payant est instrumenté.** §8 fait des demandes de payant
+spontanées la ligne qui tranche — sans qu'aucun dispositif ne les suscite. Une
+page « Alfred for teams » décrit l'étage closed-source déjà annoncé (D4) et
+invite à ouvrir une demande qualifiée, capturée par un template d'issue étiqueté
+`teams-inquiry` : datée, attribuable, comptable. Pas de prix, pas de date, pas
+de waitlist annoncée dans les posts — un launch open-source ne se transforme pas
+en collecte de leads.
+
+**4. Le leaderboard devient un moteur, pas un plan B.** Il portait deux rôles
+incompatibles (machine à contenu la plus starrable *et* assurance du re-launch à
+J+120). Une **édition zéro** sort en M2 — 2-3 frameworks, un mandat commun,
+données brutes rejouables. Le jour où le garde-fou §9 doit servir, l'angle est
+déjà rodé au lieu d'être découvert sous pression.
+
 ### 6.1 Principes
 
 Les stars viennent d'une **thèse racontée avec des preuves**. La thèse d'Alfred : *« on déploie des employés IA sans mandat, sans daily, sans dossier de preuve — voici la couche manquante »*. Chaque contenu la ré-encode. Aucun post ne parle du produit sans une preuve concrète (finding, code, GIF).
@@ -298,9 +359,11 @@ Les stars viennent d'une **thèse racontée avec des preuves**. La thèse d'Alfr
 ### 6.2 Pré-launch (compressé : 21 juillet → 3 août, ADR 0009)
 
 Le build ayant fini à J+3, le pré-launch passe de 6 semaines à 2. Cibles
-recalées : **15 noms** d'early users au 1er août (au lieu de 30 à J+45),
-DM personnalisés vers ~8 d'entre eux dès que le GIF existe, objectif
-inchangé de 5 installations le jour du launch + 2-3 témoignages écrits.
+recalées : **30 noms** d'early users au 1er août, DM personnalisés vers ~15
+d'entre eux dès que le GIF existe, objectif inchangé de 5 installations le
+jour du launch + 2-3 témoignages écrits. Le ratio 15 noms → 8 DM d'origine
+supposait une part de contacts chauds ; sans eux (ADR 0027), il faut élargir
+le haut du sourcing pour tenir la même cible d'installations.
 **2 posts build-in-public** au lieu de 6 : (1) le post B4 « comment on
 empêche notre LLM d'halluciner nos rapports » — il est déjà documenté
 dans `docs/verified_nlg.md`, c'est le plus fort ; (2) un post « pourquoi
@@ -308,13 +371,16 @@ vos agents IA ont besoin d'un mandat, pas d'un dashboard ».
 
 **Cadence** : 1 post/semaine, EN + FR (X + LinkedIn), toujours sur un problème concret rencontré pendant la construction. Pas « j'ai codé la brique 3 » mais « voici pourquoi un agent qui résume sa propre activité hallucine, et comment on l'ancre sur la trace » (post issu de B4 par exemple).
 
-**Constituer une liste d'early users pendant le build** (objectif : 30 noms à J+45) :
+**Constituer une liste d'early users pendant le build** (objectif : 30 noms au 1er août). Le point commun de tous ces viviers : la personne a **déjà exprimé publiquement le problème**, donc le DM s'ouvre sur ses propres mots, pas sur un pitch.
 - Auteurs d'issues récentes sur `langchain-ai/langgraph`, `crewAIInc/crewAI`, `openai/openai-agents-python` qui mentionnent "monitoring", "tracing", "logging", "observability".
 - Membres actifs du Discord de LangGraph et CrewAI (chercher les questions manager-side).
 - r/AI_Agents contributeurs récents sur les threads "how do you monitor/audit agents".
-- Ex-collègues systèmes critiques qui déploient de l'IA aujourd'hui (ton réseau — atout unique).
+- Issues sur les outils adjacents (`langfuse/langfuse`, `Arize-ai/phoenix`, `AgentOps-AI/agentops`) qui réclament de l'audit, de la conformité ou du coût par tâche — ceux-là demandent la couche d'Alfred, pas un dashboard de plus.
+- Commentateurs des threads HN « agent reliability » / « LLM observability » (recherche via hn.algolia.com).
+- Auteurs de billets « monitoring AI agents in production » (dev.to, Medium) — ils ont écrit publiquement sur le sujet.
+- r/LocalLLaMA, pré-qualifié pour l'argument « vos traces restent chez vous » — le même angle que le launch, autant y recruter avant.
 
-**Contact** : DM personnalisé à ~10 d'entre eux à J+35, montrer le GIF, demander « would you try this the day it ships? ». Objectif : 5 installations le jour du launch + 2-3 témoignages écrits (« I tried Alfred, here's what I got »).
+**Contact** : DM personnalisé à ~15 d'entre eux, montrer le GIF, demander « would you try this the day it ships? ». Objectif : 5 installations le jour du launch + 2-3 témoignages écrits (« I tried Alfred, here's what I got »). Le sourcing et l'échauffement des comptes Reddit (§6.3) sont **la même activité** : lire ces fils et y répondre sincèrement produit les deux.
 
 **Assets à préparer à J+40** :
 - GIF final de démo (< 15s, boucle propre).
@@ -329,15 +395,25 @@ vos agents IA ont besoin d'un mandat, pas d'un dashboard ».
 
 | Jour | Canal | Angle | Objectif |
 |---|---|---|---|
-| Mardi 14h-16h Paris | **Show HN** | « Show HN: Alfred – daily stand-ups for your AI agents, computed from traces » | Front page, 100+ commentaires. Rester dispo 6h. |
-| Mercredi | **Reddit** r/AI_Agents, r/LangChain, r/LocalLLaMA | Adapté par sub. LocalLLaMA = « surveillez vos agents sans envoyer vos traces à un SaaS ». | 500 upvotes cumulés. |
+| Mardi 14h-16h Paris | **Show HN** | « Show HN: Alfred – daily stand-ups for your AI agents, computed from traces ». Les connecteurs natifs dans le titre ou le premier paragraphe : ils suppriment l'objection n°1 (« je ne sais pas produire vos fichiers OTLP ») avant qu'elle soit posée. | Front page, 100+ commentaires. Rester dispo 6h. |
+| Mercredi | **Reddit** r/AI_Agents, r/LocalLLaMA | Adapté par sub. LocalLLaMA = « surveillez vos agents sans envoyer vos traces à un SaaS ». **Posts texte, jamais posts lien** — l'automod des subs filtre les comptes neufs qui postent une URL, et le post disparaît sans notification. | 500 upvotes cumulés. |
 | Jeudi | **X thread** | GIF + le finding le plus frappant de B4 (verified NLG). | 200+ reposts sur le thread. |
-| Vendredi | **LinkedIn FR** | Angle manager/conformité, ton réseau systèmes critiques. | 5 commentaires de décideurs. |
+| Vendredi | **PRs d'exemples** (LangGraph, OpenAI Agents SDK) + **awesome-lists** | Distribution permanente au lieu d'un pic : une PR mergée est un backlink devant l'audience cible qu'aucun modérateur ne retire. Remplace le post LinkedIn FR, qui supposait un réseau de décideurs (ADR 0027). | 1-2 PRs ouvertes, 3 listes soumises. |
 | Lundi J+7 | **Pitch 4 newsletters IA** (TLDR AI, The Rundown, Ben's Bites, La Revue IA) | Angle « accountability » = angle éditorial frais. | 1-2 pickups. |
+
+**Prérequis Reddit, à traiter avant le launch** : vérifier l'âge et le karma du
+compte. Un compte neuf est filtré par l'automod de r/AI_Agents et r/LocalLLaMA.
+Deux semaines de commentaires sincères dans ces subs suffisent — et c'est le
+même travail que le sourcing des 30 noms (§6.2).
+
+Le post LinkedIn FR peut sortir hors séquence, sans objectif chiffré : il coûte
+20 minutes et ne dépend de personne.
 
 **Signal de réussite du launch** : ≥ 500 stars à J+50, ≥ 20 installs pip, ≥ 5 issues créées par des inconnus.
 
-**Si le launch rate** (< 100 stars à J+50) : ne pas paniquer, re-launch à J+120 avec la v0.2 sous un autre angle (« Alfred now speaks LangGraph natively »). Un HN raté se retente sous un autre angle à 2-3 mois.
+**Si le launch rate** (< 100 stars à J+50) : ne pas paniquer, re-launch à J+120 sous un autre angle — le **leaderboard mensuel de fiabilité** (§6.4), un objet de discussion neuf plutôt qu'une redite du produit. Un HN raté se retente sous un autre angle à 2-3 mois.
+
+**Sur la lecture du résultat** : un Show HN suit une distribution très asymétrique — l'issue la plus probable est nettement sous les 500 stars, seuil qui correspond en pratique à un top 10 front page. Le seuil reste la cible ; il ne doit pas être lu comme le cas de base, sinon un résultat médian passe pour un échec produit.
 
 ### 6.4 Post-launch (J+50 → J+150)
 
@@ -349,10 +425,11 @@ vos agents IA ont besoin d'un mandat, pas d'un dashboard ».
 - **Réactivité issues < 24h** les 3 premiers mois. C'est le signal de star le plus sous-estimé.
 - **PRs d'exemples** dans les repos LangGraph, CrewAI, OpenAI Agents SDK (dossier `examples/`).
 - **Soumission** aux awesome-lists : `awesome-llm-agents`, `awesome-ai-agents`, `awesome-opentelemetry`.
-- **Leaderboard mensuel de fiabilité d'agents** (ancienne Brique 9 du harnais RAG, réactivée ici) — machine à contenu la plus starrable du plan. Premier édition à J+120.
+- **Leaderboard mensuel de fiabilité d'agents** (ancienne Brique 9 du harnais RAG, réactivée ici) — machine à contenu la plus starrable du plan. **Édition zéro en M2** (minimale : 2-3 frameworks, mandat commun, données brutes committées), édition n°1 à J+120 (§6.0 point 4, ADR 0030). L'assurance du re-launch §9 est ainsi un angle déjà rodé, et non un lot à découvrir sous pression.
+- **Une édition de liste mail par release**, plus le finding mensuel ci-dessus (§6.0 point 2). Le seul canal du moteur qui ne soit pas loué.
 
 **Cadence de release** :
-- v0.2 (J+90) : connecteurs natifs LangGraph, CrewAI, OpenAI Agents SDK (priorisés par les *issues*, pas par intuition). Digest Teams. Coûts multi-providers.
+- v0.2 (J+90) : connecteur natif CrewAI, endpoint OTLP HTTP, digest Microsoft Teams, coûts multi-providers — priorisés par les *issues*, pas par intuition. LangGraph et OpenAI Agents SDK sont livrés avant le launch (Briques 12 et 13) et font partie de son angle.
 - v0.3 (J+120) : « entretien de performance » — bench rejoué, dérive de comportement, coût/tâche vérifié.
 - v0.4 (J+150) : chaîne de responsabilité — export dossier de preuve. C'est le pont explicite vers l'étage payant.
 
@@ -407,6 +484,14 @@ YC exige le temps plein si accepté. À J+150 la décision « saut CDI → fonda
 
 **La ligne qui tranche** entre CDI premium / freelance-runway / fondation à J+150 = *demandes de payant spontanées*, pas stars. Si 0 à J+150 avec 1000 stars → le produit intéresse la communauté mais pas les acheteurs → repivoter le pitch payant, ne pas fonder.
 
+**Comment elle se compte** (ADR 0030) : issues étiquetées `teams-inquiry`, plus
+les demandes arrivées par DM ou par mail, reportées manuellement dans le relevé
+hebdo. Jusqu'au 2026-07-26 ce critère n'avait aucune source et aucun dispositif
+pour le susciter — la page « Alfred for teams » (§6.0 point 3) est ce dispositif.
+**Sans elle, un zéro à J+150 ne se lit pas** : on ne peut pas distinguer
+« personne ne veut payer » de « personne n'a jamais su qu'il y avait un étage
+payant », et la décision fondateur reposerait sur une absence auto-organisée.
+
 ---
 
 ## 9. Risques et garde-fous
@@ -432,7 +517,7 @@ Décisions actives de *ne pas* faire, pour éviter la dérive :
 - ❌ Bench rejoué / dérive comportement (v0.3).
 - ❌ Endpoint OTLP HTTP (v0.2, fichiers OTLP JSON suffisent pour v0.1).
 - ❌ Connecteurs natifs LangGraph/CrewAI/OpenAI (v0.2, priorisés par issues).
-- ❌ Digest Teams (v0.2), Discord (jamais sauf demande insistante).
+- ❌ Digest Microsoft Teams (v0.2), Discord (jamais sauf demande insistante).
 - ❌ Base de données autre que SQLite (jamais en v0.x — zéro infra est un feature).
 - ❌ Auth, RBAC, multi-tenancy (v0.4+, closed-source).
 - ❌ Export dossier de preuve (v0.4 — c'est le pont vers le payant).
@@ -453,7 +538,9 @@ de squat (`alfred-ai` vérifié libre le 2026-07-18) :
       l'adresse définitive). Réserver le domaine (`getalfred.dev` ou `alfred.sh`).
 - [ ] Enregistrer le GIF de démo (< 15 s, boucle propre) → haut du README.
 - [ ] Ouvrir les 3 issues « good first issue ».
-- [ ] Basculer le quickstart README sur `pip install alfred-ai`.
+- [x] Basculer le quickstart README sur `pip install alfred-ai` (fait le
+      2026-07-26 ; la ligne ne devient vraie qu'à la publication — publier
+      avant de merger sur `main`).
 - [ ] Tag `v0.1.0` + release PyPI finale.
 
 Puis, semaines du 21 et 28 juillet (pré-launch compressé, §6.2) :
@@ -606,6 +693,148 @@ réseau).
 
 **Definition of done** : le test 5 minutes BYOA passe, chronométré par une
 personne qui n'a pas écrit le code.
+
+### Brique 12 — Connecteur natif LangGraph (ajoutée en v1.3, ADR 0014)
+
+**Objectif** : un dev qui utilise LangGraph n'instrumente plus à la main.
+Il attache un callback handler à l'invocation de son graphe et Alfred
+enregistre ce que le graphe a réellement fait. Cible v0.2 avancée sur
+demande produit — cloisonnée derrière l'extra optionnel `[langgraph]`, le
+cœur garde `pyyaml` comme seule dépendance.
+
+**Forme cible** (les ~3 lignes promises par `GROWTH_PLAN_3M.md`) :
+
+```python
+from alfred.instrument import AgentTracer
+from alfred.integrations.langgraph import AlfredCallbackHandler
+
+tracer = AgentTracer(agent="support-bot", traces_dir="traces")
+graph.invoke(inputs, config={"callbacks": [AlfredCallbackHandler(tracer)]})
+tracer.flush()
+```
+
+Le handler ne réémet aucune clé : il pilote les context managers prouvés
+d'`AgentTracer` (`__enter__` sur `*_start`, `__exit__` sur `*_end`, indexés
+par `run_id`). La garantie « chaque fait ancré sur un event ID réel » (D5)
+est héritée, pas réimplémentée. `tracer.py` est inchangé.
+
+**Tests falsifiables** (`tests/test_integration_langgraph.py`, vrai graphe
+LangGraph + fake chat model, zéro réseau) :
+- `test_graph_run_ingests` : run → 1 `AGENT_TASK`, ≥1 `LLM_CALL`, ≥1
+  `TOOL_CALL`, event IDs uniques, enfants rattachés à la tâche.
+- `test_tool_arguments_flattened` : `tool.arguments.amount_eur` sur le span
+  outil ; `test_tool_error_recorded_as_status` : outil qui lève → statut
+  `error`.
+- `test_llm_usage_propagated` : tokens réels propagés depuis `usage_metadata`.
+- `test_digest_from_graph_trace_anchored` : chaque ligne du digest a
+  `sources` non-vide et ⊆ event IDs.
+- `test_overlimit_yields_forbidden_action` : approbation à 250 € sous mandat
+  cap 100 € → exactement une `Deviation FORBIDDEN_ACTION` ancrée sur l'event
+  ID du tool call ; `test_conform_run_yields_no_deviations` : miroir à zéro.
+
+**Definition of done** : idem §5 (`pytest -q`, `ruff`, `mypy --strict src/`
+verts) + `examples/agents/langgraph_bot/` (agent jouet zéro clé) et section
+« LangGraph connector » dans `docs/integrate.md`.
+
+### Brique 13 — Connecteur natif OpenAI Agents SDK (F5 première moitié, ADR 0021)
+
+**Objectif** : un dev qui utilise l'OpenAI Agents SDK (`openai-agents`)
+n'instrumente plus à la main. Il enregistre un `TracingProcessor` et Alfred
+enregistre ce que le run a réellement fait. Première moitié de F5 (§13),
+démarrée sur demande produit du 2026-07-23 — cloisonnée derrière l'extra
+optionnel `[openai-agents]`, le cœur garde `pyyaml` comme seule dépendance.
+CrewAI (l'autre moitié de F5) reste une brique à venir.
+
+**Forme cible** (les ~3 lignes, patron identique à la Brique 12) :
+
+```python
+from agents import Agent, Runner, set_trace_processors
+from alfred.instrument import AgentTracer
+from alfred.integrations.openai_agents import AlfredTracingProcessor
+
+tracer = AgentTracer(agent="support-bot", traces_dir="traces")
+set_trace_processors([AlfredTracingProcessor(tracer)])
+Runner.run_sync(agent, "handle the ticket")
+tracer.flush()
+```
+
+Le processor ne réémet aucune clé : il pilote les context managers prouvés
+d'`AgentTracer` depuis les événements de tracing du SDK (trace racine →
+`session()`, span de génération/réponse → `llm_call()`, span de fonction →
+`tool_call()`), indexés par `trace_id`. La garantie D5 est héritée, pas
+réimplémentée. `tracer.py` est inchangé.
+
+**Tests falsifiables** (`tests/test_integration_openai_agents.py`, vrai
+`Runner.run_sync` + client OpenAI factice sur `httpx.MockTransport`, zéro
+réseau, zéro clé) : `test_run_ingests` (kinds corrects, event IDs uniques,
+enfants rattachés à la tâche), `test_tool_arguments_flattened`,
+`test_tool_error_recorded_as_status` (outil en échec → statut `error`, run non
+interrompu — l'erreur d'outil est non fatale dans ce SDK),
+`test_llm_usage_propagated`, `test_digest_from_trace_anchored` (chaque ligne du
+digest a `sources` non-vide ⊆ event IDs), `test_overlimit_yields_forbidden_action`
+(approbation 250 € sous cap 100 € → exactement une `FORBIDDEN_ACTION` ancrée sur
+l'event ID du tool call) et son miroir `test_conform_run_yields_no_deviations`.
+
+**Definition of done** : idem §5 (`pytest -q`, `ruff`, `mypy --strict src/`
+verts) + `examples/agents/openai_agents_bot/` (agent jouet zéro clé) et section
+« OpenAI Agents SDK connector » dans `docs/integrate.md`.
+
+---
+
+## 13. Features produit post-launch (backlog priorisé, 2026-07-22)
+
+Cinq features retenues pour améliorer le produit *et* l'expérience client,
+classées par levier. Chacune reste fidèle à la thèse (chaque affirmation ancrée
+sur un event ID, rapport *manager* pas dashboard *dev*) et exige un ADR daté
+avant code, mêmes DoD que §5 (`pytest -q`, `ruff`, `mypy --strict src/` verts).
+
+| # | Feature | Pourquoi (expérience client) | Fit roadmap |
+|---|---|---|---|
+| F1 | **Alertes de déviation en temps réel** — push Slack immédiat dès qu'une passe trouve une déviation, en plus du digest quotidien. | Un manager ne découvre plus une erreur à 10 k€ le lendemain matin. Le plus gros trou d'expérience du produit. | Complémentaire, non listé au backlog §10. **ADR 0017.** |
+| F2 | **Bootstrap du mandat depuis les traces + `alfred mandate lint`** — `mandate init --from-traces` propose outils autorisés et budget observés ; `lint` valide le YAML. | Tue la falaise d'onboarding (écrire le `mandate.yaml` juste). Raccourcit le time-to-value du « test 5 minutes BYOA » (Brique 11). | Prolonge la Brique 11. Non listé au backlog. |
+| F3 | **Digest contextualisé par baseline glissante** — chaque chiffre gagne sa comparaison (« Coût 3.42 € — +180 % vs moy. 7 j ⚠️ »). | Transforme un nombre brut en jugement (« est-ce normal ? »). Cœur du créneau « rapport manager ». | Version *légère* de la dérive de comportement (v0.3), baseline seulement — pas le bench rejoué. **ADR 0019.** |
+| F4 | **Rapport HTML statique partageable** (`alfred report --html`) — fichier autonome, chaque ligne cliquable vers ses events source. | Le digest Slack est éphémère ; un manager veut *forwarder* la preuve navigable. | À cadrer en lecture seule, **délibérément plus pauvre** que l'export « dossier de preuve » payant (v0.4) pour ne pas le cannibaliser. Zéro infra (fichier généré, pas de dashboard web §10). **ADR 0020.** |
+| F5 | **Connecteurs natifs CrewAI + OpenAI Agents SDK** — la recette du connecteur LangGraph (Brique 12) pour les deux autres frameworks dominants. | Le *portail* avant toute expérience : un client ne peut pas brancher son stack sinon. | Roadmapé v0.2 (§6.4). **OpenAI Agents SDK livré (Brique 13, ADR 0021)** ; CrewAI restant. |
+
+**Mention honorable — LIVRÉE (ADR 0022, 2026-07-24)** : redaction PII/secrets
+avant stockage/envoi (feature de confiance pour les secteurs régulés cibles YC
+— assurance/finance/santé). Promue de mention honorable au périmètre livré à la
+préparation d'un usage client réel : champ `redact:` déclaratif dans le mandat,
+redaction à l'ingestion (la valeur brute n'entre jamais dans SQLite), hash
+stable. Voir `docs/adr/0022-pii-redaction.md`.
+
+**Idée en réserve — sortie d'enforcement optionnelle** : sur détection d'une
+déviation, appeler un hook externe (kill switch, révocation de credentials,
+blocage d'outil) en plus du reporting. Ferait passer Alfred de « je constate /
+j'alerte » à « j'alerte *et* je peux déclencher une coupure », sans trahir la
+règle produit : le hook reste **strictement séparé** du moteur de reporting, et
+chaque déclenchement reste ancré à l'`event_id` de la déviation qui l'a causé.
+Motivé par les incidents type « agent qui enchaîne N milliers d'actions
+autonomes sur un week-end sans humain dans la boucle » : l'alerte near-real-time
+(F1) réduit la fenêtre, l'enforcement la fermerait. Limite assumée à documenter
+dans l'ADR : reste aveugle à ce qui sort du périmètre tracé (un agent qui
+« s'échappe » de son instrumentation). À cadrer en ADR daté avant tout code.
+
+**Idée en réserve — vitrine Hugging Face Space (démo zéro-install)** : un Space
+Gradio où l'on dépose un fichier de trace (OTLP/NDJSON) et où s'affichent le
+digest ancré et les déviations typées, URL partageable, sans `pip install` ni
+clé API. Prolonge le récit « test 5 minutes, sans credential » (Brique 11) en
+enlevant même le clone. Peu de logique neuve : fine couche Gradio par-dessus le
+moteur existant (`build_digest`, rendu markdown/stdout). **Distribution/démo, pas
+protection** — ne protège pas HF (hors sujet IDS/EDR). Canal du paquet reste
+PyPI ; le Space est une vitrine, pas un registre. À cadrer en ADR daté.
+
+**Idée en réserve — connecteur natif smolagents** : appliquer la recette du
+connecteur LangGraph (Brique 12) au framework d'agents de Hugging Face —
+callback/instrumentation → trace ancrée, sans réinstrumentation. Portail (pas
+démo) vers l'écosystème agents HF. Même patron que F5 (CrewAI / OpenAI Agents) ;
+vraie brique (module `integrations/smolagents.py` + exemple + tests + ADR daté).
+
+**Séquencement retenu** : F1 puis F2 d'abord — plus fort levier d'expérience
+*sans* toucher au périmètre payant, et les plus rapides à shipper post-launch.
+**F1–F4 sont livrées** (ADR 0017, 0018, 0019, 0020) ; **F5 est démarrée** — le
+connecteur OpenAI Agents SDK est livré (Brique 13, ADR 0021), le connecteur
+CrewAI reste (v0.2, priorisé par la demande réelle).
 
 ---
 

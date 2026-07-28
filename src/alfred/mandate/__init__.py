@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from alfred.mandate.engine import evaluate
+from alfred.mandate.engine import evaluate, evaluate_day, evaluate_trace
 from alfred.mandate.model import (
     Deviation,
     DeviationType,
@@ -22,5 +22,7 @@ __all__ = [
     "MandateError",
     "dump_mandate",
     "evaluate",
+    "evaluate_day",
+    "evaluate_trace",
     "load_mandate",
 ]

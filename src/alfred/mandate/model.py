@@ -23,6 +23,10 @@ class DeviationType(StrEnum):
     BUDGET_EXCEEDED = "budget_exceeded"
     FORBIDDEN_ACTION = "forbidden_action"
     ESCALATION_MISSED = "escalation_missed"
+    LOOP_DETECTED = "loop_detected"
+    REQUIRED_ACTION_MISSING = "required_action_missing"
+    COST_MISMATCH = "cost_mismatch"
+    TOOL_UNIDENTIFIED = "tool_unidentified"
 
 
 def _compare(value: float, operator: str, threshold: float) -> bool:
@@ -75,12 +79,40 @@ class ForbiddenRule:
 
 
 @dataclass(frozen=True, slots=True)
+class RequiredAction:
+    """A conditional obligation: if `when_tool` runs, `require_tool` must too.
+
+    Both within the same trace. The deviation anchors to the `when_tool`
+    event(s) that create the obligation — mirroring `escalation_missed`, which
+    anchors to the events that breach the threshold, so a *missing* action
+    still carries a real event ID (the product's absolute rule).
+    """
+
+    when_tool: str
+    require_tool: str
+
+
+@dataclass(frozen=True, slots=True)
 class Mandate:
     agent: str
     allowed_tools: frozenset[str]
     daily_budget_eur: float
     forbidden_actions: tuple[str | ForbiddenRule, ...]
     escalate_when: tuple[EscalationRule, ...]
+    required_actions: tuple[RequiredAction, ...] = ()
+    # Tools whose call proves the agent escalated to a human. An `escalate_when`
+    # threshold is only excused by a real call to one of these (ADR 0023
+    # decision 4) — never by a self-declared attribute. Empty means no
+    # escalation can be proven, so every breach is reported; `mandate lint`
+    # raises an error when `escalate_when` is declared without it.
+    escalation_tools: frozenset[str] = frozenset()
+    # A run of this many identical consecutive tool calls (same tool + same
+    # arguments) is read as an agent spinning without progress.
+    loop_threshold: int = 3
+    # Attribute values to mask at ingestion, before they reach the trace store
+    # (ADR 0022). Each name matches a bare tool-argument name (`customer_email`
+    # → `tool.arguments.customer_email`) or a full attribute key (`gen_ai.prompt`).
+    redact: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)

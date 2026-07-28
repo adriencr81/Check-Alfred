@@ -17,4 +17,5 @@ def otlp_sample_path() -> Path:
 
 @pytest.fixture
 def otlp_sample_payload(otlp_sample_path: Path) -> dict[str, object]:
-    return json.loads(otlp_sample_path.read_text(encoding="utf-8"))
+    payload: dict[str, object] = json.loads(otlp_sample_path.read_text(encoding="utf-8"))
+    return payload

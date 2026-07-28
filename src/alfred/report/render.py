@@ -21,15 +21,42 @@ LABELS: dict[LineKind, str] = {
     LineKind.ESCALATIONS: "Escalations",
 }
 
+_DEVIATIONS_LABEL = "Deviations (mandate)"
+
+# Left-justify every `label:` to the widest label so the value column lines up
+# vertically across all rows (metric lines + the deviations header), matching the
+# aligned digest in the README. Values are then right-justified in a fixed field.
+_LABEL_WIDTH = max(len(label) for label in (*LABELS.values(), _DEVIATIONS_LABEL)) + 1
+_VALUE_WIDTH = 10
+
 _MAX_DISPLAYED_SOURCES = 3
 _TRUNCATE_IDS_LONGER_THAN = 12
 _DISPLAYED_ID_PREFIX = 8
+
+# A number that doubles (or halves) vs its rolling mean earns a ⚠️ (F3,
+# docs/adr/0019). Symmetric: a collapse can matter as much as a spike.
+_WARN_DELTA = 1.0
 
 
 def format_value(line: Line) -> str:
     if line.kind is LineKind.COST_EUR:
         return f"{line.value:.2f} €"
     return str(int(line.value))
+
+
+def format_baseline(line: Line) -> str | None:
+    """Display form of a line's rolling comparison, e.g. `+180% vs 7-day avg ⚠️`.
+
+    Returns `None` when the line carries no baseline. The mean is always > 0
+    when a `Baseline` exists (see `report.model.Baseline`), so the ratio is
+    always defined.
+    """
+    baseline = line.baseline
+    if baseline is None:
+        return None
+    delta = (line.value - baseline.mean) / baseline.mean
+    warn = " ⚠️" if abs(delta) >= _WARN_DELTA else ""
+    return f"{delta * 100:+.0f}% vs {baseline.window_days}-day avg{warn}"
 
 
 def _format_event_id(event_id: EventId) -> str:
@@ -51,23 +78,42 @@ def format_sources(event_ids: tuple[EventId, ...]) -> str:
     return "[evt:" + ", ".join(shown) + suffix + "]"
 
 
+def _render_row(label: str, value: str) -> str:
+    """`label:` left-justified to the shared width, then the value right-justified,
+    so value columns align vertically across metric and deviation rows."""
+    return f"{label + ':':<{_LABEL_WIDTH}} {value:>{_VALUE_WIDTH}}"
+
+
 def _render_line(line: Line) -> str:
-    label = LABELS[line.kind]
-    return f"{label}: {format_value(line):>10}   {format_sources(line.sources)}"
+    row = f"{_render_row(LABELS[line.kind], format_value(line))}   {format_sources(line.sources)}"
+    baseline = format_baseline(line)
+    return f"{row}   ({baseline})" if baseline is not None else row
 
 
-def _render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
+def plain(text: str) -> str:
+    """Strip control characters from a trace-derived string.
+
+    Tool names and argument values are chosen by the audited agent and land on
+    a terminal: a `\\r` or an ANSI sequence rewrites lines already printed, so a
+    deviation can scrub itself off the operator's screen. Same stance as the
+    Slack sink — escape at the sink, keep the raw value in the store (ADR 0026
+    decision 1).
+    """
+    return "".join(character for character in text if character >= " " and character != "\x7f")
+
+
+def render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
     if not deviations:
         return []
     if len(deviations) == 1:
         deviation = deviations[0]
         return [
-            f"Deviations (mandate): {1:>10}   {format_sources(deviation.event_ids)} "
-            f"— {deviation.type.value}: {deviation.message}"
+            f"{_render_row(_DEVIATIONS_LABEL, '1')}   {format_sources(deviation.event_ids)} "
+            f"— {deviation.type.value}: {plain(deviation.message)}"
         ]
-    rows = [f"Deviations (mandate): {len(deviations):>10}"]
+    rows = [_render_row(_DEVIATIONS_LABEL, str(len(deviations)))]
     rows.extend(
-        f"  - {deviation.type.value}: {deviation.message}   "
+        f"  - {deviation.type.value}: {plain(deviation.message)}   "
         f"{format_sources(deviation.event_ids)}"
         for deviation in deviations
     )
@@ -75,7 +121,7 @@ def _render_deviations(deviations: tuple[Deviation, ...]) -> list[str]:
 
 
 def render(digest: Digest) -> str:
-    rows = [f"Alfred · {digest.agent} · {digest.date.isoformat()}", ""]
+    rows = [plain(f"Alfred · {digest.agent} · {digest.date.isoformat()}"), ""]
     rows.extend(_render_line(line) for line in digest.lines)
-    rows.extend(_render_deviations(digest.deviations))
+    rows.extend(render_deviations(digest.deviations))
     return "\n".join(rows)

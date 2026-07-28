@@ -8,30 +8,148 @@ docs/adr/0007-brique5-delivery-cli-design.md); `demo` lands in Brique 6
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
 from alfred import __version__
-from alfred.config import ConfigError, init_project, load_config
+from alfred.config import AlfredConfig, ConfigError, build_llm_client, init_project, load_config
 from alfred.deliver import slack, stdout
 from alfred.demo import build_demo_payload, demo_mandate
+from alfred.mandate.bootstrap import suggest_mandate
+from alfred.mandate.lint import Severity, lint_mandate
 from alfred.mandate.model import MandateError
-from alfred.mandate.yaml_io import load_mandate
+from alfred.mandate.yaml_io import dump_mandate, load_mandate
+from alfred.narrate.llm import LLMClient, NarrateError, narrate
+from alfred.narrate.render import render_text
 from alfred.report.build import build_digest
-from alfred.trace.ingest import ingest_otlp_json
+from alfred.report.html import render_html
+from alfred.report.model import Digest
+from alfred.schedule import ScheduleError, build_cron_line, build_github_actions_workflow
+from alfred.trace.ingest import ingest_otlp_file, ingest_otlp_json
+from alfred.trace.model import TraceEvent, TraceIngestionError
+from alfred.trace.redact import Redactor, redactor_for
 from alfred.trace.store import TraceStore
-from alfred.watch import watch_once
+from alfred.watch import QuarantinedTrace, WatchPass, build_digests, watch_loop, watch_once
+
+# Shown when `--narrate` is requested but no LLM endpoint resolves (missing
+# config keys or the API-key env var). Fail loudly rather than fall back to the
+# raw digest — the user asked for narration.
+_NARRATE_UNCONFIGURED = (
+    "alfred: --narrate needs an LLM endpoint — set llm_base_url and llm_model in "
+    ".alfred/config.toml (or via `alfred init --llm-base-url URL --llm-model NAME`) "
+    "and export ALFRED_LLM_API_KEY."
+)
+
+# Floor for `watch --loop --interval`: below this a pass just re-globs the
+# directory in a tight spin, burning CPU for no gain. Clamp up, but say so.
+_MIN_INTERVAL_S = 1.0
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
     try:
-        init_project(args.directory, agent=args.agent)
+        init_project(
+            args.directory,
+            agent=args.agent,
+            slack_webhook=args.slack_webhook,
+            llm_base_url=args.llm_base_url,
+            llm_model=args.llm_model,
+        )
     except ConfigError as exc:
         print(f"alfred init: {exc}", file=sys.stderr)
         return 1
     print(f"Initialized Alfred project in {Path(args.directory).resolve()}")
     return 0
+
+
+def _resolve_narrate_client(
+    config: AlfredConfig, *, enabled: bool
+) -> tuple[LLMClient | None, bool]:
+    """Resolve the narration client for a command that accepts `--narrate`.
+
+    Returns `(client, ok)`: `(None, True)` when `--narrate` is off; `(None,
+    False)` — after printing the shared guidance — when it is on but no endpoint
+    resolves, so the caller just `return 1`. The single source of the fail-loud
+    behavior shared by `watch` and `report`.
+    """
+    if not enabled:
+        return None, True
+    client = build_llm_client(config)
+    if client is None:
+        print(_NARRATE_UNCONFIGURED, file=sys.stderr)
+        return None, False
+    return client, True
+
+
+def _deliver(
+    digests: list[Digest],
+    config: AlfredConfig,
+    *,
+    alerts: bool = False,
+    narrate_client: LLMClient | None = None,
+    announce_empty: bool = True,
+) -> None:
+    """Deliver each digest to stdout and, if configured, to Slack.
+
+    Shared by the single-pass and `--loop` paths. When empty (no new trace
+    files) it prints one notice; in loop mode that keeps each idle pass quiet
+    but visible. `announce_empty` suppresses that notice when the pass *did*
+    find files but quarantined them all: "no new trace files" reads as all
+    clear, and the quarantine report right after it says the opposite. With
+    `alerts` set, a digest that carries deviations also
+    triggers an immediate Slack alert (ADR 0017) alongside the digest. With
+    `narrate_client` set, stdout gets the verified LLM prose (`narrate` →
+    `render_text`) instead of the raw digest; a `NarrateError` — endpoint down
+    or a hallucinated citation — propagates and fails the run rather than
+    silently degrading (PLAN D5). Slack keeps the raw Block Kit digest.
+    """
+    if not digests:
+        if announce_empty:
+            print("alfred watch: no new trace files.")
+        return
+    for digest in digests:
+        if narrate_client is not None:
+            print(render_text(narrate(digest, narrate_client)))
+        else:
+            stdout.deliver(digest)
+        if config.slack_webhook_url:
+            slack.send(digest, config.slack_webhook_url)
+            if alerts and digest.deviations:
+                slack.send_alert(digest, config.slack_webhook_url)
+
+
+def _report_quarantine(quarantined: tuple[QuarantinedTrace, ...], project_dir: Path) -> None:
+    """Name every trace file Alfred could not read, on every pass.
+
+    A file it cannot parse is a hole in the audit, so it is repeated until a
+    human fixes or removes it (ADR 0024 decision 3) — never announced once and
+    forgotten.
+    """
+    for trace in quarantined:
+        print(f"alfred watch: quarantined {trace.name} — {trace.reason}", file=sys.stderr)
+    if quarantined:
+        print(
+            f"alfred watch: {len(quarantined)} trace file(s) could not be read and are NOT "
+            f"covered by this digest — fix or remove them (recorded in "
+            f"{project_dir / '.alfred' / 'seen.json'}).",
+            file=sys.stderr,
+        )
+
+
+def _report_conflicts(conflicts: tuple[TraceEvent, ...]) -> None:
+    """Name every event that tried to overwrite one already stored.
+
+    The stored anchor wins (ADR 0026 decision 4), so the digest stays true to
+    what was first recorded — but an agent re-emitting a span with different
+    content is trying to rewrite evidence, and that has to be said out loud.
+    """
+    for event in conflicts:
+        print(
+            f"alfred watch: refused to overwrite evidence {event.event_id} "
+            f"(trace {event.trace_id}) — the stored event differs from the re-emitted one",
+            file=sys.stderr,
+        )
 
 
 def _cmd_watch(args: argparse.Namespace) -> int:
@@ -43,22 +161,249 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         print(f"alfred watch: {exc}", file=sys.stderr)
         return 1
 
+    if args.alerts and not config.slack_webhook_url:
+        print(
+            "alfred watch: --alerts needs a Slack webhook; none configured — run "
+            "`alfred init --slack-webhook URL`. Deviations still show in the digest.",
+            file=sys.stderr,
+        )
+
+    narrate_client, ok = _resolve_narrate_client(config, enabled=args.narrate)
+    if not ok:
+        return 1
+
+    traces_dir = Path(args.traces_dir)
+    if not traces_dir.is_dir():
+        print(
+            f"alfred watch: traces directory not found: {traces_dir} — "
+            "check the path (this is where your agent writes its *.json trace files).",
+            file=sys.stderr,
+        )
+        return 1
+
+    interval = args.interval
+    if args.loop and interval < _MIN_INTERVAL_S:
+        print(
+            f"alfred watch: --interval {interval} too low; using {_MIN_INTERVAL_S}s.",
+            file=sys.stderr,
+        )
+        interval = _MIN_INTERVAL_S
+
+    config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
+    store = TraceStore(config.trace_db_path)
+    quarantined: tuple[QuarantinedTrace, ...] = ()
+    conflicts: tuple[TraceEvent, ...] = ()
+
+    def _handle(result: WatchPass) -> None:
+        _deliver(
+            result.digests,
+            config,
+            alerts=args.alerts,
+            narrate_client=narrate_client,
+            announce_empty=not result.quarantined,
+        )
+        _report_quarantine(result.quarantined, project_dir)
+        _report_conflicts(result.conflicts)
+
+    def _handle_in_loop(result: WatchPass) -> None:
+        """Same handling, but a delivery outage must not end the supervision.
+
+        In `--loop` Alfred *is* the running process: letting a Slack or LLM
+        failure propagate stopped the watch until someone noticed (ADR 0024
+        decision 7). A single pass keeps failing loudly — there, cron decides
+        whether to retry.
+        """
+        try:
+            _handle(result)
+        except (slack.DeliverError, NarrateError) as exc:
+            print(f"alfred watch: delivery failed, continuing: {exc}", file=sys.stderr)
+
+    try:
+        if args.loop:
+            watch_loop(
+                project_dir, traces_dir, mandate, store, _handle_in_loop, interval_s=interval
+            )
+        else:
+            result = watch_once(project_dir, traces_dir, mandate, store)
+            quarantined, conflicts = result.quarantined, result.conflicts
+            _handle(result)
+    except KeyboardInterrupt:
+        print("\nalfred watch: stopped.")
+    except (TraceIngestionError, OSError) as exc:
+        print(f"alfred watch: cannot read traces: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+    # A quarantined file means the digest covers less than the directory does,
+    # and a conflict means something tried to rewrite what it covers: exit
+    # non-zero so a cron run surfaces either, having delivered the rest.
+    return 1 if quarantined or conflicts else 0
+
+
+def _read_trace_events(traces_dir: Path, redactor: Redactor | None = None) -> list[TraceEvent]:
+    """Ingest every OTLP JSON file in `traces_dir`, in filename order.
+
+    Raises `OSError` if a file cannot be read — each caller frames its own
+    message. Shared by `report` (which passes the project's `Redactor` so PII
+    is masked before storage, ADR 0022) and `mandate init` (which needs only
+    tool names and budget, so it leaves values untouched).
+    """
+    events: list[TraceEvent] = []
+    for file_path in sorted(traces_dir.glob("*.json")):
+        events.extend(ingest_otlp_file(file_path, redactor))
+    return events
+
+
+def _slug(text: str) -> str:
+    """A filesystem-safe slug for a report filename (keeps alnum, '-' and '_')."""
+    return re.sub(r"[^A-Za-z0-9_-]+", "-", text).strip("-") or "agent"
+
+
+# The HTML report is what a developer forwards to whoever answers for the agent
+# (ADR 0030 decision 1). The file itself stays free of any external reference —
+# ADR 0020 decision 2, and it gets filed for audit — so the pointer is printed
+# here instead, to the person actually running the command. See ADR 0030 dec. 5.
+_TEAMS_URL = "https://adriencr81.github.io/Check-Alfred/teams/"
+
+
+def _cmd_report(args: argparse.Namespace) -> int:
+    if not args.html:
+        print(
+            "alfred report: choose an output format — only --html is available.",
+            file=sys.stderr,
+        )
+        return 1
+
+    project_dir = Path(args.project)
+    try:
+        config = load_config(project_dir)
+        mandate = load_mandate(config.mandate_path)
+    except (ConfigError, MandateError) as exc:
+        print(f"alfred report: {exc}", file=sys.stderr)
+        return 1
+
+    narrate_client, ok = _resolve_narrate_client(config, enabled=args.narrate)
+    if not ok:
+        return 1
+
+    traces_dir = Path(args.traces_dir)
+    try:
+        events = _read_trace_events(traces_dir, redactor_for(project_dir, mandate.redact))
+    except (TraceIngestionError, OSError) as exc:
+        print(f"alfred report: cannot read traces: {exc}", file=sys.stderr)
+        return 1
+    if not events:
+        print(
+            f"alfred report: no trace events found in {traces_dir} (expected *.json)",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Ingest into the store (idempotent) so each day's digest carries its rolling
+    # baseline (F3); unlike `watch`, `report` tracks no seen files, so it always
+    # re-renders — a shareable report is meant to be regenerated on demand.
     config.trace_db_path.parent.mkdir(parents=True, exist_ok=True)
     store = TraceStore(config.trace_db_path)
     try:
-        digests = watch_once(project_dir, Path(args.traces_dir), mandate, store)
+        store.put_many(events)
+        digests = build_digests(mandate, events, store)
     finally:
         store.close()
 
-    if not digests:
-        print("alfred watch: no new trace files.")
-        return 0
-
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
     for digest in digests:
-        stdout.deliver(digest)
-        if config.slack_webhook_url:
-            slack.send(digest, config.slack_webhook_url)
+        narrative = (
+            tuple(sentence.text for sentence in narrate(digest, narrate_client).sentences)
+            if narrate_client is not None
+            else ()
+        )
+        path = out_dir / f"alfred-{_slug(digest.agent)}-{digest.date.isoformat()}.html"
+        path.write_text(render_html(digest, narrative=narrative), encoding="utf-8")
+        print(f"alfred report: wrote {path}")
+    if digests:
+        print(
+            f"\nForwarding this to whoever is accountable? When the open package "
+            f"stops covering what they answer for: {_TEAMS_URL}"
+        )
     return 0
+
+
+def _cmd_schedule(args: argparse.Namespace) -> int:
+    try:
+        hour_str, minute_str = args.at.split(":", 1)
+        hour, minute = int(hour_str), int(minute_str)
+    except ValueError:
+        print(f"alfred schedule: --at must be HH:MM, got {args.at!r}", file=sys.stderr)
+        return 1
+    # A workflow always runs from the repository root, so --project has no
+    # meaning there. Say so rather than ignore it silently.
+    if args.github_actions and args.project != ".":
+        print(
+            "alfred schedule: --project does not apply to --github-actions "
+            "(a workflow runs from the repository root)",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        if args.github_actions:
+            rendered = build_github_actions_workflow(args.traces_dir, hour=hour, minute=minute)
+        else:
+            rendered = build_cron_line(args.project, args.traces_dir, hour=hour, minute=minute)
+    except ScheduleError as exc:
+        print(f"alfred schedule: {exc}", file=sys.stderr)
+        return 1
+    print(rendered, end="" if args.github_actions else "\n")
+    return 0
+
+
+def _cmd_mandate_lint(args: argparse.Namespace) -> int:
+    findings = lint_mandate(args.path)
+    for finding in findings:
+        stream = sys.stderr if finding.severity is Severity.ERROR else sys.stdout
+        print(f"alfred mandate lint: {finding.severity}: {finding.message}", file=stream)
+    if any(finding.severity is Severity.ERROR for finding in findings):
+        return 1
+    warnings = len(findings)
+    tail = f" ({warnings} warning{'s' if warnings != 1 else ''})" if warnings else ""
+    print(f"alfred mandate lint: {args.path} is valid{tail}")
+    return 0
+
+
+_SUGGESTED_HEADER = (
+    "# Suggested mandate — observed from your traces.\n"
+    "# Review before use: allowed_tools and daily_budget_eur are what the agent\n"
+    "# DID, not what it MAY do. Add headroom to the budget, and fill in\n"
+    "# forbidden_actions / escalate_when — policy the human declares, never\n"
+    "# inferred from a trace.\n"
+)
+
+
+def _cmd_mandate_init(args: argparse.Namespace) -> int:
+    traces_dir = Path(args.from_traces)
+    try:
+        events = _read_trace_events(traces_dir)
+    except (TraceIngestionError, OSError) as exc:
+        print(f"alfred mandate init: cannot read traces: {exc}", file=sys.stderr)
+        return 1
+    if not events:
+        print(
+            f"alfred mandate init: no trace events found in {traces_dir} (expected *.json)",
+            file=sys.stderr,
+        )
+        return 1
+    mandate = suggest_mandate(events, agent=args.agent)
+    print(_SUGGESTED_HEADER + dump_mandate(mandate), end="")
+    return 0
+
+
+# The package sends nothing home — deliberately, and it is an argument we make
+# publicly. That leaves self-reporting as the only way to learn whether anyone
+# actually ran Alfred, so the demo asks, once, at the end. See ADR 0027
+# decision 9.
+_SHOW_YOUR_DIGEST_URL = (
+    "https://github.com/adriencr81/Check-Alfred/issues/new?template=show_your_digest.md"
+)
 
 
 def _cmd_demo(args: argparse.Namespace) -> int:
@@ -67,16 +412,15 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     mandate = demo_mandate(args.agent)
     digest = build_digest(mandate, events, events[0].start_time.date())
     stdout.deliver(digest)
+    print(
+        f"\nThat digest came from a scripted agent. Point Alfred at a real one —\n"
+        f"every line stays anchored to an event ID, so the proof travels with it.\n"
+        f"Show us what it caught: {_SHOW_YOUR_DIGEST_URL}"
+    )
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Redirected output on Windows defaults to cp1252, which can't encode the
-    # help text's `→` (same guard as alfred.deliver.stdout for digest text).
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8")
-
     parser = argparse.ArgumentParser(
         prog="alfred", description="Alfred — accountability layer for AI employees"
     )
@@ -88,6 +432,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     init_parser.add_argument("directory", nargs="?", default=".")
     init_parser.add_argument("--agent", default="your-agent")
+    init_parser.add_argument(
+        "--slack-webhook",
+        default=None,
+        metavar="URL",
+        help="Slack incoming webhook (https://…); written to config so `watch` posts the digest",
+    )
+    init_parser.add_argument(
+        "--llm-base-url",
+        default=None,
+        metavar="URL",
+        help="OpenAI-compatible base URL for `--narrate` (e.g. https://api.openai.com/v1); "
+        "written to config. The API key is read from env ALFRED_LLM_API_KEY, never stored.",
+    )
+    init_parser.add_argument(
+        "--llm-model",
+        default=None,
+        metavar="NAME",
+        help="model name for `--narrate` (e.g. gpt-4o-mini); written to config",
+    )
     init_parser.set_defaults(func=_cmd_init)
 
     watch_parser = subparsers.add_parser(
@@ -95,7 +458,105 @@ def main(argv: list[str] | None = None) -> int:
     )
     watch_parser.add_argument("traces_dir")
     watch_parser.add_argument("--project", default=".")
+    watch_parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="keep running, re-scanning every --interval seconds (Ctrl-C to stop)",
+    )
+    watch_parser.add_argument(
+        "--interval",
+        type=float,
+        default=60.0,
+        metavar="SECONDS",
+        help="seconds between passes when --loop is set (default 60)",
+    )
+    watch_parser.add_argument(
+        "--alerts",
+        action="store_true",
+        help="also push an immediate Slack alert whenever a pass finds a deviation "
+        "(needs a configured webhook; pair with --loop for near real-time)",
+    )
+    watch_parser.add_argument(
+        "--narrate",
+        action="store_true",
+        help="rewrite the stdout digest as verified LLM prose (needs an LLM endpoint in "
+        "config + ALFRED_LLM_API_KEY; every sentence's citations are checked against the "
+        "computed sources)",
+    )
     watch_parser.set_defaults(func=_cmd_watch)
+
+    report_parser = subparsers.add_parser(
+        "report", help="Render a shareable, self-contained HTML report from OTLP trace files"
+    )
+    report_parser.add_argument("traces_dir")
+    report_parser.add_argument("--project", default=".")
+    report_parser.add_argument(
+        "--html",
+        action="store_true",
+        help="write a self-contained HTML report, one file per day (currently required)",
+    )
+    report_parser.add_argument(
+        "--out",
+        default=".",
+        metavar="DIR",
+        help="output directory for alfred-<agent>-<date>.html files (default: current dir)",
+    )
+    report_parser.add_argument(
+        "--narrate",
+        action="store_true",
+        help="prepend a verified LLM prose summary to each report (needs an LLM endpoint in "
+        "config + ALFRED_LLM_API_KEY; citations are checked against the computed sources)",
+    )
+    report_parser.set_defaults(func=_cmd_report)
+
+    schedule_parser = subparsers.add_parser(
+        "schedule", help="Print a daily schedule for `alfred watch` (crontab line or workflow)"
+    )
+    schedule_parser.add_argument("traces_dir")
+    schedule_parser.add_argument("--project", default=".")
+    schedule_parser.add_argument(
+        "--github-actions",
+        action="store_true",
+        help="print a GitHub Actions workflow instead of a crontab line — for when no "
+        "host stays up (the webhook comes from the ALFRED_SLACK_WEBHOOK_URL secret)",
+    )
+    schedule_parser.add_argument(
+        "--at", default="09:00", metavar="HH:MM", help="daily run time (24h), default 09:00"
+    )
+    schedule_parser.set_defaults(func=_cmd_schedule)
+
+    mandate_parser = subparsers.add_parser(
+        "mandate", help="Bootstrap or validate a mandate.yaml (see `mandate lint`/`init`)"
+    )
+    mandate_sub = mandate_parser.add_subparsers(dest="mandate_command")
+
+    def _print_mandate_help(_args: argparse.Namespace) -> int:
+        mandate_parser.print_help()
+        return 0
+
+    mandate_parser.set_defaults(func=_print_mandate_help)
+
+    lint_parser = mandate_sub.add_parser(
+        "lint", help="Validate a mandate.yaml (exit 1 on error, 0 otherwise)"
+    )
+    lint_parser.add_argument("path", nargs="?", default="mandate.yaml")
+    lint_parser.set_defaults(func=_cmd_mandate_lint)
+
+    mandate_init_parser = mandate_sub.add_parser(
+        "init", help="Print a suggested mandate.yaml observed from OTLP trace files"
+    )
+    mandate_init_parser.add_argument(
+        "--from-traces",
+        required=True,
+        metavar="DIR",
+        help="directory of OTLP JSON trace files to observe tools and cost from",
+    )
+    mandate_init_parser.add_argument(
+        "--agent",
+        default=None,
+        help="agent name to write (default: observed gen_ai.agent.name, else 'your-agent')",
+    )
+    mandate_init_parser.set_defaults(func=_cmd_mandate_init)
 
     demo_parser = subparsers.add_parser(
         "demo", help="Run a fake instrumented agent → real digest, zero setup"

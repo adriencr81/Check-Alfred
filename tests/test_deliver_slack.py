@@ -15,7 +15,15 @@ from typing import cast
 
 import pytest
 
-from alfred.deliver.slack import DeliverError, HTTPRequest, Transport, build_block_kit_payload, send
+from alfred._http import HTTPRequest
+from alfred.deliver.slack import (
+    DeliverError,
+    Transport,
+    build_alert_payload,
+    build_block_kit_payload,
+    send,
+    send_alert,
+)
 from alfred.mandate.model import Deviation, DeviationType, Mandate
 from alfred.report.build import build_digest
 from alfred.report.model import Digest, Line, LineKind
@@ -92,7 +100,7 @@ def test_payload_with_deviation_has_dedicated_warning_section() -> None:
     text = warning_blocks[0]["text"]["text"]
     assert "*1 deviation (mandate)*" in text
     assert "forbidden_action" in text
-    assert "amount_eur=250.0 > 100.0" in text
+    assert "amount_eur=250.0 &gt; 100.0" in text  # escaped: Slack renders it as ">"
 
 
 def test_payload_fallback_text_counts_deviations() -> None:
@@ -118,6 +126,38 @@ def test_slack_payload_is_valid_block_kit() -> None:
         assert_valid_block_kit_payload(payload, _constraints())
 
 
+def test_alert_payload_has_alert_header_and_deviation_section() -> None:
+    payload = build_alert_payload(_digest_with_deviation())
+    blocks = payload["blocks"]
+    assert blocks[0]["type"] == "header"
+    header = blocks[0]["text"]["text"]
+    assert "🚨" in header
+    assert "refund-bot-v3" in header
+    warning = blocks[1]["text"]["text"]
+    assert "forbidden_action" in warning
+    assert "amount_eur=250.0 &gt; 100.0" in warning
+    assert payload["text"].endswith("— 1 deviation")
+
+
+def test_alert_payload_evidence_lists_deviation_event_ids() -> None:
+    payload = build_alert_payload(_digest_with_deviation())
+    context = payload["blocks"][-1]
+    assert context["type"] == "context"
+    evidence = context["elements"][0]["text"]
+    assert "forbidden_action [evt:78480053…]" in evidence
+    assert _LONG_DEVIATION_ID not in json.dumps(payload)
+
+
+def test_alert_payload_is_valid_block_kit() -> None:
+    payload = build_alert_payload(_digest_with_deviation())
+    assert_valid_block_kit_payload(payload, _constraints())
+
+
+def test_build_alert_payload_requires_a_deviation() -> None:
+    with pytest.raises(ValueError, match="deviation"):
+        build_alert_payload(_digest())
+
+
 def _fake_transport(captured: list[HTTPRequest]) -> Transport:
     def transport(request: HTTPRequest) -> None:
         captured.append(request)
@@ -138,6 +178,17 @@ def test_send_posts_expected_request() -> None:
     assert request.url == "https://hooks.slack.com/services/T0/B0/xyz"
     assert request.headers["Content-Type"] == "application/json"
     assert json.loads(request.body) == build_block_kit_payload(_digest())
+
+
+def test_send_alert_posts_alert_payload() -> None:
+    captured: list[HTTPRequest] = []
+    send_alert(
+        _digest_with_deviation(),
+        "https://hooks.slack.com/services/T0/B0/xyz",
+        transport=_fake_transport(captured),
+    )
+    assert len(captured) == 1
+    assert json.loads(captured[0].body) == build_alert_payload(_digest_with_deviation())
 
 
 def test_send_propagates_transport_failure() -> None:
@@ -177,3 +228,51 @@ def test_end_to_end_trace_to_digest_to_slack_payload_without_network(
     )
     assert len(captured) == 1
     assert json.loads(captured[0].body) == payload
+
+
+_FORGERY = (
+    "x*\n*Tasks completed*\n42 — all clear "
+    "<https://evil.example|✅ verified by Alfred> <!channel>"
+)
+
+
+def _digest_with_deviation_message(message: str) -> Digest:
+    return Digest(
+        agent="refund-bot-v3",
+        date=date(2026, 8, 30),
+        lines=(),
+        deviations=(
+            Deviation(
+                type=DeviationType.TOOL_NOT_ALLOWED,
+                event_ids=(EventId("e1"),),
+                message=message,
+            ),
+        ),
+    )
+
+
+def test_deviation_message_cannot_forge_slack_markup() -> None:
+    """ADR 0026 decision 1: the tool name is chosen by the audited agent, so it
+    reached mrkdwn raw — enough to fake an 'all clear' line, a link that looks
+    like Alfred vouching for it, and a channel-wide ping, inside a real digest.
+    """
+    payload = build_block_kit_payload(_digest_with_deviation_message(_FORGERY))
+    text = json.dumps(payload)
+
+    assert "<https://evil.example" not in text
+    assert "<!channel>" not in text
+    assert "&lt;!channel&gt;" in text  # neutralized, still visible as evidence
+    section = payload["blocks"][-2]["text"]["text"]
+    assert "\n*Tasks completed*" not in section  # no forged line
+
+
+def test_deviation_message_is_truncated() -> None:
+    """A tool name is not a place to put a novel: Slack caps a section at 3000
+    characters, and a rejected payload is a digest nobody reads."""
+    payload = build_block_kit_payload(_digest_with_deviation_message("A" * 5000))
+    assert_valid_block_kit_payload(payload, _constraints())
+
+
+def test_alert_payload_escapes_the_same_way() -> None:
+    payload = build_alert_payload(_digest_with_deviation_message(_FORGERY))
+    assert "<!channel>" not in json.dumps(payload)

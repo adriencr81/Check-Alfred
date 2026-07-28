@@ -222,10 +222,17 @@ class AgentTracer:
         }
 
     def flush(self) -> Path:
-        """Write the payload to `traces_dir/<agent>-<timestamp>.json`."""
+        """Write the payload to `traces_dir/<agent>-<timestamp>-<token>.json`.
+
+        The timestamp is second-resolution (human-sortable); a short random
+        token keeps two flushes within the same second from overwriting each
+        other — otherwise the second write would silently clobber the first and
+        `alfred watch` would never see that trace.
+        """
         self._traces_dir.mkdir(parents=True, exist_ok=True)
         stamp = _now().strftime("%Y%m%d-%H%M%S")
-        path = self._traces_dir / f"{self._agent}-{stamp}.json"
+        token = os.urandom(2).hex()
+        path = self._traces_dir / f"{self._agent}-{stamp}-{token}.json"
         path.write_text(json.dumps(self.payload(), indent=2), encoding="utf-8")
         return path
 

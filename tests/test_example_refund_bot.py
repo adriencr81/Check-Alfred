@@ -111,7 +111,12 @@ def _overlimit_run() -> list[TraceEvent]:
             [
                 _tool_use(
                     "tu-2", "issue_refund", {"order_id": "ORD-1002", "amount_eur": 250.0}
-                )
+                ),
+                _tool_use(
+                    "tu-3",
+                    "notify_customer",
+                    {"order_id": "ORD-1002", "message": "Refund of 250 EUR issued."},
+                ),
             ]
         ),
         _response(

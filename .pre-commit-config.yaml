@@ -15,7 +15,7 @@ repos:
         always_run: true
       - id: mypy
         name: mypy --strict
-        entry: python3 -m mypy --strict src/
+        entry: python3 -m mypy --strict src/ tests/
         language: system
         pass_filenames: false
         always_run: true

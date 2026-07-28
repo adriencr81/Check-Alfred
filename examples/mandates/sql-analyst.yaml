@@ -10,6 +10,7 @@ agent: sql-analyst
 allowed_tools:
   - execute_sql
   - send_report
+  - escalate_to_human
 
 daily_budget_eur: 3.00
 
@@ -31,3 +32,9 @@ forbidden_actions:
 escalate_when:
   - tool_error_rate > 0.10
   - budget_used > 0.80
+
+# Ce qui prouve une escalade : l'appel d'un de ces outils. Un attribut
+# `alfred.escalated` posé par l'agent lui-même n'est plus accepté — il lui
+# suffisait de l'écrire pour désarmer le contrôle qui le surveille (ADR 0023).
+escalation_tools:
+  - escalate_to_human

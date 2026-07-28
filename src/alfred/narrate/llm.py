@@ -10,14 +10,28 @@ from __future__ import annotations
 
 import json
 import re
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from typing import Protocol
 
+from alfred._http import HttpError, HTTPRequest
+from alfred._http import post as http_post
 from alfred.narrate.model import NarratedDigest, Sentence
 from alfred.report.model import Digest, Line
+from alfred.report.render import format_value
 from alfred.trace.model import EventId
+
+# `HTTPRequest` and `Transport` are the injection seam re-exported through
+# `alfred.narrate` (and imported by tests); list them so mypy --strict treats
+# the re-export as explicit (no_implicit_reexport).
+__all__ = [
+    "HTTPRequest",
+    "LLMClient",
+    "NarrateError",
+    "OpenAICompatibleClient",
+    "Transport",
+    "extract_event_ids",
+    "narrate",
+]
 
 _CITATION_PATTERN = re.compile(r"\[evt:([^\]]*)\]")
 
@@ -41,11 +55,21 @@ def extract_event_ids(text: str) -> set[EventId]:
     return ids
 
 
+def _value_token(line: Line) -> str:
+    """The line's value as the sentence must spell it — digits, no unit.
+
+    `format_value` renders a cost as `1.18 €`; requiring the symbol would fail
+    an honest sentence written as "1.18 EUR", so only the number is checked.
+    """
+    return format_value(line).removesuffix(" €")
+
+
 def _build_prompt(line: Line) -> str:
     allowed = ", ".join(line.sources)
     return (
         f"Write one short sentence reporting the metric {line.kind.value!r} "
-        f"with value {line.value}. You may only cite these event IDs, and "
+        f"with value {_value_token(line)}. The sentence must contain that "
+        f"number in digits. You may only cite these event IDs, and "
         f"must cite at least one, as a single trailing bracket in the exact "
         f"form [evt:id1, id2]: {allowed}"
     )
@@ -62,6 +86,15 @@ def _narrate_line(line: Line, llm_client: LLMClient) -> Sentence:
             f"LLM cited events not in source {sorted(hallucinated)} "
             f"for line {line.kind.value!r}: {text!r}"
         )
+    value = _value_token(line)
+    if value not in text:
+        # A real citation proves the sentence points at a real event, not that
+        # it says what that event shows: a fluent "everything is within
+        # mandate" citing a genuine ID used to pass (ADR 0026 decision 3).
+        raise NarrateError(
+            f"LLM sentence does not report the value {value!r} it cites "
+            f"for line {line.kind.value!r}: {text!r}"
+        )
     return Sentence(text=text, line=line)
 
 
@@ -76,32 +109,15 @@ def narrate(digest: Digest, llm_client: LLMClient) -> NarratedDigest:
     return NarratedDigest(digest=digest, sentences=sentences)
 
 
-@dataclass(frozen=True, slots=True)
-class HTTPRequest:
-    url: str
-    headers: dict[str, str]
-    body: bytes
-    timeout_s: float
-
-
 class Transport(Protocol):
     def __call__(self, request: HTTPRequest) -> bytes: ...
 
 
 def _urllib_transport(request: HTTPRequest) -> bytes:
-    if not request.url.startswith(("http://", "https://")):
-        raise NarrateError(f"refusing to fetch non-HTTP(S) URL: {request.url!r}")
-    urlreq = urllib.request.Request(  # noqa: S310
-        request.url, data=request.body, headers=request.headers, method="POST"
-    )
     try:
-        with urllib.request.urlopen(urlreq, timeout=request.timeout_s) as response:  # noqa: S310
-            content: bytes = response.read()
-            return content
-    except urllib.error.HTTPError as exc:
-        raise NarrateError(f"LLM endpoint returned HTTP {exc.code}: {exc.reason}") from exc
-    except urllib.error.URLError as exc:
-        raise NarrateError(f"LLM endpoint unreachable: {exc.reason}") from exc
+        return http_post(request, label="LLM endpoint")
+    except HttpError as exc:
+        raise NarrateError(str(exc)) from exc
 
 
 def _extract_content(raw: bytes) -> str:

@@ -27,12 +27,24 @@ pre-commit install
 
 ```bash
 pytest -q
-ruff check . && mypy --strict src/
+ruff check . && mypy --strict src/ tests/
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same three commands on Python
-3.11 and 3.12; `.github/workflows/codeql.yml` runs a static security scan.
-Both must pass.
+3.11, 3.12, 3.13 and 3.14; `.github/workflows/codeql.yml` runs a static
+security scan; `.github/workflows/docs.yml` builds the landing page with
+`mkdocs build --strict`. All three must pass.
+
+If you touch the landing page (`docs/site/`), build it locally first:
+
+```bash
+pip install -e ".[docs]"
+mkdocs build --strict
+```
+
+## Reporting a vulnerability
+
+Don't open a public issue — see [`SECURITY.md`](SECURITY.md).
 
 ## Design decisions
 

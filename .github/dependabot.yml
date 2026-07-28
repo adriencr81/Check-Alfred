@@ -1,0 +1,22 @@
+# CodeQL scans Alfred's own code weekly; nothing watched what Alfred depends on.
+# The core has a single runtime dependency (pyyaml), so the surface here is
+# mostly the dev toolchain, the optional connector extras, and the pinned
+# actions in ci.yml / codeql.yml / release.yml — release.yml being the one that
+# gets an OIDC token, so a compromised action there is the worst case.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the dev toolchain: these move together and CI is the test.
+      dev-tooling:
+        patterns: ["pytest*", "ruff", "mypy", "types-*", "pre-commit"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

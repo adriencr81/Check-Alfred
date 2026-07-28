@@ -12,7 +12,13 @@ from typing import Any, cast
 
 import yaml
 
-from alfred.mandate.model import EscalationRule, ForbiddenRule, Mandate, MandateError
+from alfred.mandate.model import (
+    EscalationRule,
+    ForbiddenRule,
+    Mandate,
+    MandateError,
+    RequiredAction,
+)
 
 # Shared `<op> <number>` tail of every condition string (escalate_when
 # metrics and structured-rule `when:` conditions use the same grammar).
@@ -59,6 +65,16 @@ def _dump_forbidden_action(action: str | ForbiddenRule) -> str | dict[str, str]:
     return action
 
 
+def _parse_required_action(raw: object) -> RequiredAction:
+    """One `required_actions` entry: a `when_tool:`/`require_tool:` mapping."""
+    if not isinstance(raw, dict) or set(raw) != {"when_tool", "require_tool"}:
+        raise MandateError(
+            "required_actions entry must have exactly 'when_tool' and "
+            f"'require_tool' keys: {raw!r}"
+        )
+    return RequiredAction(when_tool=str(raw["when_tool"]), require_tool=str(raw["require_tool"]))
+
+
 def _parse_escalation_rule(raw: str) -> EscalationRule:
     match = _ESCALATION_PATTERN.match(raw)
     if match is None:
@@ -85,6 +101,12 @@ def _mandate_from_dict(raw: dict[str, Any]) -> Mandate:
             escalate_when=tuple(
                 _parse_escalation_rule(str(rule)) for rule in raw["escalate_when"]
             ),
+            required_actions=tuple(
+                _parse_required_action(entry) for entry in raw.get("required_actions", [])
+            ),
+            escalation_tools=frozenset(str(tool) for tool in raw.get("escalation_tools", [])),
+            loop_threshold=int(raw.get("loop_threshold", 3)),
+            redact=frozenset(str(name) for name in raw.get("redact", [])),
         )
     except (TypeError, ValueError) as exc:
         raise MandateError(f"Malformed mandate: {exc}") from exc
@@ -94,15 +116,27 @@ def load_mandate(path: Path | str) -> Mandate:
     """Parse a mandate YAML file into a `Mandate`.
 
     Raises `MandateError` on malformed YAML or a missing/invalid required key.
+    The message names the offending file and points at `alfred mandate lint`:
+    a raw parser dump tells the reader what happened but not what to do, and a
+    broken mandate is a first-quarter-hour error (GROWTH_PLAN_3M.md §1.1).
     """
-    text = Path(path).read_text(encoding="utf-8")
+    mandate_path = Path(path)
+    text = mandate_path.read_text(encoding="utf-8")
     try:
         raw = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        raise MandateError(f"Invalid mandate YAML: {exc}") from exc
+        raise MandateError(_mandate_problem(mandate_path, f"invalid YAML: {exc}")) from exc
     if not isinstance(raw, dict):
-        raise MandateError("Mandate YAML must be a mapping at the top level")
-    return _mandate_from_dict(cast("dict[str, Any]", raw))
+        raise MandateError(_mandate_problem(mandate_path, "the YAML must be a mapping"))
+    try:
+        return _mandate_from_dict(cast("dict[str, Any]", raw))
+    except MandateError as exc:
+        raise MandateError(_mandate_problem(mandate_path, str(exc))) from exc
+
+
+def _mandate_problem(path: Path, detail: str) -> str:
+    """Frame a mandate failure: which file, what is wrong, how to check it."""
+    return f"{path}: {detail}\nRun `alfred mandate lint {path}` to validate the file."
 
 
 def dump_mandate(mandate: Mandate) -> str:
@@ -117,5 +151,15 @@ def dump_mandate(mandate: Mandate) -> str:
         "escalate_when": [
             f"{rule.metric} {rule.operator} {rule.threshold}" for rule in mandate.escalate_when
         ],
+        "loop_threshold": mandate.loop_threshold,
     }
+    if mandate.escalation_tools:
+        raw["escalation_tools"] = sorted(mandate.escalation_tools)
+    if mandate.required_actions:
+        raw["required_actions"] = [
+            {"when_tool": rule.when_tool, "require_tool": rule.require_tool}
+            for rule in mandate.required_actions
+        ]
+    if mandate.redact:
+        raw["redact"] = sorted(mandate.redact)
     return yaml.safe_dump(raw, sort_keys=False)

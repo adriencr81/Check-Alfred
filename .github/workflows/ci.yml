@@ -10,13 +10,21 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        # 3.14 is in the matrix because `requires-python = ">=3.11"` lets pip
+        # install Alfred there: an untested version is one a user meets first.
+        # The core suite passes on 3.14; the optional connector extras drag
+        # pydantic, whose 3.14 support is upstream's to confirm — this job is
+        # what tells us, rather than a launch-day install.
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
       - run: pytest -q
       - run: ruff check .
-      - run: mypy --strict src/
+        # `tests/` too: pyproject's [tool.mypy] files already lists it, but a
+        # positional argument overrides that setting, so the test suite was
+        # never actually type-checked.
+      - run: mypy --strict src/ tests/

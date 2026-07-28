@@ -7,11 +7,14 @@ for the falsifiable specification.
 from __future__ import annotations
 
 import json
+import re
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
 from alfred.trace.model import EventId, SpanKind, TraceEvent, TraceIngestionError
+from alfred.trace.redact import Redactor
 
 
 def _value(value: dict[str, Any]) -> Any:
@@ -46,17 +49,28 @@ def _kind(attributes: dict[str, Any]) -> SpanKind:
     See docs/adr/0003-span-kind-classification.md: unlike a prefix scan over
     `gen_ai.*`/`tool.*`/`agent.*` attribute keys, the semconv already carries
     tool and agent spans under the `gen_ai.*` namespace, so the operation
-    name is the only reliable discriminator.
+    name is the primary discriminator.
+
+    A span that carries tool attributes but no recognized operation name still
+    falls back to `TOOL_CALL` (ADR 0023 decision 5): classifying it `UNKNOWN`
+    dropped it out of every mandate check, so an unrecognized operation name
+    was all it took to hide a tool call. Ordinary spans (HTTP, DB) carry
+    neither attribute and stay `UNKNOWN`.
     """
     operation = attributes.get("gen_ai.operation.name")
     if isinstance(operation, str) and operation in _OPERATION_KIND:
         return _OPERATION_KIND[operation]
+    if _TOOL_NAME_ATTR in attributes or any(
+        key.startswith(_TOOL_ARGS_PREFIX) for key in attributes
+    ):
+        return SpanKind.TOOL_CALL
     return SpanKind.UNKNOWN
 
 
 _TOOL_STATUS_ATTR = "tool.result.status"
 _TOOL_ARGS_JSON_ATTR = "gen_ai.tool.call.arguments"
 _TOOL_ARGS_PREFIX = "tool.arguments."
+_TOOL_NAME_ATTR = "gen_ai.tool.name"
 
 
 def _is_status_error(span: dict[str, Any]) -> bool:
@@ -97,29 +111,73 @@ def _flatten_tool_arguments(raw: str, attributes: dict[str, Any]) -> None:
             attributes.setdefault(f"{_TOOL_ARGS_PREFIX}{key}", value)
 
 
+_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+
+
+def _identifier(value: Any, field: str) -> str:
+    """Return `value` if it is a usable identifier, else raise.
+
+    A `spanId` is repeated into the narration prompt, the Slack digest and the
+    HTML report, and nothing constrained it: an ID could be a paragraph of
+    instructions aimed at the narrating model (ADR 0026 decision 2). The shape
+    is policed — printable, bounded, no whitespace — rather than the strict
+    OTel hex, so readable IDs like `demo-1-task` keep working.
+    """
+    if isinstance(value, str) and _IDENTIFIER_PATTERN.match(value):
+        return value
+    return _reject_identifier(value, field)
+
+
+def _reject_identifier(value: Any, field: str) -> str:
+    shown = value if isinstance(value, str) else repr(value)
+    raise TraceIngestionError(
+        f"{field} is not a usable identifier (expected up to 128 characters of "
+        f"[A-Za-z0-9._:-]): {shown[:60]!r}"
+    )
+
+
 def _timestamp(nanos: str) -> datetime:
     seconds, nanoseconds = divmod(int(nanos), 1_000_000_000)
     return datetime.fromtimestamp(seconds, tz=UTC).replace(microsecond=nanoseconds // 1_000)
 
 
 def _span_to_event(span: dict[str, Any]) -> TraceEvent:
-    attributes = _attributes(span.get("attributes", []))
-    kind = _kind(attributes)
-    _adapt_semconv(span, kind, attributes)
-    parent_span_id = span.get("parentSpanId") or None
-    return TraceEvent(
-        event_id=EventId(span["spanId"]),
-        trace_id=span["traceId"],
-        parent_span_id=parent_span_id,
-        kind=kind,
-        name=span["name"],
-        start_time=_timestamp(span["startTimeUnixNano"]),
-        end_time=_timestamp(span["endTimeUnixNano"]),
-        attributes=attributes,
-    )
+    """Normalize one OTLP span, or raise `TraceIngestionError` naming it.
+
+    Every failure mode is funnelled into the one typed error the callers
+    already expect (ADR 0024 decision 1): a `ValueError` escaping from a
+    malformed timestamp used to crash `alfred watch` outright, and since the
+    seen-state was only written at the end of a pass, every re-run crashed
+    again on the same file.
+    """
+    if not isinstance(span, dict):
+        raise TraceIngestionError(f"Span is not an object: {span!r}")
+    try:
+        attributes = _attributes(span.get("attributes", []))
+        kind = _kind(attributes)
+        _adapt_semconv(span, kind, attributes)
+        parent_span_id = span.get("parentSpanId") or None
+        return TraceEvent(
+            event_id=EventId(_identifier(span["spanId"], "spanId")),
+            trace_id=_identifier(span["traceId"], "traceId"),
+            parent_span_id=parent_span_id,
+            kind=kind,
+            name=span["name"],
+            start_time=_timestamp(span["startTimeUnixNano"]),
+            end_time=_timestamp(span["endTimeUnixNano"]),
+            attributes=attributes,
+        )
+    except TraceIngestionError:
+        raise
+    except (AttributeError, KeyError, OverflowError, OSError, TypeError, ValueError) as exc:
+        raise TraceIngestionError(
+            f"Malformed span {span.get('spanId', '<no spanId>')!r}: {exc}"
+        ) from exc
 
 
-def ingest_otlp_json(payload: dict[str, object]) -> list[TraceEvent]:
+def ingest_otlp_json(
+    payload: dict[str, object], redactor: Redactor | None = None
+) -> list[TraceEvent]:
     """Parse an OTLP JSON payload into normalized TraceEvents.
 
     Contract (must hold for every returned event):
@@ -127,6 +185,10 @@ def ingest_otlp_json(payload: dict[str, object]) -> list[TraceEvent]:
     - Timestamps are UTC datetimes derived from `startTimeUnixNano`/`endTimeUnixNano`.
     - `attributes` is a flat `dict[str, Any]`, un-nested from OTLP's list-of-KV format.
     - Raises `TraceIngestionError` on malformed input (missing required fields).
+
+    `redactor` masks the attribute values its mandate names *before* the event
+    is returned, so a redacted value never reaches the trace store or any
+    downstream sink (ADR 0022). None (the default) leaves every value untouched.
     """
     try:
         resource_spans = cast("list[dict[str, Any]]", payload["resourceSpans"])
@@ -138,10 +200,12 @@ def ingest_otlp_json(payload: dict[str, object]) -> list[TraceEvent]:
         ]
     except (KeyError, TypeError) as exc:
         raise TraceIngestionError(f"Malformed OTLP payload: {exc}") from exc
-    return events
+    if redactor is None:
+        return events
+    return [replace(event, attributes=redactor.apply(event.attributes)) for event in events]
 
 
-def ingest_otlp_file(path: Path) -> list[TraceEvent]:
+def ingest_otlp_file(path: Path, redactor: Redactor | None = None) -> list[TraceEvent]:
     """Read one or more OTLP JSON payloads from a file into TraceEvents.
 
     Decodes the file as a stream of JSON values, so every real shape lands in
@@ -149,8 +213,12 @@ def ingest_otlp_file(path: Path) -> list[TraceEvent]:
     newline-delimited payloads the OTel Collector file exporter writes (so the
     `agent → Collector → alfred watch` bridge works), or several concatenated.
     A malformed value raises `TraceIngestionError` naming the line it starts on.
+
+    `redactor` is forwarded to `ingest_otlp_json` (ADR 0022): named values are
+    masked before the events leave this function.
     """
-    text = Path(path).read_text(encoding="utf-8")
+    path = Path(path)
+    text = path.read_text(encoding="utf-8")
     decoder = json.JSONDecoder()
     events: list[TraceEvent] = []
     index, length = 0, len(text)
@@ -158,8 +226,13 @@ def ingest_otlp_file(path: Path) -> list[TraceEvent]:
         try:
             payload, index = decoder.raw_decode(text, index)
         except json.JSONDecodeError as exc:
-            raise TraceIngestionError(f"Malformed OTLP JSON at line {exc.lineno}: {exc}") from exc
-        events.extend(ingest_otlp_json(payload))
+            raise TraceIngestionError(
+                f"Malformed OTLP JSON in {path} at line {exc.lineno}: {exc}"
+            ) from exc
+        try:
+            events.extend(ingest_otlp_json(payload, redactor))
+        except TraceIngestionError as exc:
+            raise TraceIngestionError(f"{path}: {exc}") from exc
     return events
 
 

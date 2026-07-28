@@ -6,7 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from alfred.mandate.model import EscalationRule, ForbiddenRule, Mandate, MandateError
+from alfred.mandate.model import (
+    EscalationRule,
+    ForbiddenRule,
+    Mandate,
+    MandateError,
+    RequiredAction,
+)
 from alfred.mandate.yaml_io import dump_mandate, load_mandate
 
 EXAMPLES_DIR = Path(__file__).parent.parent / "examples" / "mandates"
@@ -17,13 +23,17 @@ EXAMPLE_STRUCTURED_MANDATE = EXAMPLES_DIR / "sql-analyst.yaml"
 def _mandate() -> Mandate:
     return Mandate(
         agent="refund-bot-v3",
-        allowed_tools=frozenset({"read_order", "issue_refund", "notify_customer"}),
+        allowed_tools=frozenset(
+            {"read_order", "issue_refund", "notify_customer", "escalate_to_human"}
+        ),
         daily_budget_eur=5.0,
         forbidden_actions=("issue_refund_above_100_eur", "send_marketing"),
         escalate_when=(
             EscalationRule("tool_error_rate", ">", 0.10),
             EscalationRule("budget_used", ">", 0.80),
         ),
+        required_actions=(RequiredAction("issue_refund", "notify_customer"),),
+        escalation_tools=frozenset({"escalate_to_human"}),
     )
 
 
@@ -93,6 +103,76 @@ def test_load_mandate_structured_rule_unknown_key_raises(tmp_path: Path) -> None
     )
     with pytest.raises(MandateError):
         load_mandate(path)
+
+
+def test_load_mandate_malformed_required_action_raises(tmp_path: Path) -> None:
+    path = tmp_path / "mandate.yaml"
+    path.write_text(
+        "agent: refund-bot-v3\n"
+        "allowed_tools: [issue_refund, notify_customer]\n"
+        "daily_budget_eur: 5.0\n"
+        "forbidden_actions: []\n"
+        "escalate_when: []\n"
+        "required_actions:\n"
+        "  - when_tool: issue_refund\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(MandateError):
+        load_mandate(path)
+
+
+def test_load_mandate_loop_threshold_defaults_to_3(tmp_path: Path) -> None:
+    path = tmp_path / "mandate.yaml"
+    path.write_text(
+        "agent: refund-bot-v3\n"
+        "allowed_tools: [read_order]\n"
+        "daily_budget_eur: 5.0\n"
+        "forbidden_actions: []\n"
+        "escalate_when: []\n",
+        encoding="utf-8",
+    )
+    assert load_mandate(path).loop_threshold == 3
+
+
+def test_load_mandate_loop_threshold_override(tmp_path: Path) -> None:
+    path = tmp_path / "mandate.yaml"
+    path.write_text(
+        "agent: refund-bot-v3\n"
+        "allowed_tools: [read_order]\n"
+        "daily_budget_eur: 5.0\n"
+        "forbidden_actions: []\n"
+        "escalate_when: []\n"
+        "loop_threshold: 5\n",
+        encoding="utf-8",
+    )
+    assert load_mandate(path).loop_threshold == 5
+
+
+def test_redact_roundtrip(tmp_path: Path) -> None:
+    mandate = Mandate(
+        agent="refund-bot-v3",
+        allowed_tools=frozenset({"read_order"}),
+        daily_budget_eur=5.0,
+        forbidden_actions=(),
+        escalate_when=(),
+        redact=frozenset({"customer_email", "address"}),
+    )
+    path = tmp_path / "mandate.yaml"
+    path.write_text(dump_mandate(mandate), encoding="utf-8")
+    assert load_mandate(path) == mandate
+
+
+def test_redact_defaults_empty(tmp_path: Path) -> None:
+    path = tmp_path / "mandate.yaml"
+    path.write_text(
+        "agent: refund-bot-v3\n"
+        "allowed_tools: [read_order]\n"
+        "daily_budget_eur: 5.0\n"
+        "forbidden_actions: []\n"
+        "escalate_when: []\n",
+        encoding="utf-8",
+    )
+    assert load_mandate(path).redact == frozenset()
 
 
 def test_load_mandate_missing_key_raises(tmp_path: Path) -> None:

@@ -5,9 +5,18 @@ from __future__ import annotations
 from datetime import date
 
 from alfred.mandate.model import Deviation, DeviationType
-from alfred.report.model import Digest, Line, LineKind
-from alfred.report.render import format_sources, render
+from alfred.report.model import Baseline, Digest, Line, LineKind
+from alfred.report.render import format_baseline, format_sources, render
 from alfred.trace.model import EventId
+
+
+def _cost_line(value: float, mean: float) -> Line:
+    return Line(
+        LineKind.COST_EUR,
+        value,
+        (EventId("c0f"),),
+        baseline=Baseline(mean=mean, window_days=7, sample_days=5, sources=(EventId("h1"),)),
+    )
 
 
 def _digest_with_one_deviation() -> Digest:
@@ -53,6 +62,15 @@ def test_render_matches_fixed_format_single_deviation() -> None:
     assert len(lines) == 6
 
 
+def test_render_aligns_value_columns_across_rows() -> None:
+    # Every value (and its evidence) must start at the same column across the
+    # metric lines and the deviations header, despite differing label lengths —
+    # the aligned digest the README advertises. Falsifies label-less padding.
+    lines = render(_digest_with_one_deviation()).splitlines()
+    evidence_columns = {line.index("[evt:") for line in lines if "[evt:" in line}
+    assert len(evidence_columns) == 1
+
+
 def test_render_omits_deviations_section_when_none() -> None:
     digest = Digest(
         agent="refund-bot-v3",
@@ -92,6 +110,45 @@ def test_render_never_shows_a_full_long_event_id() -> None:
     assert "evt:78480053…" in output
 
 
+def test_format_baseline_none_without_baseline() -> None:
+    assert format_baseline(Line(LineKind.COST_EUR, 3.42, (EventId("c0f"),))) is None
+
+
+def test_format_baseline_flags_a_doubling_with_warning() -> None:
+    # 3.42 vs mean 1.20 → +185% → over the ±100% threshold.
+    text = format_baseline(_cost_line(3.42, 1.20))
+    assert text is not None
+    assert "+185% vs 7-day avg" in text
+    assert "⚠️" in text
+
+
+def test_format_baseline_no_warning_below_threshold() -> None:
+    text = format_baseline(_cost_line(1.10, 1.00))  # +10%
+    assert text == "+10% vs 7-day avg"
+    assert "⚠️" not in text
+
+
+def test_format_baseline_warns_symmetrically_on_a_collapse() -> None:
+    text = format_baseline(_cost_line(0.40, 1.00))  # -60% → not warned
+    assert text == "-60% vs 7-day avg"
+    warned = format_baseline(_cost_line(0.20, 1.00))  # -80%... still below 100%
+    assert warned == "-80% vs 7-day avg"
+    halved = format_baseline(_cost_line(0.00, 1.00))  # -100% → warned
+    assert halved is not None and "⚠️" in halved
+
+
+def test_render_appends_baseline_on_the_same_line() -> None:
+    digest = Digest(
+        agent="refund-bot-v3",
+        date=date(2026, 8, 30),
+        lines=(_cost_line(3.42, 1.20),),
+    )
+    rows = render(digest).splitlines()
+    cost_row = next(row for row in rows if row.startswith("Cost (tokens → €):"))
+    assert "[evt:c0f]" in cost_row
+    assert "(+185% vs 7-day avg ⚠️)" in cost_row
+
+
 def test_render_lists_each_deviation_when_multiple() -> None:
     digest = Digest(
         agent="refund-bot-v3",
@@ -107,3 +164,25 @@ def test_render_lists_each_deviation_when_multiple() -> None:
     assert "2" in header
     assert any("tool_not_allowed" in line and "msg one" in line for line in lines)
     assert any("budget_exceeded" in line and "msg two" in line for line in lines)
+
+
+def test_render_strips_control_characters_from_trace_text() -> None:
+    """ADR 0026 decision 1: the same agent-chosen strings reach the terminal.
+    A carriage return or an ANSI sequence there rewrites lines already printed,
+    so a deviation can erase itself from the operator's screen."""
+    digest = Digest(
+        agent="refund-bot-v3",
+        date=date(2026, 8, 30),
+        lines=(),
+        deviations=(
+            Deviation(
+                type=DeviationType.TOOL_NOT_ALLOWED,
+                event_ids=(EventId("e1"),),
+                message="wire_transfer\r\x1b[2KAll clear",
+            ),
+        ),
+    )
+    text = render(digest)
+    assert "\r" not in text
+    assert "\x1b" not in text
+    assert "wire_transfer" in text  # the evidence itself is preserved
