@@ -10,7 +10,7 @@
 landed: a public `alfred.instrument` SDK, real-world OTel Collector ingestion,
 and a 5-minute example that needs no API key. 151 tests green, mypy --strict,
 CI + CodeQL. Public **v0.1 targeted for early August 2026**. Full roadmap:
-[PLAN.md](PLAN.md).
+[PLAN.md](https://github.com/adriencr81/Check-Alfred/blob/main/PLAN.md).
 
 ---
 
@@ -25,7 +25,7 @@ digest in Slack, deviations flagged the moment they happen.
 **Every line of an Alfred report is anchored to one or more trace event IDs.**
 The LLM only rephrases what was already computed from the traces. No self-declared
 summaries, no hallucinated numbers. A report line without a source event is a bug,
-not a feature — and there's a test that says so (see [PLAN.md §5 Brique 4](PLAN.md)).
+not a feature — and there's a test that says so (see [PLAN.md §5 Brique 4](https://github.com/adriencr81/Check-Alfred/blob/main/PLAN.md)).
 
 ## What a digest looks like (v0.1 target)
 
@@ -65,7 +65,7 @@ alfred demo
 `alfred demo` replays a scripted scenario. To watch Alfred catch a *real*
 agent's deviation — a framework-free Claude tool loop that decides on its
 own whether to grant an over-limit refund — see
-[`examples/agents/refund_bot/`](examples/agents/refund_bot/). Nothing is
+[`examples/agents/refund_bot/`](https://github.com/adriencr81/Check-Alfred/tree/main/examples/agents/refund_bot/). Nothing is
 scripted there: the model decides, Alfred verifies.
 
 Once v0.1 ships to PyPI:
@@ -80,14 +80,14 @@ alfred demo          # instrumented fake agent → real digest, no setup
 ## Plug in your own agent
 
 Alfred verifies *your* agents. The floor is 5 minutes and no credentials:
-[`examples/agents/minimal/`](examples/agents/minimal/) is a ~30-line agent
+[`examples/agents/minimal/`](https://github.com/adriencr81/Check-Alfred/tree/main/examples/agents/minimal/) is a ~30-line agent
 with no LLM and no API key — run it, `alfred watch` it, watch Alfred catch its
 over-cap approval. Three honest paths get your real agent's runs to Alfred:
 
 | Path | For agents that… | Status |
 |---|---|---|
-| **`alfred.instrument` SDK** | you can add ~10 lines to (wrap the loop, model call, tool call) | **works today** — [`docs/integrate.md`](docs/integrate.md) |
-| **OTel Collector bridge** | already emit OpenTelemetry GenAI spans | **works today** — point the Collector's file exporter at the watched folder ([bridge config](docs/integrate.md#otel-collector-bridge)) |
+| **`alfred.instrument` SDK** | you can add ~10 lines to (wrap the loop, model call, tool call) | **works today** — [`docs/integrate.md`](https://github.com/adriencr81/Check-Alfred/blob/main/docs/integrate.md) |
+| **OTel Collector bridge** | already emit OpenTelemetry GenAI spans | **works today** — point the Collector's file exporter at the watched folder ([bridge config](https://github.com/adriencr81/Check-Alfred/blob/main/docs/integrate.md#otel-collector-bridge)) |
 | **Native connectors** | run on a managed platform (no code change) | **v0.2** — not built yet |
 
 Whatever the path, the guarantee is the same: every digest line is computed
@@ -116,14 +116,14 @@ src/alfred/instrument/ # Brique 8 — public instrumentation SDK (AgentTracer)
 examples/agents/       # B7 refund_bot (real LLM), B11 minimal (no LLM, no API key)
 ```
 
-The [`CLAUDE.md`](CLAUDE.md) file encodes the workflow rules for anyone (human or
+The [`CLAUDE.md`](https://github.com/adriencr81/Check-Alfred/blob/main/CLAUDE.md) file encodes the workflow rules for anyone (human or
 agent) working on this repo: tests first, plan mode for multi-file changes,
 proof-of-run required at each commit.
 
 ## Roadmap
 
 Each brick is a signed contract with falsifiable tests and a definition-of-done.
-See [PLAN.md §5](PLAN.md) for the v0.1 core and [§12](PLAN.md) for the
+See [PLAN.md §5](https://github.com/adriencr81/Check-Alfred/blob/main/PLAN.md) for the v0.1 core and [§12](https://github.com/adriencr81/Check-Alfred/blob/main/PLAN.md) for the
 "Bring Your Own Agent" sprint.
 
 **v0.1 core — done:**
@@ -137,7 +137,7 @@ See [PLAN.md §5](PLAN.md) for the v0.1 core and [§12](PLAN.md) for the
 
 **Bring Your Own Agent sprint — done:** make Alfred work for a dev who
 downloads it for *their* agents
-([ADR 0013](docs/adr/0013-byoa-bring-your-own-agent-plan.md)).
+([ADR 0013](https://github.com/adriencr81/Check-Alfred/blob/main/docs/adr/0013-byoa-bring-your-own-agent-plan.md)).
 
 - **Brique 7** — real refund-bot example: a framework-free Claude tool loop whose over-limit refund Alfred catches
 - **Brique 8** — public `alfred.instrument` SDK: any loop → an ingestible OTLP trace in ~10 lines
@@ -153,4 +153,4 @@ Post-v0.1: native connectors (v0.2), performance review — behavioral drift & c
 
 The advanced mandate engine (formal verdict semantics, verifiable policies,
 multi-agent, retention, compliance features) is planned as **closed-source** —
-open-core model announced up front. See [PLAN.md §1 D4](PLAN.md).
+open-core model announced up front. See [PLAN.md §1 D4](https://github.com/adriencr81/Check-Alfred/blob/main/PLAN.md).

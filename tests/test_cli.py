@@ -6,7 +6,10 @@ docs/adr/0008-brique6-demo-launch-polish-design.md.
 
 from __future__ import annotations
 
+import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -86,3 +89,17 @@ def test_cli_no_command_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main([])
     assert exit_code == 0
     assert "usage" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("args", [["--help"], ["demo"]])
+def test_cli_output_survives_cp1252_stdout(args: list[str]) -> None:
+    """Help and digest text contain non-cp1252 chars (e.g. `→`); piping the CLI
+    on Windows encodes stdout as cp1252 and must not raise UnicodeEncodeError."""
+    result = subprocess.run(
+        [sys.executable, "-m", "alfred.cli", *args],
+        capture_output=True,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.decode(errors="replace")
+    assert "alfred" in result.stdout.decode("utf-8").lower()
