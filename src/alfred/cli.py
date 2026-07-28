@@ -421,6 +421,12 @@ def _cmd_demo(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Redirected output on Windows defaults to cp1252, which can't encode the
+    # help text's `→` (same guard as alfred.deliver.stdout for digest text).
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+
     parser = argparse.ArgumentParser(
         prog="alfred", description="Alfred — accountability layer for AI employees"
     )

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import shutil
 import stat
+import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -356,6 +357,7 @@ def test_watch_ingests_a_quarantined_file_once_it_is_fixed(
     store.close()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes don't exist on Windows")
 def test_seen_state_and_store_are_owner_only(project_dir: Path, traces_dir: Path) -> None:
     """ADR 0025 decision 7: both files carry what the agent handled."""
     db_path = project_dir / "trace.db"

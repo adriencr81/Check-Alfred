@@ -6,8 +6,11 @@ docs/adr/0008-brique6-demo-launch-polish-design.md.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -16,6 +19,20 @@ import yaml
 
 from alfred.cli import main
 from alfred.report.model import Digest
+
+
+@pytest.mark.parametrize("args", [["--help"], ["demo"]])
+def test_cli_output_survives_cp1252_stdout(args: list[str]) -> None:
+    """Help and digest text contain non-cp1252 chars (e.g. `→`); piping the CLI
+    on Windows encodes stdout as cp1252 and must not raise UnicodeEncodeError."""
+    result = subprocess.run(
+        [sys.executable, "-m", "alfred.cli", *args],
+        capture_output=True,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.decode(errors="replace")
+    assert "alfred" in result.stdout.decode("utf-8").lower()
 
 
 def test_cli_init_creates_project(tmp_path: Path) -> None:

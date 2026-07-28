@@ -7,12 +7,23 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 Nothing yet.
 
-## [0.1.0] — targeted 2026-08-04
+## [0.1.1] — 2026-07-28
 
-First public release; set this to the tag date when you publish. The entries
-below are the whole v0.1 roadmap
+First complete public release. The entries below are the whole v0.1 roadmap
 (PLAN.md §5), the "Bring Your Own Agent" sprint (§12), the post-launch
-features F1–F4 (§13), and four rounds of security hardening.
+features F1–F4 (§13), and four rounds of security hardening — plus:
+
+- The CLI forces UTF-8 on stdout/stderr: redirected output on Windows
+  defaults to cp1252, which crashed `alfred --help` (and any piped digest)
+  on the `→` character.
+- README links are absolute so they survive on the PyPI project page.
+
+### About 0.1.0
+
+`alfred-ai 0.1.0` was published to PyPI on 2026-07-28 from an outdated
+snapshot (the brique-11 state, before everything listed below). PyPI
+versions are immutable, so it stays as-is; 0.1.1 supersedes it the same
+day and is the version to install.
 
 ### Onboarding
 

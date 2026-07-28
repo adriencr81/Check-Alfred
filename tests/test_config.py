@@ -7,6 +7,7 @@ docs/adr/0007-brique5-delivery-cli-design.md.
 from __future__ import annotations
 
 import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -147,6 +148,7 @@ def test_build_llm_client_builds_client_when_fully_configured(
     assert client.api_key == "secret"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes don't exist on Windows")
 def test_config_file_is_owner_only(tmp_path: Path) -> None:
     """ADR 0025 decision 7: the webhook's path is the credential, and the file
     holding it used to be world-readable."""

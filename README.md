@@ -3,12 +3,12 @@
 [![CI](https://github.com/adriencr81/Check-Alfred/actions/workflows/ci.yml/badge.svg)](https://github.com/adriencr81/Check-Alfred/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/alfred-ai.svg)](https://pypi.org/project/alfred-ai/)
 [![Python versions](https://img.shields.io/pypi/pyversions/alfred-ai.svg)](https://pypi.org/project/alfred-ai/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/adriencr81/Check-Alfred/blob/main/LICENSE)
 
 > **Accountability layer for AI agents.** Every line of an Alfred report is
 > anchored to a trace event ID. The ones that aren't, don't ship.
 
-![An Alfred digest: four counted lines, each followed by the trace event IDs it was computed from, and one flagged deviation.](docs/assets/social-preview.png)
+![An Alfred digest: four counted lines, each followed by the trace event IDs it was computed from, and one flagged deviation.](https://raw.githubusercontent.com/adriencr81/Check-Alfred/main/docs/assets/social-preview.png)
 
 ## Try it — 20 seconds, no install, no API key, no webhook
 
@@ -64,8 +64,8 @@ landed: a public `alfred.instrument` SDK, native LangGraph and OpenAI Agents SDK
 connectors, real-world OTel Collector ingestion, and a 5-minute example that
 needs no API key. mypy --strict on source *and* tests, Python 3.11–3.14,
 CI + CodeQL — the badge above is the live version of that claim, which is why
-no test count is written here. Public **v0.1 targeted for early August 2026**.
-Full roadmap: [PLAN.md](PLAN.md).
+no test count is written here. Published on PyPI: **`pip install alfred-ai`**.
+Full roadmap: [PLAN.md](https://github.com/adriencr81/Check-Alfred/blob/main/PLAN.md).
 
 ---
 
@@ -80,7 +80,7 @@ digest in Slack, deviations flagged the moment they happen.
 **Every line of an Alfred report is anchored to one or more trace event IDs.**
 The LLM only rephrases what was already computed from the traces. No self-declared
 summaries, no hallucinated numbers. A report line without a source event is a bug,
-not a feature — and there's a test that says so (see [PLAN.md §5 Brique 4](PLAN.md)).
+not a feature — and there's a test that says so (see [PLAN.md §5 Brique 4](https://github.com/adriencr81/Check-Alfred/blob/main/PLAN.md)).
 
 ## Each number reads against its own baseline
 
@@ -188,7 +188,7 @@ activate step is `.venv\Scripts\activate`.
 `alfred demo` replays a scripted scenario. To watch Alfred catch a *real*
 agent's deviation — a framework-free Claude tool loop that decides on its
 own whether to grant an over-limit refund — see
-[`examples/agents/refund_bot/`](examples/agents/refund_bot/). Nothing is
+[`examples/agents/refund_bot/`](https://github.com/adriencr81/Check-Alfred/tree/main/examples/agents/refund_bot/). Nothing is
 scripted there: the model decides, Alfred verifies.
 
 Writing the first `mandate.yaml` is the onboarding cliff, so Alfred meets you
@@ -227,7 +227,7 @@ wasn't given fails the run instead of shipping. Declare the endpoint in config
 (`alfred init --llm-base-url … --llm-model …`, any OpenAI-compatible endpoint)
 and export `ALFRED_LLM_API_KEY`; without them `--narrate` exits 1 rather than
 degrade silently. `alfred demo` stays LLM-free. See
-[`docs/integrate.md`](docs/integrate.md#narrated-digest-verified-prose).
+[`docs/integrate.md`](https://github.com/adriencr81/Check-Alfred/blob/main/docs/integrate.md#narrated-digest-verified-prose).
 
 The Slack digest is ephemeral, so `alfred report traces/ --html` writes a
 self-contained HTML file per day into `--out` (default the current directory) —
@@ -241,16 +241,16 @@ evidence-dossier export (v0.4). See
 ## Plug in your own agent
 
 Alfred verifies *your* agents. The floor is 5 minutes and no credentials:
-[`examples/agents/minimal/`](examples/agents/minimal/) is a ~30-line agent
+[`examples/agents/minimal/`](https://github.com/adriencr81/Check-Alfred/tree/main/examples/agents/minimal/) is a ~30-line agent
 with no LLM and no API key — run it, `alfred watch` it, watch Alfred catch its
 over-cap approval. Three honest paths get your real agent's runs to Alfred:
 
 | Path | For agents that… | Status |
 |---|---|---|
-| **`alfred.instrument` SDK** | you can add ~10 lines to (wrap the loop, model call, tool call) | **works today** — [`docs/integrate.md`](docs/integrate.md) |
-| **LangGraph connector** | run on LangGraph — attach one callback handler, no manual instrumentation | **works today** — `pip install alfred-ai[langgraph]` ([connector](docs/integrate.md#langgraph-connector)) |
-| **OpenAI Agents SDK connector** | run on the OpenAI Agents SDK — register one tracing processor, no manual instrumentation | **works today** — `pip install alfred-ai[openai-agents]` ([connector](docs/integrate.md#openai-agents-sdk-connector)) |
-| **OTel Collector bridge** | already emit OpenTelemetry GenAI spans | **works today** — point the Collector's file exporter at the watched folder ([bridge config](docs/integrate.md#otel-collector-bridge)) |
+| **`alfred.instrument` SDK** | you can add ~10 lines to (wrap the loop, model call, tool call) | **works today** — [`docs/integrate.md`](https://github.com/adriencr81/Check-Alfred/blob/main/docs/integrate.md) |
+| **LangGraph connector** | run on LangGraph — attach one callback handler, no manual instrumentation | **works today** — `pip install alfred-ai[langgraph]` ([connector](https://github.com/adriencr81/Check-Alfred/blob/main/docs/integrate.md#langgraph-connector)) |
+| **OpenAI Agents SDK connector** | run on the OpenAI Agents SDK — register one tracing processor, no manual instrumentation | **works today** — `pip install alfred-ai[openai-agents]` ([connector](https://github.com/adriencr81/Check-Alfred/blob/main/docs/integrate.md#openai-agents-sdk-connector)) |
+| **OTel Collector bridge** | already emit OpenTelemetry GenAI spans | **works today** — point the Collector's file exporter at the watched folder ([bridge config](https://github.com/adriencr81/Check-Alfred/blob/main/docs/integrate.md#otel-collector-bridge)) |
 | **Other native connectors** | run on CrewAI or a managed platform | **v0.2** — not built yet |
 
 Whatever the path, the guarantee is the same: every digest line is computed
@@ -282,14 +282,14 @@ src/alfred/integrations/ # Brique 12 — native connectors (LangGraph handler, O
 examples/agents/       # B7 refund_bot (real LLM), B11 minimal (no LLM), B12 langgraph_bot, F5 openai_agents_bot
 ```
 
-The [`CLAUDE.md`](CLAUDE.md) file encodes the workflow rules for anyone (human or
+The [`CLAUDE.md`](https://github.com/adriencr81/Check-Alfred/blob/main/CLAUDE.md) file encodes the workflow rules for anyone (human or
 agent) working on this repo: tests first, plan mode for multi-file changes,
 proof-of-run required at each commit.
 
 ## Roadmap
 
 Each brick is a signed contract with falsifiable tests and a definition-of-done.
-See [PLAN.md §5](PLAN.md) for the v0.1 core and [§12](PLAN.md) for the
+See [PLAN.md §5](https://github.com/adriencr81/Check-Alfred/blob/main/PLAN.md) for the v0.1 core and [§12](https://github.com/adriencr81/Check-Alfred/blob/main/PLAN.md) for the
 "Bring Your Own Agent" sprint.
 
 **v0.1 core — done:**
@@ -303,7 +303,7 @@ See [PLAN.md §5](PLAN.md) for the v0.1 core and [§12](PLAN.md) for the
 
 **Bring Your Own Agent sprint — done:** make Alfred work for a dev who
 downloads it for *their* agents
-([ADR 0013](docs/adr/0013-byoa-bring-your-own-agent-plan.md)).
+([ADR 0013](https://github.com/adriencr81/Check-Alfred/blob/main/docs/adr/0013-byoa-bring-your-own-agent-plan.md)).
 
 - **Brique 7** — real refund-bot example: a framework-free Claude tool loop whose over-limit refund Alfred catches
 - **Brique 8** — public `alfred.instrument` SDK: any loop → an ingestible OTLP trace in ~10 lines
@@ -313,8 +313,8 @@ downloads it for *their* agents
 
 **Native connectors:**
 
-- **Brique 12** ([ADR 0014](docs/adr/0014-langgraph-native-connector.md)) — LangGraph connector: attach one callback handler, get an anchored trace (`pip install alfred-ai[langgraph]`)
-- **F5** ([ADR 0021](docs/adr/0021-openai-agents-native-connector.md)) — OpenAI Agents SDK connector: register one tracing processor, get an anchored trace (`pip install alfred-ai[openai-agents]`)
+- **Brique 12** ([ADR 0014](https://github.com/adriencr81/Check-Alfred/blob/main/docs/adr/0014-langgraph-native-connector.md)) — LangGraph connector: attach one callback handler, get an anchored trace (`pip install alfred-ai[langgraph]`)
+- **F5** ([ADR 0021](https://github.com/adriencr81/Check-Alfred/blob/main/docs/adr/0021-openai-agents-native-connector.md)) — OpenAI Agents SDK connector: register one tracing processor, get an anchored trace (`pip install alfred-ai[openai-agents]`)
 
 Post-v0.1: native connectors (v0.2 — CrewAI remaining), performance review — behavioral drift & cost-per-task (v0.3), evidence file export (v0.4 — the bridge to the closed-source engine).
 
@@ -336,4 +336,4 @@ Post-v0.1: native connectors (v0.2 — CrewAI remaining), performance review —
 
 The advanced mandate engine (formal verdict semantics, verifiable policies,
 multi-agent, retention, compliance features) is planned as **closed-source** —
-open-core model announced up front. See [PLAN.md §1 D4](PLAN.md).
+open-core model announced up front. See [PLAN.md §1 D4](https://github.com/adriencr81/Check-Alfred/blob/main/PLAN.md).

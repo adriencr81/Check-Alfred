@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import json
 import stat
+import sys
 from datetime import date
 from pathlib import Path
+
+import pytest
 
 from alfred.deliver.slack import build_block_kit_payload
 from alfred.mandate.engine import evaluate
@@ -184,6 +187,7 @@ def test_blob_without_a_named_field_is_left_intact() -> None:
     assert events[0].attributes[_ARGS_BLOB] == blob
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes don't exist on Windows")
 def test_redaction_key_is_created_private_and_reused(tmp_path: Path) -> None:
     """ADR 0025 decision 3: the key is what stops a masked email from being
     recovered from a dictionary, so it is owner-only and stable."""
