@@ -44,6 +44,12 @@ GEMINI_RATES = [
     ("gemini-3.1-flash-lite", 0.00025, 0.0015),
 ]
 
+# DeepSeek (api-docs.deepseek.com); unified V3.2 rate, $→€ at 0.90.
+DEEPSEEK_RATES = [
+    ("deepseek-chat", 0.00025, 0.00038),
+    ("deepseek-reasoner", 0.00025, 0.00038),
+]
+
 
 def _llm_event(model: str, input_tokens: int, output_tokens: int) -> TraceEvent:
     return TraceEvent(
@@ -73,6 +79,13 @@ def test_claude_model_priced_from_tokens(model: str, rate_in: float, rate_out: f
 def test_openai_and_gemini_model_priced_from_tokens(
     model: str, rate_in: float, rate_out: float
 ) -> None:
+    event = _llm_event(model, input_tokens=1000, output_tokens=500)
+    expected = (1000 / 1000) * rate_in + (500 / 1000) * rate_out
+    assert event_cost_eur(event) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(("model", "rate_in", "rate_out"), DEEPSEEK_RATES)
+def test_deepseek_model_priced_from_tokens(model: str, rate_in: float, rate_out: float) -> None:
     event = _llm_event(model, input_tokens=1000, output_tokens=500)
     expected = (1000 / 1000) * rate_in + (500 / 1000) * rate_out
     assert event_cost_eur(event) == pytest.approx(expected)

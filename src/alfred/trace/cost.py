@@ -50,6 +50,10 @@ _PRICING_EUR_PER_1K_TOKENS: dict[str, tuple[float, float]] = {
     "gemini-3.5-flash": (0.0015, 0.009),
     "gemini-3-flash-preview": (0.0005, 0.003),
     "gemini-3.1-flash-lite": (0.00025, 0.0015),
+    # DeepSeek (api-docs.deepseek.com/quick_start/pricing; unified V3.2 list
+    # price of $0.28/1M input, $0.42/1M output, converted at 1 USD ≈ 0.90 EUR)
+    "deepseek-chat": (0.00025, 0.00038),
+    "deepseek-reasoner": (0.00025, 0.00038),
 }
 
 
