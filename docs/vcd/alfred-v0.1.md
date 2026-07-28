@@ -1,7 +1,8 @@
 # VCD — Alfred v0.1 (léger, autonome)
 
-**Version** : 2 · **Date** : 2026-07-26 · **Auteur** : Claude Code
-(régénération pré-launch) · **Version 1** : 2026-07-18 (Brique 6)
+**Version** : 3 · **Date** : 2026-07-28 · **Auteur** : Claude Code
+(lancement PyPI, section finale) · **Version 2** : 2026-07-26 (régénération
+pré-launch) · **Version 1** : 2026-07-18 (Brique 6)
 
 ## Ce que ce document est — et n'est pas
 
@@ -239,3 +240,59 @@ name: Alfred daily digest        # workflow committable, webhook depuis un secre
 Confirme la DoD de la brique 11 (un inconnu voit un digest ancré, avec une
 déviation attrapée, sans réseau ni clé API, en moins de 5 minutes) et les DoD
 F4 et ADR 0027 sur le même run.
+
+## Lancement PyPI (2026-07-28)
+
+Alfred est public : `pip install alfred-ai` installe la **0.1.1** depuis le
+vrai index. Vérifié le soir même, depuis un venv vierge sans aucun accès au
+repo :
+
+```
+$ pip install alfred-ai
+$ alfred --version
+alfred 0.1.1
+$ alfred demo
+Alfred · demo-bot · 2026-07-28
+
+Tasks completed:               3   [evt:demo-1-task, demo-2-task, demo-3-task]
+…
+```
+
+L'API PyPI confirme deux versions publiées le 2026-07-28 : `0.1.0` et `0.1.1`,
+la 0.1.1 servie par défaut. **La 0.1.0 est un accident consigné** : publiée
+manuellement depuis une copie locale restée au niveau de la brique 11 (avant
+les PRs #19-49), elle est immuable et supersédée le jour même — voir la
+section « About 0.1.0 » du CHANGELOG. Le tag `v0.1.0` pointe volontairement
+sur le snapshot réellement publié, pas sur main.
+
+La release 0.1.1 (tag `v0.1.1`, commit `71a8268`) a ajouté par rapport au main
+pré-launch :
+
+- **Fix Windows réel attrapé par le smoke test pré-publication** : la sortie
+  redirigée (`alfred --help`, `alfred demo > out.txt`, CI) encodait en cp1252
+  et crashait en `UnicodeEncodeError` sur la flèche `→` du texte d'aide. Le
+  CLI force désormais stdout/stderr en UTF-8 ; test falsifiable
+  `test_cli_output_survives_cp1252_stdout` (subprocess en `PYTHONIOENCODING=
+  cp1252`), écrit rouge avant le fix, vert après.
+- Liens README absolus (la page PyPI ne résout pas les chemins relatifs).
+- 3 tests de permissions POSIX marqués skip sur Windows, où `chmod` ne sait
+  pas exprimer owner-only — le CI ubuntu continue de les exécuter.
+
+Exécution de référence au tag `v0.1.1` (Windows 11, Python 3.13.5) :
+
+```
+$ python -m pytest
+401 passed, 3 skipped in 17.70s
+$ python -m ruff check .
+All checks passed!
+$ python -m mypy
+Success: no issues found in 73 source files
+```
+
+Le même jour, les deux premières PRs externes ont été revues et mergées :
+**#53** (pricing DeepSeek, ferme #50 — prix sourcé, conversion recalculée à la
+main, tests calqués sur le pattern existant) et **#54** (mandat d'exemple
+`support-triage-bot.yaml` — chargé par le loader, 0 finding à
+`alfred mandate lint`). Vérification pré-merge en worktree local, les deux PRs
+mergées ensemble sur main : `403 passed, 3 skipped`, ruff et mypy propres —
+équivalent du CI, dont les runs de forks attendaient une approbation manuelle.
