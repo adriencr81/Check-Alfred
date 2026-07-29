@@ -87,9 +87,15 @@ One email per release, plus the monthly finding — a real case where Alfred
 caught a deviation an agent's own summary had smoothed over. No drip sequence,
 no product announcements between releases, unsubscribe in one click.
 
-<!-- MAINTAINER ACTION (ADR 0030): pick a provider (Buttondown, listmonk, …) and
-     drop the subscribe form or link here. Deliberately left empty rather than
-     filled with a placeholder URL that would 404 on launch day. -->
+<form action="https://buttondown.com/api/emails/embed-subscribe/alfred-ai"
+      method="post" target="_blank" class="buttondown-subscribe">
+  <input type="email" name="email" placeholder="you@example.com" required
+         style="padding: 0.45em 0.6em; min-width: 16em; max-width: 100%;">
+  <button type="submit" style="padding: 0.45em 1.1em;">Subscribe</button>
+</form>
+
+<p><small>Prefer a page? <a href="https://buttondown.com/alfred-ai">Subscribe on
+Buttondown</a> directly.</small></p>
 
 Nothing here is collected by Alfred itself: the package emits no telemetry, and
 subscribing is a deliberate act on this page, outside the product. Your traces
