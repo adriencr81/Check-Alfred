@@ -8,7 +8,7 @@
 > **Accountability layer for AI agents.** Every line of an Alfred report is
 > anchored to a trace event ID. The ones that aren't, don't ship.
 
-![An Alfred digest: four counted lines, each followed by the trace event IDs it was computed from, and one flagged deviation.](https://raw.githubusercontent.com/adriencr81/Check-Alfred/main/docs/assets/social-preview.png)
+![14-second terminal demo: a mandate forbids refunds above €100, the agent issues a €250 refund anyway, and alfred watch flags the deviation anchored to its trace event ID.](https://raw.githubusercontent.com/adriencr81/Check-Alfred/main/docs/assets/alfred-demo.gif)
 
 ## Try it — 20 seconds, no install, no API key, no webhook
 
