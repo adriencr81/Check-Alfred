@@ -147,6 +147,16 @@ events (the `[evt:…]` IDs) — never self-reported by the agent, never
 invented by an LLM. See [verified_nlg.md](verified_nlg.md) for the
 guarantee.
 
+### One agent per traces directory (for now)
+
+`alfred watch` currently evaluates every event in the traces directory
+against the project's mandate — the mandate's `agent:` field is a label, not
+a filter. Two agents writing to the same directory means each one's digest
+reports false deviations computed from the other's events. Until evaluation
+is scoped to the mandate's agent
+([#60](https://github.com/adriencr81/Check-Alfred/issues/60)), give each
+agent its own traces directory and its own Alfred project.
+
 ### When a trace file cannot be read
 
 A file Alfred cannot parse is **quarantined**, not fatal: the pass still
