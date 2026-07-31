@@ -4,10 +4,8 @@
 traces into a daily stand-up your team can actually trust — every line anchored
 to a trace event ID.
 
-*Status: v0.1 is feature-complete and targeted for public release in early
-August 2026. Until it ships, the install commands below name a package that is
-not on PyPI yet — build from the [repository](https://github.com/adriencr81/Check-Alfred)
-in the meantime.*
+*Status: v0.1 is live on PyPI — `pip install alfred-ai`. It is a 0.1 and says so;
+the full roadmap lives in the [repository](https://github.com/adriencr81/Check-Alfred).*
 
 ---
 
