@@ -18,7 +18,7 @@ from alfred.mandate.engine import evaluate_day, evaluate_trace
 from alfred.mandate.model import Deviation, Mandate
 from alfred.report.model import Baseline, Digest, Line, LineKind
 from alfred.trace.cost import contributing_costs
-from alfred.trace.model import EventId, SpanKind, TraceEvent
+from alfred.trace.model import EventId, SpanKind, TraceEvent, is_tool_error
 
 _TOOL_NAME_ATTR = "gen_ai.tool.name"
 
@@ -80,6 +80,30 @@ def _escalations_line(
     )
 
 
+def _failed_tool_calls_line(events: Sequence[TraceEvent]) -> Line | None:
+    """Count the tool calls the trace records as failed.
+
+    A failed call is a fact, not a mandate breach — an agent whose tool failed
+    and which escalated correctly did nothing wrong — so it is a Line, never a
+    Deviation. It exists because the failure used to reach the report only
+    through the aggregate `tool_error_rate` of an `escalate_when` rule: a
+    mandate declaring no such rule reported a flawless day over a tool that
+    failed, and the agent's own account of it went unchallenged.
+    """
+    failed = [
+        event
+        for event in events
+        if event.kind is SpanKind.TOOL_CALL and is_tool_error(event)
+    ]
+    if not failed:
+        return None
+    return Line(
+        kind=LineKind.FAILED_TOOL_CALLS,
+        value=float(len(failed)),
+        sources=tuple(event.event_id for event in failed),
+    )
+
+
 _LineBuilder = Callable[[Sequence[TraceEvent]], Line | None]
 
 
@@ -94,6 +118,7 @@ def _line_builders(mandate: Mandate) -> tuple[_LineBuilder, ...]:
         _tasks_completed_line,
         _cost_line,
         partial(_escalations_line, mandate.escalation_tools),
+        _failed_tool_calls_line,
     )
 
 

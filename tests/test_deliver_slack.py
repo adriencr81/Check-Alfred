@@ -71,6 +71,17 @@ def _digest_with_deviation() -> Digest:
     )
 
 
+def test_payload_evidence_context_labels_failed_tool_calls() -> None:
+    digest = Digest(
+        agent="refund-bot-v3",
+        date=date(2026, 8, 30),
+        lines=(Line(LineKind.FAILED_TOOL_CALLS, 1.0, (EventId("f01"),)),),
+    )
+    payload = build_block_kit_payload(digest)
+    context = payload["blocks"][-1]
+    assert "failures [evt:f01]" in context["elements"][0]["text"]
+
+
 def test_payload_has_header_and_one_field_per_line() -> None:
     payload = build_block_kit_payload(_digest())
     blocks = payload["blocks"]

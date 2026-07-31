@@ -19,6 +19,7 @@ LABELS: dict[LineKind, str] = {
     LineKind.TASKS_COMPLETED: "Tasks completed",
     LineKind.COST_EUR: "Cost (tokens → €)",
     LineKind.ESCALATIONS: "Escalations",
+    LineKind.FAILED_TOOL_CALLS: "Failed tool calls",
 }
 
 _DEVIATIONS_LABEL = "Deviations (mandate)"

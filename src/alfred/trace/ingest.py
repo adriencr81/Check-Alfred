@@ -13,7 +13,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-from alfred.trace.model import EventId, SpanKind, TraceEvent, TraceIngestionError
+from alfred.trace.model import (
+    TOOL_STATUS_ATTR,
+    EventId,
+    SpanKind,
+    TraceEvent,
+    TraceIngestionError,
+)
 from alfred.trace.redact import Redactor
 
 
@@ -67,7 +73,6 @@ def _kind(attributes: dict[str, Any]) -> SpanKind:
     return SpanKind.UNKNOWN
 
 
-_TOOL_STATUS_ATTR = "tool.result.status"
 _TOOL_ARGS_JSON_ATTR = "gen_ai.tool.call.arguments"
 _TOOL_ARGS_PREFIX = "tool.arguments."
 _TOOL_NAME_ATTR = "gen_ai.tool.name"
@@ -91,8 +96,8 @@ def _adapt_semconv(span: dict[str, Any], kind: SpanKind, attributes: dict[str, A
     """
     if kind is not SpanKind.TOOL_CALL:
         return
-    if _TOOL_STATUS_ATTR not in attributes and _is_status_error(span):
-        attributes[_TOOL_STATUS_ATTR] = "error"
+    if TOOL_STATUS_ATTR not in attributes and _is_status_error(span):
+        attributes[TOOL_STATUS_ATTR] = "error"
     raw_arguments = attributes.get(_TOOL_ARGS_JSON_ATTR)
     if isinstance(raw_arguments, str):
         _flatten_tool_arguments(raw_arguments, attributes)

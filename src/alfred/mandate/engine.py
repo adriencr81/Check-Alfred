@@ -16,12 +16,11 @@ from typing import Any
 
 from alfred.mandate.model import Deviation, DeviationType, ForbiddenRule, Mandate, MandateError
 from alfred.trace.cost import computed_cost_eur, contributing_costs, declared_cost_eur
-from alfred.trace.model import EventId, SpanKind, TraceEvent
+from alfred.trace.model import EventId, SpanKind, TraceEvent, is_tool_error
 
 _FORBIDDEN_PATTERN = re.compile(r"^(?P<tool>.+?)_above_(?P<amount>\d+(?:\.\d+)?)_eur$")
 
 _TOOL_NAME_ATTR = "gen_ai.tool.name"
-_TOOL_STATUS_ATTR = "tool.result.status"
 _TOOL_ARGS_PREFIX = "tool.arguments."
 
 _CallSignature = tuple[str, tuple[tuple[str, Any], ...]]
@@ -34,11 +33,6 @@ def _tool_calls(events: Sequence[TraceEvent]) -> list[TraceEvent]:
 def _tool_name(event: TraceEvent) -> str | None:
     name = event.attributes.get(_TOOL_NAME_ATTR)
     return name if isinstance(name, str) else None
-
-
-def _is_error(event: TraceEvent) -> bool:
-    status = event.attributes.get(_TOOL_STATUS_ATTR)
-    return isinstance(status, str) and status.lower() != "ok"
 
 
 def _is_escalated(mandate: Mandate, tool_calls: Sequence[TraceEvent]) -> bool:
@@ -273,7 +267,7 @@ def _tool_error_rate(
 ) -> tuple[float, tuple[EventId, ...]]:
     if not tool_calls:
         return 0.0, ()
-    errored = [event for event in tool_calls if _is_error(event)]
+    errored = [event for event in tool_calls if is_tool_error(event)]
     return len(errored) / len(tool_calls), tuple(event.event_id for event in errored)
 
 
