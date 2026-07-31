@@ -58,6 +58,7 @@ alfred-ai = "alfred.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/adriencr81/Check-Alfred"
+Documentation = "https://adriencr81.github.io/Check-Alfred/"
 Issues = "https://github.com/adriencr81/Check-Alfred/issues"
 
 [tool.hatch.build.targets.wheel]
