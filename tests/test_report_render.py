@@ -71,6 +71,18 @@ def test_render_aligns_value_columns_across_rows() -> None:
     assert len(evidence_columns) == 1
 
 
+def test_render_labels_failed_tool_calls() -> None:
+    digest = Digest(
+        agent="refund-bot-v3",
+        date=date(2026, 8, 30),
+        lines=(Line(LineKind.FAILED_TOOL_CALLS, 2.0, (EventId("f01"), EventId("f02"))),),
+    )
+    line = render(digest).splitlines()[2]
+    assert line.startswith("Failed tool calls:")
+    assert "2" in line
+    assert "[evt:f01, f02]" in line
+
+
 def test_render_omits_deviations_section_when_none() -> None:
     digest = Digest(
         agent="refund-bot-v3",

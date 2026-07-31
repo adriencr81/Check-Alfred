@@ -195,6 +195,34 @@ def test_escalations_line_absent_when_none() -> None:
     assert all(line.kind is not LineKind.ESCALATIONS for line in digest.lines)
 
 
+def test_failed_tool_calls_line_counts_errored_calls() -> None:
+    """A failed tool call surfaces on its own line, whatever the mandate says.
+
+    Before this line existed, an error only reached the report through the
+    aggregate `tool_error_rate` of an `escalate_when` rule — so a mandate that
+    declared no such rule reported a flawless day over a tool that failed.
+    """
+    events = [
+        _event(
+            "e1",
+            attributes={"gen_ai.tool.name": "read_order", "tool.result.status": "error"},
+        ),
+        _event("e2", attributes={"gen_ai.tool.name": "read_order", "tool.result.status": "ok"}),
+    ]
+    digest = build_digest(_mandate(), events, date(2026, 8, 30))
+    line = _line(digest, LineKind.FAILED_TOOL_CALLS)
+    assert line.value == 1.0
+    assert line.sources == (EventId("e1"),)
+
+
+def test_failed_tool_calls_line_absent_when_none() -> None:
+    events = [
+        _event("e1", attributes={"gen_ai.tool.name": "read_order", "tool.result.status": "ok"})
+    ]
+    digest = build_digest(_mandate(), events, date(2026, 8, 30))
+    assert all(line.kind is not LineKind.FAILED_TOOL_CALLS for line in digest.lines)
+
+
 def test_deviations_span_multiple_traces_in_one_day() -> None:
     events = [
         _event("e1", trace_id="trace-a", attributes={"gen_ai.tool.name": "read_pii"}),

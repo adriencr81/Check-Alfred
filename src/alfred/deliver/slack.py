@@ -25,6 +25,7 @@ _EVIDENCE_LABELS: dict[LineKind, str] = {
     LineKind.TASKS_COMPLETED: "tasks",
     LineKind.COST_EUR: "cost",
     LineKind.ESCALATIONS: "escalations",
+    LineKind.FAILED_TOOL_CALLS: "failures",
 }
 
 

@@ -25,6 +25,9 @@ class TraceIngestionError(Exception):
     """Raised when an incoming trace payload cannot be normalized."""
 
 
+TOOL_STATUS_ATTR = "tool.result.status"
+
+
 @dataclass(frozen=True, slots=True)
 class TraceEvent:
     event_id: EventId
@@ -35,3 +38,14 @@ class TraceEvent:
     start_time: datetime
     end_time: datetime
     attributes: dict[str, Any] = field(default_factory=dict, hash=False)
+
+
+def is_tool_error(event: TraceEvent) -> bool:
+    """True when the event records a tool call that failed.
+
+    Single source of truth: the mandate engine (`tool_error_rate`) and the
+    report's Failed tool calls line must agree on what counts as a failure, or
+    a digest contradicts its own deviations.
+    """
+    status = event.attributes.get(TOOL_STATUS_ATTR)
+    return isinstance(status, str) and status.lower() != "ok"

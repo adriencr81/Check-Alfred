@@ -18,6 +18,7 @@ class LineKind(StrEnum):
     TASKS_COMPLETED = "tasks_completed"
     COST_EUR = "cost_eur"
     ESCALATIONS = "escalations"
+    FAILED_TOOL_CALLS = "failed_tool_calls"
 
 
 @dataclass(frozen=True, slots=True)
