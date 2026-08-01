@@ -116,6 +116,27 @@ In qualification terms: evidence of execution is worthless without a requirement
 to hold it against. That isn't philosophy. It's the entire reason the V-model
 has a left-hand side.
 
+```yaml
+agent: refund-bot-v3
+
+allowed_tools: [read_order, issue_refund, notify_customer, escalate_to_human]
+daily_budget_eur: 5.00
+
+forbidden_actions:
+  - issue_refund_above_100_eur
+  - send_marketing
+
+escalate_when:
+  - tool_error_rate > 0.10
+  - budget_used > 0.80
+escalation_tools:
+  - escalate_to_human
+
+required_actions:
+  - when_tool: issue_refund
+    require_tool: notify_customer
+```
+
 ---
 
 ## V4 — Independent outcome verification
@@ -272,6 +293,8 @@ Python package covering V1 to V3: it reads an agent's OpenTelemetry GenAI spans,
 holds them against a mandate declared in YAML, and computes a daily digest in
 which every statement is anchored to a trace event ID. Failed tool calls get
 their own line, whatever the agent claimed about them.
+
+![14-second terminal demo: a mandate forbids refunds above €100, the agent issues a €250 refund anyway, and alfred watch flags the deviation anchored to its trace event ID.](https://raw.githubusercontent.com/adriencr81/Check-Alfred/main/docs/assets/alfred-demo.gif)
 
 It does **not** do V4 — it reads traces, not your database — and it does not do
 V5 today. I'd rather write that here than have you discover it in production.
