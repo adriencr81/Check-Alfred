@@ -5,8 +5,17 @@
 > aucune décision actée — voir `docs/adr/0011-growth-plan-3m.md`.
 > **Objectif unique : maximiser le nombre d'utilisateurs.**
 
-**Version** : 1.2 · **Date** : 2026-07-26 · **Horizon** : M1 (19/07→18/08),
+**Version** : 1.3 · **Date** : 2026-08-01 · **Horizon** : M1 (19/07→18/08),
 M2 (19/08→18/09), M3 (19/09→19/10).
+
+> **Révision 1.3 (2026-08-01, ADR 0032)** — trois recalages à 3 jours du launch,
+> aucun sur les cibles chiffrées. La séquence du launch n'avait **aucun canal
+> conversationnel** : le vendredi gagne le Slack OTel `#sig-ai` et le Discord
+> LangChain/LangGraph (§1.2). Le tableau §1.3 est **réordonné** — les digests
+> partagés passent devant les stars, pour que le bilan du 10-14/08 se lise dans
+> le bon ordre. La **motion d'audit** outbound est ouverte en M3 (§3), sans prix.
+> Et la case « liste mail » de §1.1 est corrigée : le formulaire est branché,
+> l'action mainteneur bloquante de l'ADR 0030 est levée.
 
 > **Révision 1.2 (2026-07-26, ADR 0030)** — la politique directrice manquait au
 > plan : il décrivait par quels canaux on lance, pas quelle traction on
@@ -140,12 +149,13 @@ launch qu'ils sont censés capter.
       qui produit l'artefact à transmettre (motion dev-champion) ; le fichier HTML
       lui-même reste vierge de toute référence externe, l'ADR 0020 décision 2
       n'étant pas relâchée — un rapport archivé pour audit ne porte pas de CTA.
-- [ ] **Liste mail** — section « Stay in the loop » en place sur la landing et au
-      README (2026-07-26) ; **reste une action mainteneur** : choisir le
-      fournisseur (Buttondown, listmonk…) et brancher l'URL du formulaire dans
-      `docs/site/index.md`. Aucune URL n'a été inventée. Tant que ce n'est pas
-      fait, le canal possédé n'existe pas — c'est le seul item bloquant de
-      l'ADR 0030, et il est antérieur au launch.
+- [x] **Liste mail** — section « Stay in the loop » sur la landing et au README
+      (2026-07-26), **formulaire Buttondown branché** dans `docs/site/index.md`
+      le 2026-07-31 (commit `a7c43ae`). Le canal possédé existe donc : c'était le
+      seul item bloquant de l'ADR 0030, et il est levé avant le launch — la
+      semaine du 04/08 est la seule de l'horizon où le trafic est gratuit et
+      massif, un visiteur non capté ce mardi-là coûte une réacquisition complète
+      au M3.
 
 Priorité 3 — **fiabilité visible** : badges CI, PyPI, versions Python et
 licence en place au README (2026-07-26). Les deux badges PyPI restent vides
@@ -184,9 +194,23 @@ Semaine du 28/07 :
 
 Semaine du 04/08 — **LAUNCH** (séquence §6.3, révisée ADR 0027) :
 mardi Show HN 14h-16h Paris → mercredi Reddit (r/AI_Agents, r/LocalLLaMA,
-posts texte) → jeudi thread X → vendredi PRs d'exemples + awesome-lists →
-lundi 11/08 pitch 4 newsletters (TLDR AI, The Rundown, Ben's Bites,
-La Revue IA).
+posts texte) → jeudi thread X → vendredi PRs d'exemples + awesome-lists
+**+ Slack OTel `#sig-ai` et Discord LangChain/LangGraph** → lundi 11/08 pitch
+4 newsletters (TLDR AI, The Rundown, Ben's Bites, La Revue IA).
+
+- [ ] **Créneau conversationnel du vendredi** (ADR 0032) — le reste de la
+      séquence ne fait que diffuser : un post, un pic, retour à zéro. Ces deux
+      salons sont les seuls où la semconv **GenAI** et l'ancrage **event-level**
+      s'énoncent sans traduction, et le Slack OTel est le public le moins
+      disputé du paysage. Cible **3-5 conversations engagées**, pas un compteur
+      de vues. Trois règles, dans l'ordre d'importance :
+      **(a)** on y arrive en consommateur de la spec qui expose ce qu'il en tire
+      et ce qui lui a manqué — un pitch produit y est un coût net ;
+      **(b)** on écrit **event ID**, jamais « trace ID » — la nuance est la
+      différence entre « dans quelle session » et « quel appel exact », donc la
+      totalité de la promesse, et elle ne se rattrape pas devant ce public ;
+      **(c)** même prérequis d'appartenance que Reddit (§1.2, semaine du 21/07) —
+      un lien froid sans historique est au mieux ignoré.
 
 - [ ] **Capter le pic dans le canal possédé** : chaque post de la séquence cite
       la landing, et la landing porte le formulaire d'abonnement. C'est la seule
@@ -206,14 +230,19 @@ Semaines du 11/08 et 18/08 (post-launch immédiat) :
 
 ### 1.3 Cibles fin M1
 
+Ordre de lecture, pas seulement liste de cibles (ADR 0032 décision 2) : les
+métriques d'exécution passent avant les métriques d'audience. Aucun chiffre n'a
+changé depuis la rev 1.2 — seule leur position a changé, et c'est elle qui décide
+de ce qu'on conclut d'un launch médian.
+
 | Métrique | Cible |
 |---|---|
-| Stars | 500 (signal §6.3) — plancher acceptable 150 |
-| Installs pip/semaine | 20-50 |
-| Issues/PRs d'inconnus | ≥ 5 |
-| Témoignages écrits early users | 2-3 |
 | **Digests partagés publiquement** | ≥ 3 |
 | **Abonnés liste mail** | 50 |
+| Issues/PRs d'inconnus | ≥ 5 |
+| Témoignages écrits early users | 2-3 |
+| Installs pip/semaine | 20-50 |
+| Stars | 500 (signal §6.3) — plancher acceptable 150 |
 | **Demandes `teams-inquiry`** | ≥ 1 (informatif, pas un échec à 0) |
 
 Sur la lecture du résultat : un Show HN suit une distribution très asymétrique.
@@ -369,6 +398,24 @@ mois sans effort marginal.
       découvert sous pression** — c'était tout l'objet d'avancer l'édition zéro.
       Le re-tir vise en priorité la liste mail constituée depuis M1 : c'est la
       seule audience qu'un second passage n'a pas à racheter.
+- [ ] **Motion d'audit outbound — ~20 approches qualifiées** (ADR 0032
+      décision 3). Jusqu'ici le dispositif du signal payant est **passif** : la
+      page teams attend qu'on la trouve. C'est la seule tâche de l'horizon qui
+      va le chercher, et elle arrive au M3 parce que la cible « demandes payant
+      spontanées ≥ 2 » se joue ici. Ce qu'on propose est un **diagnostic, pas
+      l'outil** : le lead technique lance `alfred report --html` sur ses propres
+      agents, transmet le fichier autonome, on le lit avec lui 30 min.
+      Deux invariants, non négociables :
+      **(a)** on ne touche jamais son infrastructure et on ne reçoit jamais ses
+      traces — c'est exactement le motion dev-champion (§6.0 point 1), et « your
+      traces never leave your infrastructure » est une propriété du paquet, pas
+      un argument de vente qu'on peut suspendre le temps d'un audit ;
+      **(b)** **aucun prix n'est annoncé** — PLAN.md §8 tranche sur les demandes
+      de payant spontanées, et un tarif posé remplace ce signal par un signal
+      contaminé : à zéro conversion on ne distingue plus « pas d'acheteurs » de
+      « pas d'acheteurs à ce prix-là ».
+      Cette campagne est **découplée du launch** : l'ADR 0030 point 3 écarte la
+      collecte de leads pendant le pic, pas l'outbound deux mois après.
 - [ ] Finding public du mois (cadence rituelle).
 - [ ] **2-3 études de cas nommées** tirées des utilisateurs récurrents
       (matière YC §7.2 : « trois utilisateurs nommables »).
