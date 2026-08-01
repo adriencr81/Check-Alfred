@@ -312,6 +312,14 @@ Le launch (§6.3) est re-daté seulement après ce run.
 > ci-dessous et énonce la politique directrice — cible, canal possédé, signal
 > payant, actif composé. §6.4 est recalé en conséquence (leaderboard en M2).
 
+> **Révision 2026-08-01** (ADR 0032) : la séquence §6.3 n'avait aucun canal
+> conversationnel — elle gagne le vendredi le Slack OTel `#sig-ai` et le Discord
+> LangChain/LangGraph, seuls endroits où l'ancrage event-level s'énonce sans
+> traduction. Le signal de réussite du launch est réordonné (digests partagés
+> avant stars) et §6.4 gagne la motion d'audit en M3. Aucune cible chiffrée
+> n'est modifiée ; ni prix ni packaging avant J+150, et le backlog négatif §10
+> est inchangé.
+
 ### 6.0 Stratégie de traction (politique directrice)
 
 Quatre décisions qui priment sur le choix des canaux, parce qu'elles disent
@@ -399,6 +407,7 @@ vos agents IA ont besoin d'un mandat, pas d'un dashboard ».
 | Mercredi | **Reddit** r/AI_Agents, r/LocalLLaMA | Adapté par sub. LocalLLaMA = « surveillez vos agents sans envoyer vos traces à un SaaS ». **Posts texte, jamais posts lien** — l'automod des subs filtre les comptes neufs qui postent une URL, et le post disparaît sans notification. | 500 upvotes cumulés. |
 | Jeudi | **X thread** | GIF + le finding le plus frappant de B4 (verified NLG). | 200+ reposts sur le thread. |
 | Vendredi | **PRs d'exemples** (LangGraph, OpenAI Agents SDK) + **awesome-lists** | Distribution permanente au lieu d'un pic : une PR mergée est un backlink devant l'audience cible qu'aucun modérateur ne retire. Remplace le post LinkedIn FR, qui supposait un réseau de décideurs (ADR 0027). | 1-2 PRs ouvertes, 3 listes soumises. |
+| Vendredi (2ᵉ créneau) | **Slack OTel `#sig-ai`** + **Discord LangChain/LangGraph** | Le seul canal conversationnel de la séquence, et le seul où la semconv GenAI et l'ancrage **event-level** s'énoncent sans traduction (ADR 0032). On y arrive en consommateur de la spec qui expose ce qu'il en tire, pas en annonceur de produit. Écrire **event ID**, jamais « trace ID » : la nuance est tout le différenciateur. | 3-5 conversations engagées. Même prérequis d'appartenance que Reddit. |
 | Lundi J+7 | **Pitch 4 newsletters IA** (TLDR AI, The Rundown, Ben's Bites, La Revue IA) | Angle « accountability » = angle éditorial frais. | 1-2 pickups. |
 
 **Prérequis Reddit, à traiter avant le launch** : vérifier l'âge et le karma du
@@ -409,7 +418,7 @@ même travail que le sourcing des 30 noms (§6.2).
 Le post LinkedIn FR peut sortir hors séquence, sans objectif chiffré : il coûte
 20 minutes et ne dépend de personne.
 
-**Signal de réussite du launch** : ≥ 500 stars à J+50, ≥ 20 installs pip, ≥ 5 issues créées par des inconnus.
+**Signal de réussite du launch** (ordre de lecture, ADR 0032 décision 2) : ≥ 3 **digests partagés publiquement**, ≥ 5 issues créées par des inconnus, ≥ 20 installs pip, ≥ 500 stars à J+50. Les digests d'abord parce qu'ils prouvent une exécution : un tir à 120 stars et 4 digests réels n'est pas le même événement qu'un tir à 400 stars et 0 digest.
 
 **Si le launch rate** (< 100 stars à J+50) : ne pas paniquer, re-launch à J+120 sous un autre angle — le **leaderboard mensuel de fiabilité** (§6.4), un objet de discussion neuf plutôt qu'une redite du produit. Un HN raté se retente sous un autre angle à 2-3 mois.
 
@@ -427,6 +436,7 @@ Le post LinkedIn FR peut sortir hors séquence, sans objectif chiffré : il coû
 - **Soumission** aux awesome-lists : `awesome-llm-agents`, `awesome-ai-agents`, `awesome-opentelemetry`.
 - **Leaderboard mensuel de fiabilité d'agents** (ancienne Brique 9 du harnais RAG, réactivée ici) — machine à contenu la plus starrable du plan. **Édition zéro en M2** (minimale : 2-3 frameworks, mandat commun, données brutes committées), édition n°1 à J+120 (§6.0 point 4, ADR 0030). L'assurance du re-launch §9 est ainsi un angle déjà rodé, et non un lot à découvrir sous pression.
 - **Une édition de liste mail par release**, plus le finding mensuel ci-dessus (§6.0 point 2). Le seul canal du moteur qui ne soit pas loué.
+- **Motion d'audit outbound, à partir du M3** (ADR 0032 décision 3) — la seule brique *active* du signal payant, le dispositif §6.0 point 3 étant passif par construction. Mécanique : le lead technique lance `alfred report --html` sur ses propres agents, transmet le fichier autonome, on le lit avec lui. On ne touche jamais son infrastructure — « your traces never leave your infrastructure » est une propriété du paquet, pas une phrase de vente. Postérieure au launch : l'ADR 0030 point 3 écarte la collecte de leads *pendant* le pic, pas l'outbound en soi. **Sans prix** — §8 se mesure mal une fois un tarif annoncé.
 
 **Cadence de release** :
 - v0.2 (J+90) : connecteur natif CrewAI, endpoint OTLP HTTP, digest Microsoft Teams, coûts multi-providers — priorisés par les *issues*, pas par intuition. LangGraph et OpenAI Agents SDK sont livrés avant le launch (Briques 12 et 13) et font partie de son angle.
