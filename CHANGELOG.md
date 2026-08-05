@@ -5,7 +5,27 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **A digest no longer reports another agent's events.** `alfred watch` and
+  `alfred report` evaluated every event in the traces directory against the
+  project's mandate — the mandate's `agent:` field was a display label, not a
+  filter. Two agents sharing a `traces/` directory each got a digest carrying
+  the other's tool calls as `tool_not_allowed` deviations, both agents' costs in
+  one budget, and mixed task counts. A trace is now evaluated only when the
+  `gen_ai.agent.name` on its `invoke_agent` span is the mandate's agent, and the
+  rolling baseline (F3) is scoped the same way — it read prior days from the
+  store unfiltered, so "+180% vs 7-day mean" compared today against another
+  agent's history. Fixes
+  [#60](https://github.com/adriencr81/Check-Alfred/issues/60); the
+  one-agent-per-directory workaround is gone from `docs/integrate.md`.
+- A trace naming **no** agent is still evaluated — excluding it would silently
+  empty the digest of any pipeline that omits the attribute, an OTel Collector
+  bridge among them — but Alfred cannot attest those events belong to your
+  agent, so it says so on stderr and carries on. It does not fail the pass:
+  unlike a quarantined file, no human action fixes it, and an exit `1` on every
+  run would train the operator to ignore it. See
+  `docs/adr/0033-agent-scoped-digest.md`.
 
 ## [0.1.1] — 2026-07-28
 

@@ -357,6 +357,197 @@ def test_watch_ingests_a_quarantined_file_once_it_is_fixed(
     store.close()
 
 
+def _write_agent_trace(
+    directory: Path,
+    *,
+    agent: str | None,
+    tool: str,
+    day: date,
+    trace_id: str,
+    cost_eur: float = 0.0,
+) -> None:
+    """One trace: an `invoke_agent` span — naming its agent unless `agent` is
+    None — plus the tool call it made, and an LLM call when a cost is wanted."""
+    nanos = str(int(datetime(day.year, day.month, day.day, 12, tzinfo=UTC).timestamp()) * 10**9)
+    task_attributes: list[dict[str, object]] = [
+        {"key": "gen_ai.operation.name", "value": {"stringValue": "invoke_agent"}}
+    ]
+    if agent is not None:
+        task_attributes.append({"key": "gen_ai.agent.name", "value": {"stringValue": agent}})
+
+    def _span(suffix: str, name: str, attributes: list[dict[str, object]]) -> dict[str, object]:
+        return {
+            "spanId": f"{trace_id}-{suffix}",
+            "traceId": trace_id,
+            "name": name,
+            "startTimeUnixNano": nanos,
+            "endTimeUnixNano": nanos,
+            "attributes": attributes,
+        }
+
+    spans: list[dict[str, object]] = [
+        _span("task", "invoke_agent", task_attributes),
+        _span(
+            "tool",
+            tool,
+            [
+                {"key": "gen_ai.operation.name", "value": {"stringValue": "execute_tool"}},
+                {"key": "gen_ai.tool.name", "value": {"stringValue": tool}},
+            ],
+        ),
+    ]
+    if cost_eur:
+        spans.append(
+            _span(
+                "llm",
+                "chat",
+                [
+                    {"key": "gen_ai.operation.name", "value": {"stringValue": "chat"}},
+                    {"key": "gen_ai.usage.cost_eur", "value": {"doubleValue": cost_eur}},
+                ],
+            )
+        )
+    payload = {"resourceSpans": [{"scopeSpans": [{"spans": spans}]}]}
+    (directory / f"{day.isoformat()}-{trace_id}.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
+
+
+@pytest.fixture
+def shared_traces_dir(tmp_path: Path) -> Path:
+    """A traces directory two agents write into — the case of issue #60."""
+    directory = tmp_path / "shared"
+    directory.mkdir()
+    return directory
+
+
+def test_digest_ignores_another_agents_events(project_dir: Path, shared_traces_dir: Path) -> None:
+    """Issue #60: two agents sharing a traces directory. `charge_card` is not in
+    the refund-bot's mandate, but the refund-bot never called it — the expense-bot
+    did, and its events must not be evaluated against someone else's mandate."""
+    day = date(2026, 8, 26)
+    _write_agent_trace(
+        shared_traces_dir, agent="refund-bot-v3", tool="issue_refund", day=day, trace_id="mine"
+    )
+    _write_agent_trace(
+        shared_traces_dir, agent="expense-bot", tool="charge_card", day=day, trace_id="theirs"
+    )
+    store = TraceStore(project_dir / "trace.db")
+
+    result = watch_once(project_dir, shared_traces_dir, _mandate(), store)
+    store.close()
+
+    assert len(result.digests) == 1
+    assert result.digests[0].deviations == ()
+    tasks = next(
+        line for line in result.digests[0].lines if line.kind is LineKind.TASKS_COMPLETED
+    )
+    assert tasks.value == 1  # the refund-bot's one task, not both agents'
+    cited = {source for line in result.digests[0].lines for source in line.sources}
+    assert not any(source.startswith("theirs") for source in cited)
+    assert result.unattributed == ()  # both traces name their agent
+
+
+def test_digest_still_reports_the_mandate_agents_own_deviation(
+    project_dir: Path, shared_traces_dir: Path
+) -> None:
+    """Mirror of the test above: the filter must not swallow real deviations.
+    The same forbidden tool, called by the agent the mandate governs, is caught."""
+    day = date(2026, 8, 26)
+    _write_agent_trace(
+        shared_traces_dir, agent="refund-bot-v3", tool="charge_card", day=day, trace_id="mine"
+    )
+    store = TraceStore(project_dir / "trace.db")
+
+    result = watch_once(project_dir, shared_traces_dir, _mandate(), store)
+    store.close()
+
+    deviations = result.digests[0].deviations
+    assert len(deviations) == 1
+    assert deviations[0].details.get("tool") == "charge_card"
+
+
+def test_baseline_ignores_another_agents_history(
+    project_dir: Path, shared_traces_dir: Path
+) -> None:
+    """The rolling baseline (F3) reads prior days straight from the store, so it
+    mixed agents too — a second, unfiltered site of the same bug.
+
+    Same three prior days and same expected mean as
+    `test_watch_attaches_rolling_baseline_from_store_history`; the only
+    difference is the expense-bot spending 90 € in the middle of the window.
+    """
+    for day, cost in ((26, 1.0), (27, 2.0), (28, 3.0), (29, 8.0)):
+        _write_agent_trace(
+            shared_traces_dir,
+            agent="refund-bot-v3",
+            tool="issue_refund",
+            day=date(2026, 8, day),
+            trace_id=f"mine-{day}",
+            cost_eur=cost,
+        )
+    _write_agent_trace(
+        shared_traces_dir,
+        agent="expense-bot",
+        tool="charge_card",
+        day=date(2026, 8, 27),
+        trace_id="theirs-27",
+        cost_eur=90.0,
+    )
+    store = TraceStore(project_dir / "trace.db")
+
+    digests = watch_once(project_dir, shared_traces_dir, _mandate(), store).digests
+    store.close()
+
+    last_cost = next(line for line in digests[-1].lines if line.kind is LineKind.COST_EUR)
+    assert last_cost.baseline is not None
+    assert last_cost.baseline.mean == pytest.approx(2.0)  # (1+2+3)/3, not (1+92+3)/3
+    assert set(last_cost.baseline.sources) == {"mine-26-llm", "mine-27-llm", "mine-28-llm"}
+
+
+def test_unattributed_trace_is_evaluated_and_reported(
+    project_dir: Path, shared_traces_dir: Path
+) -> None:
+    """A trace with no `gen_ai.agent.name` — the shape an OTel Collector bridge
+    produces — is still evaluated, since excluding it would silently empty the
+    digest of everyone who does not emit the attribute. But it cannot be proven
+    to belong to this mandate, and that gap is reported (ADR 0024)."""
+    day = date(2026, 8, 26)
+    _write_agent_trace(
+        shared_traces_dir, agent=None, tool="issue_refund", day=day, trace_id="nameless"
+    )
+    store = TraceStore(project_dir / "trace.db")
+
+    result = watch_once(project_dir, shared_traces_dir, _mandate(), store)
+    store.close()
+
+    assert len(result.digests) == 1  # evaluated, not dropped
+    assert {event.event_id for event in result.unattributed} == {
+        "nameless-task",
+        "nameless-tool",
+    }
+
+
+def test_another_agents_events_are_not_reported_as_unattributed(
+    project_dir: Path, shared_traces_dir: Path
+) -> None:
+    """An excluded trace is not a gap: it belongs to a mandate of its own."""
+    _write_agent_trace(
+        shared_traces_dir,
+        agent="expense-bot",
+        tool="charge_card",
+        day=date(2026, 8, 26),
+        trace_id="theirs",
+    )
+    store = TraceStore(project_dir / "trace.db")
+
+    result = watch_once(project_dir, shared_traces_dir, _mandate(), store)
+    store.close()
+
+    assert result.unattributed == ()
+    assert result.digests == []  # nothing of this agent's happened that day
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes don't exist on Windows")
 def test_seen_state_and_store_are_owner_only(project_dir: Path, traces_dir: Path) -> None:
     """ADR 0025 decision 7: both files carry what the agent handled."""
