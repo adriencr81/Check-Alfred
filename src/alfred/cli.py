@@ -31,7 +31,14 @@ from alfred.trace.ingest import ingest_otlp_file, ingest_otlp_json
 from alfred.trace.model import TraceEvent, TraceIngestionError
 from alfred.trace.redact import Redactor, redactor_for
 from alfred.trace.store import TraceStore
-from alfred.watch import QuarantinedTrace, WatchPass, build_digests, watch_loop, watch_once
+from alfred.watch import (
+    QuarantinedTrace,
+    WatchPass,
+    build_digests,
+    unattributed_events,
+    watch_loop,
+    watch_once,
+)
 
 # Shown when `--narrate` is requested but no LLM endpoint resolves (missing
 # config keys or the API-key env var). Fail loudly rather than fall back to the
@@ -152,6 +159,27 @@ def _report_conflicts(conflicts: tuple[TraceEvent, ...]) -> None:
         )
 
 
+def _unattributed_notice(unattributed: tuple[TraceEvent, ...], agent: str, command: str) -> str:
+    """Say what the digest covered without being able to attest whose it was.
+
+    These events *were* evaluated: dropping every trace that names no agent
+    would silently empty the digest of anyone whose pipeline omits the
+    attribute (ADR 0033). So the digest stands, and the doubt is stated —
+    unlike a quarantine, it is not a fixable file, so it never fails the run.
+    """
+    traces = {event.trace_id for event in unattributed}
+    return (
+        f"{command}: {len(unattributed)} event(s) in {len(traces)} trace(s) were evaluated "
+        f"against {agent}'s mandate without proof they belong to it — their trace carries no "
+        f"gen_ai.agent.name. Emit it to scope this digest with certainty."
+    )
+
+
+def _report_unattributed(unattributed: tuple[TraceEvent, ...], agent: str) -> None:
+    if unattributed:
+        print(_unattributed_notice(unattributed, agent, "alfred watch"), file=sys.stderr)
+
+
 def _cmd_watch(args: argparse.Namespace) -> int:
     project_dir = Path(args.project)
     try:
@@ -204,6 +232,7 @@ def _cmd_watch(args: argparse.Namespace) -> int:
         )
         _report_quarantine(result.quarantined, project_dir)
         _report_conflicts(result.conflicts)
+        _report_unattributed(result.unattributed, mandate.agent)
 
     def _handle_in_loop(result: WatchPass) -> None:
         """Same handling, but a delivery outage must not end the supervision.
@@ -309,6 +338,9 @@ def _cmd_report(args: argparse.Namespace) -> int:
         digests = build_digests(mandate, events, store)
     finally:
         store.close()
+    unattributed = unattributed_events(mandate.agent, events)
+    if unattributed:
+        print(_unattributed_notice(unattributed, mandate.agent, "alfred report"), file=sys.stderr)
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)

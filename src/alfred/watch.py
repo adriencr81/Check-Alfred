@@ -35,7 +35,7 @@ from alfred.mandate.model import Mandate
 from alfred.report.build import BASELINE_WINDOW_DAYS, build_digest
 from alfred.report.model import Digest
 from alfred.trace.ingest import ingest_otlp_file
-from alfred.trace.model import TraceEvent, TraceIngestionError
+from alfred.trace.model import SpanKind, TraceEvent, TraceIngestionError
 from alfred.trace.redact import redactor_for
 from alfred.trace.store import TraceStore
 
@@ -69,6 +69,10 @@ class WatchPass:
     # content: an attempt to rewrite evidence a past digest may already quote
     # (ADR 0026 decisions 4 and 5). Reported like a quarantine, per pass.
     conflicts: tuple[TraceEvent, ...] = ()
+    # Events this digest evaluated without being able to prove they belong to
+    # the mandate's agent — their trace names none (ADR 0033). Reported like a
+    # quarantine, since a claim that cannot be attributed is a hole in the audit.
+    unattributed: tuple[TraceEvent, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +144,63 @@ def _quarantined(state: dict[str, _SeenFile]) -> tuple[QuarantinedTrace, ...]:
     )
 
 
+_AGENT_NAME_ATTR = "gen_ai.agent.name"
+
+
+def _trace_agent_names(events: Iterable[TraceEvent]) -> dict[str, str]:
+    """The agent each trace names, when it names one.
+
+    `gen_ai.agent.name` is carried by the session span alone (see
+    `alfred.instrument.tracer`), never by the model and tool spans under it, so
+    attribution is a property of the trace rather than of the event.
+    """
+    names: dict[str, str] = {}
+    for event in events:
+        if event.kind is SpanKind.AGENT_TASK:
+            name = event.attributes.get(_AGENT_NAME_ATTR)
+            if isinstance(name, str):
+                names[event.trace_id] = name
+    return names
+
+
+def _scope_to_agent(
+    agent: str, events: Sequence[TraceEvent]
+) -> tuple[list[TraceEvent], tuple[TraceEvent, ...]]:
+    """Split `events` into what `agent`'s mandate may judge, and what it cannot attest.
+
+    A trace naming a *different* agent is dropped: it is the subject of its own
+    mandate, and judging it here reports deviations against rules it was never
+    given — two agents sharing a traces directory produced exactly that
+    (issue #60, docs/adr/0033).
+
+    A trace naming no agent is kept. Excluding it would silently empty the
+    digest of every setup that does not emit the attribute — an OTel Collector
+    bridge among them — which is a worse failure than the one being fixed. It
+    is returned as unattributed instead, so the gap is stated rather than
+    assumed away (ADR 0024).
+    """
+    names = _trace_agent_names(events)
+    evaluated: list[TraceEvent] = []
+    unattributed: list[TraceEvent] = []
+    for event in events:
+        name = names.get(event.trace_id)
+        if name is None:
+            evaluated.append(event)
+            unattributed.append(event)
+        elif name == agent:
+            evaluated.append(event)
+    return evaluated, tuple(unattributed)
+
+
+def unattributed_events(agent: str, events: Sequence[TraceEvent]) -> tuple[TraceEvent, ...]:
+    """The events `agent`'s digest evaluated without being able to attest them.
+
+    Exposed because both digest paths must report the same gap: `watch` carries
+    it on its `WatchPass`, `alfred report` prints it beside the file it writes.
+    """
+    return _scope_to_agent(agent, events)[1]
+
+
 def _group_by_day(events: Iterable[TraceEvent]) -> dict[date, list[TraceEvent]]:
     by_day: dict[date, list[TraceEvent]] = defaultdict(list)
     for event in events:
@@ -148,9 +209,14 @@ def _group_by_day(events: Iterable[TraceEvent]) -> dict[date, list[TraceEvent]]:
 
 
 def _baseline_windows(
-    store: TraceStore, days: Sequence[date]
+    store: TraceStore, days: Sequence[date], agent: str
 ) -> dict[date, list[list[TraceEvent]]]:
     """The rolling baseline window (F3) for each day in `days`, in one query.
+
+    The store holds every agent that ever wrote to this project, so the prior
+    days are scoped to `agent` exactly like the days being reported: an
+    unscoped window compared today's cost against another agent's history
+    (issue #60).
 
     A day's window is its active prior days in `[day-7, day-1]`, grouped by
     `start_time.date()` — exactly what the per-day query returned before, but
@@ -165,7 +231,8 @@ def _baseline_windows(
     prior = store.find_by_date_range(
         min(days) - timedelta(days=BASELINE_WINDOW_DAYS), max(days) - timedelta(days=1)
     )
-    by_day = _group_by_day(prior)
+    scoped, _ = _scope_to_agent(agent, prior)
+    by_day = _group_by_day(scoped)
     active_days = sorted(by_day)
     return {
         day: [
@@ -184,13 +251,19 @@ def build_digests(
 
     `events` must already be in `store` (the caller ingests them first) so each
     day's rolling baseline (F3) can read the prior days. This is the shared core
-    of the digest pipeline — day-grouping plus baseline — reused by `watch_once`
-    and by `alfred report`, without the seen-file bookkeeping that is specific to
-    `watch`.
+    of the digest pipeline — scoping, day-grouping and baseline — reused by
+    `watch_once` and by `alfred report`, without the seen-file bookkeeping that
+    is specific to `watch`.
+
+    Scoping happens here because `build_digest` requires events pre-scoped to
+    one agent and this is the only caller both commands share: without it, a
+    traces directory holding two agents had each digest report the other's tool
+    calls as deviations (issue #60).
     """
-    by_day = _group_by_day(events)
+    scoped, _ = _scope_to_agent(mandate.agent, list(events))
+    by_day = _group_by_day(scoped)
     days = sorted(by_day)
-    windows = _baseline_windows(store, days)
+    windows = _baseline_windows(store, days, mandate.agent)
     return [build_digest(mandate, by_day[day], day, history=windows[day]) for day in days]
 
 
@@ -248,6 +321,7 @@ def watch_once(
 
     return WatchPass(
         digests=build_digests(mandate, new_events, store),
+        unattributed=unattributed_events(mandate.agent, new_events),
         quarantined=_quarantined(state),
         conflicts=tuple(conflicts),
     )

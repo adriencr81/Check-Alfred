@@ -147,15 +147,20 @@ events (the `[evt:…]` IDs) — never self-reported by the agent, never
 invented by an LLM. See [verified_nlg.md](verified_nlg.md) for the
 guarantee.
 
-### One agent per traces directory (for now)
+### Several agents in one traces directory
 
-`alfred watch` currently evaluates every event in the traces directory
-against the project's mandate — the mandate's `agent:` field is a label, not
-a filter. Two agents writing to the same directory means each one's digest
-reports false deviations computed from the other's events. Until evaluation
-is scoped to the mandate's agent
-([#60](https://github.com/adriencr81/Check-Alfred/issues/60)), give each
-agent its own traces directory and its own Alfred project.
+`alfred watch` evaluates a trace against the project's mandate only when the
+trace names that mandate's agent. The name is read from `gen_ai.agent.name` on
+the `invoke_agent` span — the one `AgentTracer(agent=…)` and both native
+connectors emit for you — so several agents can share a traces directory, each
+with its own Alfred project and mandate, without polluting each other's digest.
+
+A trace that names **no** agent is still evaluated: dropping it would empty the
+digest of any pipeline that omits the attribute, an OTel Collector bridge
+among them. Alfred cannot attest such events belong to your agent, so it says
+so on stderr and carries on — the pass does not fail. If you see that notice
+and you do run several agents into one directory, emit `gen_ai.agent.name` (or
+instrument with `AgentTracer`) to make the scoping exact.
 
 ### When a trace file cannot be read
 

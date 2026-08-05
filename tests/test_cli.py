@@ -6,6 +6,7 @@ docs/adr/0008-brique6-demo-launch-polish-design.md.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -323,6 +324,40 @@ def test_cli_watch_does_not_claim_no_new_files_when_one_was_quarantined(
     captured = capsys.readouterr()
     assert "no new trace files" not in captured.out
     assert "quarantined broken.json" in captured.err
+
+
+def test_cli_watch_reports_unattributed_events_without_failing_the_pass(
+    tmp_path: Path, otlp_sample_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The same trace, from a pipeline that does not emit `gen_ai.agent.name`.
+
+    It is still evaluated — dropping it would empty the digest of everyone whose
+    Collector bridge omits the attribute — and the doubt is printed. But it does
+    not fail the pass: unlike a quarantined file, no human action fixes it here,
+    and an exit 1 on every run would train the operator to ignore it (ADR 0033).
+    """
+    project_dir = tmp_path / "project"
+    main(["init", str(project_dir), "--agent", "refund-bot-v3"])
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    payload = json.loads(otlp_sample_path.read_text(encoding="utf-8"))
+    for resource in payload["resourceSpans"]:
+        for scope in resource["scopeSpans"]:
+            for span in scope["spans"]:
+                span["attributes"] = [
+                    attribute
+                    for attribute in span["attributes"]
+                    if attribute["key"] != "gen_ai.agent.name"
+                ]
+    (traces_dir / "day1.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    exit_code = main(["watch", str(traces_dir), "--project", str(project_dir)])
+
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "Tasks completed" in captured.out  # evaluated, not dropped
+    assert "gen_ai.agent.name" in captured.err
+    assert "refund-bot-v3" in captured.err
 
 
 def test_cli_watch_reports_missing_project(
