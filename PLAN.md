@@ -399,6 +399,13 @@ vos agents IA ont besoin d'un mandat, pas d'un dashboard ».
 
 ### 6.3 Launch (date **suspendue** — ADR 0010 ; re-datage après le run réel de la Brique 7. Séquence ci-dessous inchangée, translatable.)
 
+> **Show HN indisponible (2026-08-19, ADR 0034)** — le compte HN est banni. Le
+> Show HN du mardi n'a pas eu lieu le 04/08 et ne peut pas être reprogrammé. La
+> ligne reste dans le tableau parce qu'elle documente l'angle décidé, mais elle
+> n'est pas exécutable, et le M2 ne repose plus dessus (`GROWTH_PLAN_3M.md`
+> §2.2). Seule voie ouverte : une demande de déblocage à `hn@ycombinator.com`,
+> dont le plan n'attend rien.
+
 **Séquence sur 5 jours ouvrés** (mardi → lundi suivant) :
 
 | Jour | Canal | Angle | Objectif |
@@ -421,6 +428,14 @@ Le post LinkedIn FR peut sortir hors séquence, sans objectif chiffré : il coû
 **Signal de réussite du launch** (ordre de lecture, ADR 0032 décision 2) : ≥ 3 **digests partagés publiquement**, ≥ 5 issues créées par des inconnus, ≥ 20 installs pip, ≥ 500 stars à J+50. Les digests d'abord parce qu'ils prouvent une exécution : un tir à 120 stars et 4 digests réels n'est pas le même événement qu'un tir à 400 stars et 0 digest.
 
 **Si le launch rate** (< 100 stars à J+50) : ne pas paniquer, re-launch à J+120 sous un autre angle — le **leaderboard mensuel de fiabilité** (§6.4), un objet de discussion neuf plutôt qu'une redite du produit. Un HN raté se retente sous un autre angle à 2-3 mois.
+
+> **Amendement 2026-08-19 (ADR 0034)** — ce garde-fou a été écrit pour un tir
+> **parti et manqué**. Le 04/08, aucun tir n'est parti : le résultat (3 stars,
+> 0 digest partagé) mesure une absence de distribution, pas un échec produit, et
+> rien ne s'en conclut. Le re-launch J+120 supposait lui aussi un Show HN — il
+> perd son canal en même temps que le mardi. Tant qu'aucun canal de pic n'est
+> rouvert, la validation ne passe plus par un événement mais par le discovery
+> direct (`GROWTH_PLAN_3M.md` §2.2).
 
 **Sur la lecture du résultat** : un Show HN suit une distribution très asymétrique — l'issue la plus probable est nettement sous les 500 stars, seuil qui correspond en pratique à un top 10 front page. Le seuil reste la cible ; il ne doit pas être lu comme le cas de base, sinon un résultat médian passe pour un échec produit.
 

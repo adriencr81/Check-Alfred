@@ -5,8 +5,18 @@
 > aucune décision actée — voir `docs/adr/0011-growth-plan-3m.md`.
 > **Objectif unique : maximiser le nombre d'utilisateurs.**
 
-**Version** : 1.3 · **Date** : 2026-08-01 · **Horizon** : M1 (19/07→18/08),
+**Version** : 1.4 · **Date** : 2026-08-19 · **Horizon** : M1 (19/07→18/08),
 M2 (19/08→18/09), M3 (19/09→19/10).
+
+> **Révision 1.4 (2026-08-19, ADR 0034)** — le bilan M1 a été fait avec cinq
+> jours de retard et il est sans appel : **la séquence de launch n'a pas eu
+> lieu**. Le Show HN du 04/08 n'a pas été posté (compte banni), aucune case de
+> §1.2 n'a été exécutée, et le résultat — 3 stars, 0 digest partagé, 2
+> contributions d'inconnus — ne mesure donc pas la demande mais une absence de
+> distribution. Trois recalages : §1.2 porte désormais son état réel, §1.3 le
+> bilan chiffré, et le M2 (§2.2) repart sur **20 conversations de discovery
+> direct** — la seule action du plan qui ne dépende d'aucun standing
+> communautaire. Le Show HN sort du plan aux deux endroits où il portait un pic.
 
 > **Révision 1.3 (2026-08-01, ADR 0032)** — trois recalages à 3 jours du launch,
 > aucun sur les cibles chiffrées. La séquence du launch n'avait **aucun canal
@@ -171,6 +181,14 @@ texte. C'est un jugement, contestable en revue mensuelle.
 
 ### 1.2 Marketing
 
+> **État réel au 19/08 (ADR 0034)** — aucune case de cette section n'a été
+> exécutée. Ni l'échauffement des comptes Reddit, ni la liste des 30 early
+> users, ni les ~15 DM, ni les posts du launch, ni la capture dans le canal
+> possédé. Le **Show HN du 04/08 n'a pas été posté** : le compte est banni, et
+> ce fait n'avait été écrit nulle part jusqu'ici. Les cases restent `[ ]` parce
+> qu'elles décrivent ce qui était prévu ; elles ne sont pas un reste-à-faire du
+> M2 — le M2 repart sur une autre base (§2.2).
+
 Semaine du 21/07 (pré-launch, §6.2 compressé) :
 - [ ] Post build-in-public n°1 : « Comment on empêche notre LLM
       d'halluciner nos rapports » (matière : `docs/verified_nlg.md`). EN
@@ -235,15 +253,23 @@ métriques d'exécution passent avant les métriques d'audience. Aucun chiffre n
 changé depuis la rev 1.2 — seule leur position a changé, et c'est elle qui décide
 de ce qu'on conclut d'un launch médian.
 
-| Métrique | Cible |
-|---|---|
-| **Digests partagés publiquement** | ≥ 3 |
-| **Abonnés liste mail** | 50 |
-| Issues/PRs d'inconnus | ≥ 5 |
-| Témoignages écrits early users | 2-3 |
-| Installs pip/semaine | 20-50 |
-| Stars | 500 (signal §6.3) — plancher acceptable 150 |
-| **Demandes `teams-inquiry`** | ≥ 1 (informatif, pas un échec à 0) |
+| Métrique | Cible | **Réel au 19/08** |
+|---|---|---|
+| **Digests partagés publiquement** | ≥ 3 | **0** |
+| **Abonnés liste mail** | 50 | *non relevé* |
+| Issues/PRs d'inconnus | ≥ 5 | **2** (PRs #53, #54) |
+| Témoignages écrits early users | 2-3 | **0** |
+| Installs pip/semaine | 20-50 | *non relevé* |
+| Stars | 500 (signal §6.3) — plancher acceptable 150 | **3** |
+| **Demandes `teams-inquiry`** | ≥ 1 (informatif, pas un échec à 0) | **0** |
+
+> **Lecture du bilan (ADR 0034)** — ces chiffres ne mesurent pas la demande :
+> ils mesurent une absence de distribution. Un Show HN qui échoue produit
+> malgré tout 20-40 stars ; à 3, c'est qu'aucun canal n'a été ouvert. Le
+> garde-fou §9 ne s'applique donc pas ici — il a été écrit pour un tir parti et
+> manqué, pas pour un tir jamais parti. Le seul dispositif dont on puisse
+> prouver qu'il a produit quelque chose est `good first issue` : deux inconnus
+> ont contribué sans qu'aucun canal ne soit ouvert. Il est conservé.
 
 Sur la lecture du résultat : un Show HN suit une distribution très asymétrique.
 L'issue la plus probable est nettement sous les 500 stars, qui correspondent en
@@ -262,6 +288,12 @@ inconnu passe de la découverte à une demande d'achat. La métrique compte à J
 ---
 
 ## 2. Mois 2 — Rétention & friction zéro : v0.2 (19 août → 18 septembre)
+
+> **Recalage 1.4 (ADR 0034)** — la thèse ci-dessous supposait un launch qui a
+> créé de la découverte. Il n'y en a pas eu. Le M2 ne convertit donc rien : il
+> va chercher, en direct, l'information que le M1 devait produire. Priorité 1 du
+> mois = les 20 conversations de §2.2. Le reste de cette section garde sa valeur
+> pour le jour où un canal sera rouvert.
 
 Thèse du mois : **le launch a créé la découverte ; le M2 la convertit en
 usage**. La v1.0 de ce document pariait tout le mois sur les connecteurs
@@ -321,6 +353,36 @@ l'édition zéro du leaderboard vient ensuite ; le solde est trié par les issue
 commit par brique, ADR si écart au plan.
 
 ### 2.2 Marketing
+
+**Priorité 1 du mois — 20 conversations de discovery direct** (ADR 0034
+décision 3). Passe avant tout le reste de cette section.
+
+- [ ] **Constituer le vivier** — jamais fait malgré §6.2 et §1.2 : issues des
+      frameworks (LangGraph, OpenAI Agents SDK, CrewAI), issues des outils
+      adjacents, auteurs de billets sur la fiabilité d'agents, et les deux
+      contributeurs des PRs #53 et #54.
+- [ ] **20 échanges par DM ou mail**, une question et non un pitch : « quand ton
+      agent fait une erreur en production, comment tu l'apprends aujourd'hui ? »
+      Aucun lien vers Alfred dans le premier message.
+- [ ] **Critère de succès, écrit d'avance** : ≥ 10 des 20 décrivent un processus
+      réel et douloureux → la thèse tient, le M3 repart sur la distribution.
+      Sinon → le problème n'a pas la fréquence supposée, et c'est la conclusion
+      qu'il faut acter, pas contourner.
+- [ ] **Notes brutes committées** au fil de l'eau (une ligne par échange, sans
+      interprétation). Le discovery non écrit n'a jamais eu lieu — c'est
+      exactement ce qui vient de coûter le M1.
+
+**Tâche de fond — construire le standing** (ADR 0034 décision 4). Ni un canal
+d'acquisition, ni une métrique : la condition de possibilité de tous les canaux
+du plan. Participation sincère, sans mention d'Alfred.
+
+- [ ] Slack OTel `#sig-ai` et issues LangGraph, régulièrement.
+- [x] PR vers `opentelemetry.io` — ouverte, elle relève de cette ligne.
+- [ ] Mail à `hn@ycombinator.com` pour demander le déblocage du compte. Coût
+      nul, résultat non garanti — **le plan n'en attend rien** (ADR 0034
+      décision 2).
+
+Le reste du mois, à reprendre quand un canal est rouvert :
 
 - [ ] **Un finding public** (le moteur récurrent §6.4) : cas réel ou
       reproductible où Alfred attrape une déviation que le résumé
