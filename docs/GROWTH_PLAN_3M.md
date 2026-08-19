@@ -357,10 +357,13 @@ commit par brique, ADR si écart au plan.
 **Priorité 1 du mois — 20 conversations de discovery direct** (ADR 0034
 décision 3). Passe avant tout le reste de cette section.
 
-- [ ] **Constituer le vivier** — jamais fait malgré §6.2 et §1.2 : issues des
-      frameworks (LangGraph, OpenAI Agents SDK, CrewAI), issues des outils
-      adjacents, auteurs de billets sur la fiabilité d'agents, et les deux
-      contributeurs des PRs #53 et #54.
+- [x] **Constituer le vivier** — fait le 19/08 : `docs/discovery/vivier-m2.md`.
+      20 noms sourcés des issues LangGraph et OpenAI Agents SDK, plus les deux
+      contributeurs des PRs #53 et #54 en contacts chauds. **À lire avec son
+      avertissement** : seules 5 des 20 décrivent explicitement un problème de
+      gouvernance ou d'auditabilité — les trackers de framework parlent surtout
+      de bugs de bibliothèque. C'est déjà un résultat, et il fait partie de ce
+      que les conversations doivent trancher.
 - [ ] **20 échanges par DM ou mail**, une question et non un pitch : « quand ton
       agent fait une erreur en production, comment tu l'apprends aujourd'hui ? »
       Aucun lien vers Alfred dans le premier message.
